@@ -4,7 +4,43 @@ import { assertInsideRepo, resolveScopedPath } from "./paths.js";
 import type { WorkspaceMeta, WorkspacePaths } from "./types.js";
 
 export function getGeneratedProjectsRoot(): string {
+  if (process.env.OC_GENERATED_PROJECTS_ROOT) {
+    return process.env.OC_GENERATED_PROJECTS_ROOT;
+  }
   return path.join(process.cwd(), "generated-projects");
+}
+
+function workspaceRootForSlug(slug: string, rootDir?: string): string {
+  return rootDir ?? path.join(getGeneratedProjectsRoot(), slug);
+}
+
+export function loadWorkspace(rootDir: string): WorkspacePaths | null {
+  const metaPath = path.join(rootDir, "meta.json");
+  if (!fs.existsSync(metaPath)) {
+    return null;
+  }
+
+  const meta = JSON.parse(fs.readFileSync(metaPath, "utf8")) as WorkspaceMeta;
+  return {
+    root: meta.paths.root,
+    repo: meta.paths.repo,
+    artifacts: meta.paths.artifacts,
+    logs: meta.paths.logs,
+    meta,
+  };
+}
+
+export function ensureWorkspace(input: {
+  projectId: string;
+  slug: string;
+  rootDir?: string;
+}): WorkspacePaths {
+  const root = workspaceRootForSlug(input.slug, input.rootDir);
+  const existing = loadWorkspace(root);
+  if (existing) {
+    return existing;
+  }
+  return createWorkspace({ ...input, rootDir: root });
 }
 
 export function createWorkspace(input: {

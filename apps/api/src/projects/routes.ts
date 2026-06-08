@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { ProjectService } from "./service.js";
+import type { WorkspaceService } from "../workspace/service.js";
 
-export function createProjectRoutes(projects: ProjectService) {
+export function createProjectRoutes(projects: ProjectService, workspace?: WorkspaceService) {
   const router = new Hono();
 
   router.post("/", async (c) => {
@@ -10,6 +11,7 @@ export function createProjectRoutes(projects: ProjectService) {
       return c.json({ error: "name is required" }, 400);
     }
     const project = projects.createProject(body.name.trim());
+    workspace?.ensureForProject(project);
     return c.json(project, 201);
   });
 

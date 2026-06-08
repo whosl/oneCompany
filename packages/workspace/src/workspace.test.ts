@@ -2,7 +2,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspace, listFiles, readFile, writeFile } from "./workspace.js";
+import {
+  createWorkspace,
+  ensureWorkspace,
+  listFiles,
+  loadWorkspace,
+  readFile,
+  writeFile,
+} from "./workspace.js";
 import { PathEscapeError } from "./types.js";
 
 describe("workspace layout — M5", () => {
@@ -40,6 +47,23 @@ describe("workspace layout — M5", () => {
     expect(meta.projectId).toBe("proj-1");
     expect(meta.slug).toBe("demo");
     expect(meta.version).toBe(1);
+  });
+
+  it("ensureWorkspace is idempotent", () => {
+    const rootDir = path.join(tempRoot(), "idem");
+    const first = ensureWorkspace({
+      projectId: "proj-a",
+      slug: "idem",
+      rootDir,
+    });
+    const second = ensureWorkspace({
+      projectId: "proj-a",
+      slug: "idem",
+      rootDir,
+    });
+
+    expect(second.root).toBe(first.root);
+    expect(loadWorkspace(rootDir)?.meta.createdAt).toBe(first.meta.createdAt);
   });
 
   it("writes and reads files scoped to repo", () => {

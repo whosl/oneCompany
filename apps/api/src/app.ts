@@ -11,9 +11,12 @@ import { createProjectRoutes } from "./projects/routes.js";
 import { createProjectService } from "./projects/service.js";
 import { createRequirementRoutes } from "./requirement/routes.js";
 import { createRequirementService } from "./requirement/service.js";
+import { createWorkspaceRoutes } from "./workspace/routes.js";
+import { createWorkspaceService } from "./workspace/service.js";
 
 export type AppDependencies = {
   db: Db;
+  generatedProjectsRoot?: string;
 };
 
 export function createApp(deps: AppDependencies) {
@@ -28,9 +31,14 @@ export function createApp(deps: AppDependencies) {
   });
   const requirement = createRequirementService(deps.db, projects, gates, onEvent);
   resumeRef.requirement = requirement;
+  const workspace = createWorkspaceService(deps.db, projects, gates, {
+    onEvent,
+    generatedProjectsRoot: deps.generatedProjectsRoot,
+  });
 
   app.get("/health", (c) => c.json({ ok: true }));
-  app.route("/projects", createProjectRoutes(projects));
+  app.route("/projects", createProjectRoutes(projects, workspace));
+  app.route("/projects", createWorkspaceRoutes(workspace));
   app.route("/projects", createEventRoutes(deps.db));
   app.route("/gates", createGateRoutes(gates));
   app.route("/projects", createProjectGateRoutes(gates));
@@ -42,6 +50,7 @@ export function createApp(deps: AppDependencies) {
     projects,
     gates,
     requirement,
+    workspace,
   };
 }
 

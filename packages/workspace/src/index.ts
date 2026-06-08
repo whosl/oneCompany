@@ -2,11 +2,14 @@ export { PathEscapeError, type WorkspaceMeta, type WorkspacePaths } from "./type
 export { assertInsideRepo, resolveScopedPath } from "./paths.js";
 export {
   createWorkspace,
+  ensureWorkspace,
   getGeneratedProjectsRoot,
   listFiles,
+  loadWorkspace,
   readFile,
   writeFile,
 } from "./workspace.js";
+export { runLocalCommand } from "./local-exec.js";
 export { commitSlice, initRepo, type CommitSliceInput } from "./git.js";
 export {
   classifyCommand,

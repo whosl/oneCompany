@@ -1,6 +1,6 @@
 # M5 Implementation Plan — Workspace, Git, Shell, Sandbox（工作区 + Git + Shell + 沙箱）
 
-Status: in progress (core package complete; API thin layer pending)
+Status: complete (M5 DoD passed)
 Branch: `feat/m5-workspace-shell-sandbox`（从 `feat/m4-human-gate-ui` 切出）
 Source: `spec.md` v0.3.2 §8.2、§10.2、§11、§12；`handbook/phase-05-workspace-git-shell-sandbox.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 5–7 days（一名工程师）
@@ -402,7 +402,7 @@ pnpm --filter @oc/api dev
 - [x] Docker 缺失时 surfaced，不静默本地执行 high
 - [x] `createAuthorize` 可供 `StubHarness` / 未来 `OpencodeHarness` 注入
 - [x] containment、git、risk、executor、redaction、sandbox、authorize 均有先红后绿测试
-- [ ] API 薄层：`ensureWorkspace` + `GET /projects/:id/files`（Task 5.7）
+- [x] API 薄层：`ensureWorkspace` + `GET /projects/:id/files` + `POST /projects/:id/commands`（Task 5.7）
 
 ## 10. Out of Scope
 
