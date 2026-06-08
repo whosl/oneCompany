@@ -1,6 +1,6 @@
 # M1 Implementation Plan — Event Log + SSE + Status Machine + Gate Foundation
 
-Status: ready to execute
+Status: complete (M1 DoD passed)
 Branch: `feat/m1-event-backbone` (branch from `feat/m0-foundations` after merge, or continue on a child branch)
 Source: `spec.md` v0.3.2 §3.1, §6, §8, §8.1, §8.2, §10.3; `handbook/phase-01-event-log-sse-status.md`; `dev-plan.md` (TDD Operating Model)
 Estimated effort: 3–5 days (one engineer)
@@ -259,14 +259,14 @@ pnpm --filter @oc/web dev
 
 Mirror `phase-01-event-log-sse-status.md`:
 
-- [ ] `emit()` writes enveloped events with correct per-project `seq`
-- [ ] `POST /projects` creates project + `project.created`
-- [ ] `setStatus` rejects illegal transitions; records history + `project.status_changed`
-- [ ] Status machine unit tests pass (`Paused`, `Failed`, terminal)
-- [ ] SSE replays `afterSeq` then streams live
-- [ ] Gate create / wait / resolve via API + both gate events
-- [ ] Dev event viewer shows live events
-- [ ] **All M1 tests were written red-first and pass green**
+- [x] `emit()` writes enveloped events with correct per-project `seq`
+- [x] `POST /projects` creates project + `project.created`
+- [x] `setStatus` rejects illegal transitions; records history + `project.status_changed`
+- [x] Status machine unit tests pass (`Paused`, `Failed`, terminal)
+- [x] SSE replays `afterSeq` then streams live
+- [x] Gate create / wait / resolve via API + both gate events
+- [x] Dev event viewer shows live events
+- [x] **All M1 tests were written red-first and pass green**
 
 ## 8. Out of Scope
 
