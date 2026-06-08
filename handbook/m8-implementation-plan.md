@@ -1,6 +1,6 @@
 # M8 Implementation Plan — Right Panel Tabs（五 Tab 右侧面板）
 
-Status: ready to execute
+Status: complete
 Branch: `feat/m8-right-panel-tabs`（从 `feat/m7-testing-preview` 切出）
 Source: `spec.md` v0.3.2 §2.3、§14.5、§14.8、§15、§16（preview URL 展示）、§17（Report 只读渲染）；`handbook/phase-08-right-panel-tabs.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 5–8 days（一名工程师）
@@ -428,15 +428,15 @@ pnpm --filter @oc/web dev
 
 ## 9. Definition of Done
 
-- [ ] 恰好五个 Tab：Files, Preview, Terminal, Tests, Report
-- [ ] Tab shell 符合 §14.8 暖色紧凑控制台密度
-- [ ] Files 只读：树 + 内容 + diff；含 repo 与 artifacts
-- [ ] Preview 嵌入本地 preview URL；无 URL 时空态；health 指示可达
-- [ ] Terminal 走 `POST /commands`；high-risk 触发 gate；输出可见
-- [ ] Tests 展示 normalized 结果；`slice:*` 与 `final:*` 分区；artifact 链接
-- [ ] Report 展示 PRD、验收、风险；无 delivery 时显式空态（不造假）
-- [ ] Panel 读 API + 各 Tab UI contract 测试先红后绿
-- [ ] `pnpm -w test` + `pnpm -w typecheck` 绿
+- [x] 恰好五个 Tab：Files, Preview, Terminal, Tests, Report
+- [x] Tab shell 符合 §14.8 暖色紧凑控制台密度
+- [x] Files 只读：树 + 内容 + diff；含 repo 与 artifacts
+- [x] Preview 嵌入本地 preview URL；无 URL 时空态；health 指示可达
+- [x] Terminal 走 `POST /commands`；high-risk 触发 gate；输出可见
+- [x] Tests 展示 normalized 结果；`slice:*` 与 `final:*` 分区；artifact 链接
+- [x] Report 展示 PRD、验收、风险；无 delivery 时显式空态（不造假）
+- [x] Panel 读 API + 各 Tab UI contract 测试先红后绿
+- [x] `pnpm -w test` + `pnpm -w typecheck` 绿
 
 ## 10. Out of Scope
 

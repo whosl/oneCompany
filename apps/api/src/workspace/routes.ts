@@ -1,3 +1,5 @@
+import { FileScopeSchema } from "@oc/shared";
+import { CommandRejectedError } from "@oc/workspace";
 import { Hono } from "hono";
 import { devCommandsEnabled, type WorkspaceService } from "./service.js";
 
@@ -6,12 +8,16 @@ export function createWorkspaceRoutes(workspace: WorkspaceService) {
 
   router.get("/:id/files", (c) => {
     const relativePath = c.req.query("path");
+    const scopeQuery = c.req.query("scope") ?? "repo";
+    const scopeParsed = FileScopeSchema.safeParse(scopeQuery);
+    const scope = scopeParsed.success ? scopeParsed.data : "repo";
     try {
       if (relativePath) {
-        const file = workspace.readProjectFile(c.req.param("id"), relativePath);
+        const fileScope = relativePath.startsWith("artifacts/") ? "artifacts" : "repo";
+        const file = workspace.readProjectFile(c.req.param("id"), relativePath, fileScope);
         return c.json(file);
       }
-      const result = workspace.listProjectFiles(c.req.param("id"));
+      const result = workspace.listProjectFiles(c.req.param("id"), scope);
       return c.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "failed to access files";
@@ -39,6 +45,16 @@ export function createWorkspaceRoutes(workspace: WorkspaceService) {
       const message = error instanceof Error ? error.message : "failed to run command";
       if (message.includes("not found")) {
         return c.json({ error: message }, 404);
+      }
+      if (error instanceof CommandRejectedError) {
+        return c.json(
+          {
+            error: message,
+            gateId: error.gateId,
+            gateType: error.gateType,
+          },
+          403,
+        );
       }
       if (message.includes("rejected by gate")) {
         return c.json({ error: message }, 403);

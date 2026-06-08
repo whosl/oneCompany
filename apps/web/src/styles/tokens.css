@@ -1,0 +1,42 @@
+:root {
+  --oc-app-bg: oklch(0.98 0.01 85);
+  --oc-surface-base: oklch(0.99 0.008 90);
+  --oc-surface-raised: oklch(0.97 0.012 80);
+  --oc-border-muted: oklch(0.88 0.02 75);
+  --oc-text-primary: oklch(0.22 0.02 50);
+  --oc-text-muted: oklch(0.5 0.02 70);
+  --oc-accent-primary: oklch(0.62 0.14 55);
+  --oc-accent-soft: oklch(0.94 0.04 70);
+  --oc-status-success: oklch(0.62 0.14 145);
+  --oc-status-warning: oklch(0.75 0.12 80);
+  --oc-status-danger: oklch(0.58 0.18 25);
+}
+
+.oc-panel {
+  background: var(--oc-surface-base);
+  color: var(--oc-text-primary);
+  border: 1px solid var(--oc-border-muted);
+}
+
+.oc-tab {
+  color: var(--oc-text-muted);
+  border-bottom: 2px solid transparent;
+}
+
+.oc-tab[data-active="true"] {
+  color: var(--oc-text-primary);
+  border-bottom-color: var(--oc-accent-primary);
+  background: var(--oc-accent-soft);
+}
+
+.oc-chip-success {
+  color: var(--oc-status-success);
+}
+
+.oc-chip-danger {
+  color: var(--oc-status-danger);
+}
+
+.oc-chip-muted {
+  color: var(--oc-text-muted);
+}

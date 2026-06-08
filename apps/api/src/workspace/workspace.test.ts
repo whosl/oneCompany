@@ -51,6 +51,34 @@ describe("workspace API — M5", () => {
     }
   });
 
+  it("POST /projects/:id/commands returns gateId when gate rejects high-risk command", async () => {
+    const { app, gates, cleanup } = setupTestApp();
+    try {
+      const created = await app.request("/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Gate Reject Demo" }),
+      });
+      const project = (await created.json()) as { id: string };
+
+      gates.waitForGate = async () => "reject";
+
+      const response = await app.request(`/projects/${project.id}/commands`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cmd: "npm install lodash" }),
+      });
+
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { error: string; gateId?: string; gateType?: string };
+      expect(body.error).toContain("rejected by gate");
+      expect(body.gateId).toBeTruthy();
+      expect(body.gateType).toBe("dangerous_operation");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("POST /projects/:id/commands runs low-risk commands", async () => {
     const { app, cleanup } = setupTestApp();
     try {

@@ -17,6 +17,8 @@ import { createProjectRoutes } from "./projects/routes.js";
 import { createProjectService } from "./projects/service.js";
 import { createRequirementRoutes } from "./requirement/routes.js";
 import { createRequirementService } from "./requirement/service.js";
+import { createPanelRoutes } from "./panel/routes.js";
+import { createPanelService } from "./panel/service.js";
 import { createWorkspaceRoutes } from "./workspace/routes.js";
 import { createWorkspaceService } from "./workspace/service.js";
 
@@ -42,6 +44,7 @@ export function createApp(deps: AppDependencies) {
   const requirement = createRequirementService(deps.db, projects, gates, onEvent);
   const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
   const testing = createTestingService(deps.db, projects, workspace, onEvent);
+  const panel = createPanelService(deps.db, projects, workspace);
   resumeRef.requirement = requirement;
   resumeRef.development = development;
 
@@ -55,6 +58,7 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createRequirementRoutes(requirement));
   app.route("/projects", createDevelopmentRoutes(development));
   app.route("/projects", createTestingRoutes(testing));
+  app.route("/projects", createPanelRoutes(panel));
 
   return {
     app,
@@ -64,6 +68,7 @@ export function createApp(deps: AppDependencies) {
     development,
     testing,
     workspace,
+    panel,
   };
 }
 

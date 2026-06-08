@@ -11,6 +11,7 @@ export {
 } from "./workspace.js";
 export { runLocalCommand } from "./local-exec.js";
 export { commitSlice, initRepo, type CommitSliceInput } from "./git.js";
+export { getGitPatch } from "./git-diff.js";
 export {
   classifyCommand,
   classifyToolOp,

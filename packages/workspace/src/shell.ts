@@ -44,9 +44,16 @@ export type RunCommandResult = {
 };
 
 export class CommandRejectedError extends Error {
-  constructor(message: string) {
+  gateId?: string;
+  gateType?: string;
+
+  constructor(message: string, gate?: { id: string; gateType: string }) {
     super(message);
     this.name = "CommandRejectedError";
+    if (gate) {
+      this.gateId = gate.id;
+      this.gateType = gate.gateType;
+    }
   }
 }
 
@@ -90,7 +97,10 @@ async function ensureGateApproval(
   const gate = deps.createGate(deps.projectId, gateType, riskMetadata(risk));
   const decision = await deps.waitForGate(gate.id);
   if (!isApproval(decision)) {
-    throw new CommandRejectedError(`Command rejected by gate: ${cmd}`);
+    throw new CommandRejectedError(`Command rejected by gate: ${cmd}`, {
+      id: gate.id,
+      gateType: gate.gateType,
+    });
   }
 }
 
