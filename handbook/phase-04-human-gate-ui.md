@@ -20,7 +20,7 @@ Give people real cards to make decisions. Each gate type shows the right options
 
 ## Spec References
 
-`spec_0.2.md` §6, §8.1, §8.2.
+`spec.md` §6, §8.1, §8.2.
 
 ## Tasks
 

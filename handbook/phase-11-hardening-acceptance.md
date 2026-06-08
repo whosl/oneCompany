@@ -15,7 +15,7 @@ Prove the whole product meets every MVP acceptance criterion in spec §18, on a 
 
 ## Spec References
 
-`spec_0.2.md` §18, §8.2, §3.1, §12.
+`spec.md` §18, §8.2, §3.1, §12.
 
 ## Tasks
 

@@ -18,7 +18,7 @@ Run real tests and start a local preview of the generated app. Keep per-slice ch
 
 ## Spec References
 
-`spec_0.2.md` §15, §5.5, §3.1 (Testing), §16 (preview part).
+`spec.md` §15, §5.5, §3.1 (Testing), §16 (preview part).
 
 ## Tasks
 

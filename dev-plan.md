@@ -1,15 +1,15 @@
 # OneCompany MVP Development Plan
 
-Based on: `spec_0.2.md` / version 0.3.1
+Based on: `spec.md` / version 0.3.2
 Date: 2026-06-08
 Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 
 ## How To Read This Plan
 
-- Work is organized into milestones M0–M11. Each milestone is independently demoable and leaves the system in a working state.
+- Work is organized into milestones M0–M12 (M0–M11 are the MVP; M12 is post-MVP). Each milestone is independently demoable and leaves the system in a working state.
 - Each milestone lists: goal, tasks, spec references, and a Definition of Done (DoD).
 - Effort is a rough relative size (S ≈ 1–3 days, M ≈ 3–6 days, L ≈ 1.5–2.5 weeks) for a small team. Treat as planning hints, not commitments.
-- The build order follows `spec_0.2.md` §19 but is expanded with dependencies, data, and exit criteria.
+- The build order follows `spec.md` §19 but is expanded with dependencies, data, and exit criteria.
 
 ## Guiding Principles
 
@@ -17,6 +17,7 @@ Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 - Vertical slices over horizontal layers. Prefer thin end-to-end paths (one agent, one event, one panel) before breadth.
 - Orchestration boundary (§10.1, L5). LangGraph owns macro workflow, budgets, status transitions, and gates; OpenAI Agents SDK owns single-agent ReAct. Never put status/budget logic inside an agent loop.
 - Coding engine behind an adapter (§10.4). The Development group runs on opencode through a swappable `CodingHarness`; opencode actions are governed by the same risk/sandbox/gate/redaction policies and §13 model routing, and the engine never owns budgets, status, or gates.
+- External integrations behind a gateway (§10.5). GitHub/Supabase/Vercel/Cloudflare-style connectors are post-MVP and must be registered, allowlisted, risk-graded, logged, and backed by offline Skill Packs (§10.6).
 - Unhappy path is a feature. Loop budgets, stuck detection, failure gates, and `Failed`/`Paused` transitions are in scope from the milestone that introduces each loop, not bolted on later.
 - Human gates are blocking by design. A gate halts the workflow graph until resolved and is always logged.
 
@@ -28,6 +29,7 @@ apps/api        Hono API + SSE endpoints
 packages/agent-core   agent registry, LangGraph workflows, Agents SDK + CodingHarness/opencode, model routing
 packages/workflow     requirement + development graph definitions
 packages/workspace    project workspace, git, shell, sandbox, file ops, risk grading
+packages/integrations Integration Gateway: MCP/native connectors + offline skill packs (post-MVP)
 packages/shared       shared types + zod schemas (events, states, status machine)
 packages/ui           shared UI components (optional)
 data/app.sqlite       local DB (Drizzle ORM)
@@ -74,9 +76,11 @@ Implementation must follow this baseline for the MVP console's structure and vis
 | M9 | Info stream + swimlane renderers | M1, M2 | M | Both renderers over one event stream |
 | M10 | Deployment, delivery, change requests | M4, M6, M7, M8 | L | Deploy gate + tunnel + delivery report + change flow |
 | M11 | Hardening & MVP acceptance | all | M | §18 acceptance checklist passes |
+| M12 | Integration Gateway + offline Skill Packs | M11 | L | GitHub/Supabase/Vercel-style connectors registered with offline fallbacks |
 
 Critical path: M0 → M1 → M2 → M3 → M4 → M6 → M7 → M10 → M11. M5 (L) depends only on M0 but also hard-blocks M6, so it is co-critical: start it as early as M1, and if it slips it lands on the critical path.
 Parallelizable once M1 lands: M5 (workspace) alongside M2/M3/M4; M9 (renderers) alongside M4–M8; M8 tabs as their backing services come online.
+M12 (Integration Gateway + offline Skill Packs) is post-MVP: it starts only after M11 and is not on the MVP critical path.
 
 ---
 
@@ -89,7 +93,7 @@ Tasks:
 - Scaffold `apps/web` (Next.js + Tailwind + shadcn/ui) and `apps/api` (Hono). [S]
 - Scaffold `packages/{shared,agent-core,workflow,workspace,ui}`. [S]
 - Drizzle ORM + SQLite at `data/app.sqlite`; migration runner. [S]
-- Implement all §10.3 tables as Drizzle schema, including `tech_plan_versions`, `acceptance_criteria_versions`, `diffs`. [M]
+- Implement the MVP §10.3 tables as Drizzle schema, including `tech_plan_versions`, `acceptance_criteria_versions`, `diffs` (the post-MVP integration tables land in M12). [M]
 - `packages/shared`: zod schemas + TS types for `EventEnvelope` + `AgentEvent` (§8.1), `RequirementState` (§4.2), `DevState` (§5.2), `AgentDefinition` (§7), and the project status enum + transition map (§3.1). [M]
 
 Spec refs: §10.1, §10.2, §10.3, §3.1, §4.2, §5.2, §7, §8.1.
@@ -272,6 +276,33 @@ Spec refs: §18, §14, §8.2, §3.1, §12.
 
 DoD: the §18 acceptance mapping below is fully green.
 
+## M12 — Integration Gateway + Offline Skill Packs (Post-MVP)
+
+Goal: connect OneCompany to external developer services without compromising local-first, governance, or offline operation.
+
+Tasks:
+- Add the deferred shared types (`IntegrationDefinition`, `IntegrationConnection`, `SkillPack`) and the five integration tables migration (`integration_definitions`, `integration_connections`, `integration_tool_calls`, `skill_packs`, `skill_pack_runs`) — intentionally not built in M0/M2 (§10.3, §10.5, §10.6). [S]
+- `packages/integrations`: implement the Integration Gateway registry, connection state, and normalized tool-call adapter over MCP/native providers (§10.5). [M]
+- Connector definitions for P1/P2 connectors with allowlisted tools, project-scoped permissions, risk labels, and secret refs; no arbitrary unregistered MCP servers. P1: Playwright/Browser, Figma, GitHub, Supabase, Vercel. P2: Cloudflare, Linear/Jira, Sentry/PostHog, Documentation/Context, Postgres/Database, Docker/Container. [M]
+- Connector governance: external writes route through §12 risk grading and human gates; all outputs pass §8.2 redaction/chunking and event logging. [M]
+- Offline Skill Packs for each P1 connector and selected P2 connectors, each with `SKILL.md`, recipes, templates, scripts, tests, and manual runbooks (§10.6). [M]
+- Integrations UI: readiness/status surface showing connected, expired, disabled, or offline fallback; detailed configuration lives outside Project Hub. [S]
+
+Recommended order:
+1. Playwright / Browser: generated app preview verification, user-click acceptance, screenshots, console errors, traces.
+2. Figma: design baseline, design-to-code context, design handoff.
+3. GitHub: local git -> remote repo/branch/PR handoff.
+4. Supabase: dev database/schema/auth/storage support, with production writes gated.
+5. Vercel: preview deployments/logs/env vars/domains, with deploy/env/domain changes gated.
+6. Cloudflare expansion beyond MVP tunnel: Pages/Workers/D1/R2/KV.
+7. Linear/Jira + Sentry/PostHog/observability.
+8. Documentation/Context, Postgres/Database, Docker/Container.
+9. Stripe, collaboration connectors, and Kubernetes/cloud infrastructure only after stricter safety work.
+
+Spec refs: §10.5, §10.6, §12, §8.2, §14.6, §16.
+
+DoD: each connector can run in online mode with allowlisted audited tool calls, and in offline mode with a Skill Pack that produces honest local artifacts and manual follow-up instructions without faking remote success.
+
 ---
 
 ## Cross-Cutting Workstreams
@@ -279,6 +310,7 @@ DoD: the §18 acceptance mapping below is fully green.
 - Platform self-testing: unit tests for the status-machine engine and budget/stuck logic; integration tests for the requirement and dev graphs; an E2E "golden path" that drives a tiny app from one sentence to delivery. Start in M1 and grow each milestone.
 - Observability: every milestone that adds a flow must add its events to the log and ensure they render in the info stream (M9) — no silent state.
 - Schema discipline: all event/state shapes live in `packages/shared` as zod schemas; DB writes validate against them.
+- Integration governance: external connector tools, opencode tools, and local shell tools all use the same event/log/redaction/risk/gate path. No connector-specific bypass.
 
 ## MVP Acceptance Mapping (§18 → milestone)
 
@@ -302,6 +334,17 @@ DoD: the §18 acceptance mapping below is fully green.
 | Final acceptance captured | M4, M10 |
 | No unresolved high-risk issue | M11 |
 
+## Post-MVP Integration Acceptance Mapping
+
+| Criterion | Milestone |
+| --- | --- |
+| Integration definitions and connection state are registered, versioned, and project scoped | M2, M12 |
+| GitHub connector supports repo/branch/PR handoff with audited writes | M12 |
+| Supabase connector supports dev schema/data workflows with production writes gated | M12 |
+| Vercel connector supports preview deploy/log/env workflows with deploy/env/domain changes gated | M12 |
+| Cloudflare connector expands beyond tunnel without bypassing deployment gates | M12 |
+| Offline mode falls back to Skill Packs and never fakes remote success | M12 |
+
 ## Risk Register
 
 | Risk | Impact | Mitigation |
@@ -318,6 +361,10 @@ DoD: the §18 acceptance mapping below is fully green.
 | opencode bypasses governance (shell/edit without asking) | Security/policy hole | Force permission-ask mode; route every `permission.asked` through §12; deny-by-default; no auto-approve for high risk |
 | opencode self-reports tests as passing | False-green slices | Authoritative pass/fail from OneCompany's own scoped test run (O4); opencode test runs are informational only |
 | opencode uses its own model/keys/Zen path | Routing, cost, credential drift | Pass §13 provider+model per session with managed keys; disable opencode login/Zen (O5) |
+| External connector bypasses governance | Unlogged production writes or deploys | Integration Gateway normalizes all connector tools into `tool_call.*`, §12 risk grading, and human gates |
+| Remote MCP resource contains prompt injection | Policy override or data leak | Treat connector resources as untrusted data; never let remote text override system policy, tool allowlists, or gates |
+| Offline mode overclaims remote effects | False delivery report | Skill Packs produce local artifacts and manual follow-up only; delivery report lists unperformed remote steps |
+| Connector secret leaks | Security incident | Store only secret refs in definitions; redact before DB/artifacts/frontend; connection status never reveals values |
 
 ## Suggested First Two-Week Slice
 

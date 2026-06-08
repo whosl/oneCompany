@@ -17,7 +17,7 @@ Turn a one-sentence requirement into a confirmed PRD and acceptance criteria. Th
 
 ## Spec References
 
-`spec_0.2.md` §4 (all of it), §3.1 (Draft/Asking/PRD transitions), §6, §10.3.
+`spec.md` §4 (all of it), §3.1 (Draft/Asking/PRD transitions), §6, §10.3.
 
 ## Tasks
 

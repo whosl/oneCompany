@@ -22,7 +22,7 @@ Prove the orchestration design with a fake (no-op) agent. After this phase: a La
 
 ## Spec References
 
-`spec_0.2.md` §7, §10.1, §10.4, §13, §8.1, §14.4.
+`spec.md` §7, §10.1, §10.4, §13, §8.1, §14.4.
 
 ## Tasks
 

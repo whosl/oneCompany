@@ -20,7 +20,7 @@ Build the left panel: the default information stream and a switch to swimlane mo
 
 ## Spec References
 
-`spec_0.2.md` §14.1-§14.8, §8, §20.
+`spec.md` §14.1-§14.8, §8, §20.
 
 ## Tasks
 

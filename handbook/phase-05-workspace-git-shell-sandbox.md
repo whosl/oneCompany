@@ -22,7 +22,7 @@ Give agents a safe way to create project files, run git, and run shell commands 
 
 ## Spec References
 
-`spec_0.2.md` §11, §12, §8.2.
+`spec.md` §11, §12, §8.2.
 
 ## Tasks
 

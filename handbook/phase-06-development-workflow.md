@@ -21,7 +21,7 @@ Go from a confirmed PRD to committed code. The architect writes a technical plan
 
 ## Spec References
 
-`spec_0.2.md` §5 (all), §3.1 (Developing/Tech Plan/Change Review), §10.3, §10.4, §12, §13.
+`spec.md` §5 (all), §3.1 (Developing/Tech Plan/Change Review), §10.3, §10.4, §12, §13.
 
 ## Tasks
 

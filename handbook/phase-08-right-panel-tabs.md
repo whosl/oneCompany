@@ -17,7 +17,7 @@ Build the five right-panel tabs from spec §14.5: Files, Preview, Terminal, Test
 
 ## Spec References
 
-`spec_0.2.md` §14.5, §2.3, §16, §17.
+`spec.md` §14.5, §2.3, §16, §17.
 
 ## Tasks
 

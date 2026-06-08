@@ -18,7 +18,7 @@ Expose the app behind a deployment gate (Cloudflare Tunnel), generate the full d
 
 ## Spec References
 
-`spec_0.2.md` §16, §17, §5.4, §3.1 (Change Review, Deploying), §12.
+`spec.md` §16, §17, §5.4, §3.1 (Change Review, Deploying), §12.
 
 ## Tasks
 

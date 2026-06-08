@@ -2,7 +2,7 @@
 
 This handbook tells you, the AI developer, exactly how to build OneCompany, one phase at a time.
 
-Source of truth: `spec_0.2.md` (the product/architecture spec) and `dev-plan.md` (the milestone plan).
+Source of truth: `spec.md` (the product/architecture spec) and `dev-plan.md` (the milestone plan).
 This handbook turns those into small, ordered steps you can follow without guessing.
 
 If the handbook and the spec ever disagree, the spec wins. When unsure, re-read the spec section named in the phase doc. Do not invent behavior.
@@ -31,7 +31,7 @@ You are a coding agent. You may not remember earlier steps. That is fine. Each p
 7. Status changes go only through the status-machine module. Never set status by hand.
 8. Loop limits (question rounds, slice retries) and status transitions live in LangGraph nodes, never inside an agent's own reasoning loop.
 9. Never write secrets (API keys, tokens) into logs, the database, the event stream, or artifacts. Redact first.
-10. Never run a high-risk command without a human gate. See the Risk Grading table in `spec_0.2.md` §12.
+10. Never run a high-risk command without a human gate. See the Risk Grading table in `spec.md` §12.
 11. Do not add features that are not in the current phase. Stay in scope.
 12. If you get stuck, follow "If You Get Stuck" below. Do not guess or invent APIs.
 
@@ -76,6 +76,7 @@ packages/
   agent-core/          # agent registry, LangGraph workflows, OpenAI Agents SDK + CodingHarness/opencode, model routing
   workflow/            # requirement + development graph definitions
   workspace/           # project workspace, git, shell, sandbox, file ops, risk grading
+  integrations/        # post-MVP Integration Gateway: MCP/native connectors + offline skill packs
   shared/              # shared types + zod schemas (events, states, status machine)
   ui/                  # shared UI components (optional)
 data/
@@ -92,7 +93,7 @@ handbook/              # this handbook
 ## Glossary (read once, refer back often)
 
 - Project: one user requirement being turned into an app. Everything is scoped to a `projectId`.
-- Status / status machine: the project's lifecycle state (for example `Developing`). Allowed states and moves are fixed in `spec_0.2.md` §3.1 and copied into the table below. Change status only through the status-machine module.
+- Status / status machine: the project's lifecycle state (for example `Developing`). Allowed states and moves are fixed in `spec.md` §3.1 and copied into the table below. Change status only through the status-machine module.
 - Durable state: the saved workflow/task state that the system reads to decide what to do next. This is the control source.
 - Event: a record of something that happened (for example `agent.plan`). Events are append-only history. They are the audit source and the thing the UI streams. Events do not control the workflow; durable state does. (spec §8, R1)
 - EventEnvelope: the required wrapper around every event. Shape:
@@ -119,6 +120,8 @@ type EventEnvelope<TPayload> = {
 - Risk grading: how dangerous a shell/tool command is (Low / Medium / Medium-constrained / High / High deploy-network). See spec §12. High needs a gate; containable High runs in the Docker sandbox; deploy/tunnel run on the real machine, not the sandbox.
 - Sandbox: a Docker container used to run containable high-risk operations safely (spec §12).
 - Coding engine / CodingHarness: the Development group's coding runs on opencode (an external AI coding agent) behind a swappable `CodingHarness` interface. opencode does the per-slice TDD work; LangGraph keeps budgets/status/gates; the authoritative test result comes from our own scoped test run (spec §10.4).
+- Integration Gateway: post-MVP managed layer for registered MCP/native connectors such as GitHub, Supabase, Vercel, and Cloudflare. Connector tool calls still go through the same event/log/redaction/risk/gate path as local tools (spec §10.5).
+- Skill Pack: offline fallback bundle with `SKILL.md`, docs, templates, recipes, scripts, tests, and examples. Skill Packs preserve integration know-how when the remote connector is unavailable, but they never claim a remote action succeeded (spec §10.6).
 
 ## Status Machine (reference — from spec §3.1)
 
@@ -200,7 +203,7 @@ Every phase doc has the same sections, in this order:
 
 ## Phase Index
 
-Do these in order.
+Do these in order. M0–M11 are the MVP; M12 is post-MVP (build it only after the MVP is accepted).
 
 | Phase | Doc | Goal | Needs |
 | --- | --- | --- | --- |
@@ -216,3 +219,4 @@ Do these in order.
 | M9 | [phase-09-renderers.md](./phase-09-renderers.md) | Info stream + swimlane | M1, M2 |
 | M10 | [phase-10-deployment-delivery.md](./phase-10-deployment-delivery.md) | Deploy + delivery report + change requests | M4, M6, M7, M8 |
 | M11 | [phase-11-hardening-acceptance.md](./phase-11-hardening-acceptance.md) | Pass spec §18 acceptance | all |
+| M12 | [phase-12-integrations-offline-skills.md](./phase-12-integrations-offline-skills.md) | Integration Gateway + offline Skill Packs (post-MVP) | M11 |

@@ -18,7 +18,7 @@ Create a working monorepo. After this phase: both apps start, the database migra
 
 ## Spec References
 
-Read these before starting: `spec_0.2.md` §10.1, §10.2, §10.3, §3.1, §4.2, §5.2, §7, §8.1.
+Read these before starting: `spec.md` §10.1, §10.2, §10.3, §3.1, §4.2, §5.2, §7, §8.1.
 
 ## Tasks
 

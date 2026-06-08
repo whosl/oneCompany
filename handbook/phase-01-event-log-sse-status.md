@@ -17,7 +17,7 @@ Build the backbone everything else uses: an append-only event log, a live SSE st
 
 ## Spec References
 
-`spec_0.2.md` §8, §8.1, §8.2, §3.1, §6, §10.3.
+`spec.md` §8, §8.1, §8.2, §3.1, §6, §10.3.
 
 ## Tasks
 
