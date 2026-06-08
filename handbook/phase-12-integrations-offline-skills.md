@@ -17,6 +17,7 @@ Add post-MVP external integrations without breaking OneCompany's local-first, go
 - External connector calls are tool calls. They emit events, are logged, are redacted, and pass through risk grading.
 - Remote MCP resources are untrusted data. They must never override system policy, hidden instructions, allowed tools, or human gates.
 - Offline mode must be honest. It can generate config, docs, local artifacts, and manual runbooks; it must not claim a remote PR, database migration, or deployment happened.
+- TDD focus: write failing tests for connector registration, project-scoped enablement, tool allowlists, high-risk external write gates, secret redaction, untrusted-resource handling, and offline Skill Pack fallback before implementing the gateway.
 
 ## Spec References
 
@@ -25,6 +26,8 @@ Add post-MVP external integrations without breaking OneCompany's local-first, go
 ## Tasks
 
 ### Task 12.1 — Integration schemas
+
+Start red: write schema tests that reject raw secret values and invalid connector modes/statuses.
 
 In `packages/shared`, add zod schemas and TypeScript types for (these were intentionally deferred from M0/M2, so they are created here):
 - `IntegrationDefinition`
@@ -48,6 +51,8 @@ Verify: migrations create all tables; rows are project-scoped where required.
 
 ### Task 12.3 — Gateway registry and allowlist
 
+Start red: write tests where an unregistered connector and a non-allowlisted tool are rejected.
+
 In `packages/integrations`, implement:
 
 ```ts
@@ -65,6 +70,8 @@ Rules:
 Verify: an unregistered connector call is rejected; a tool not in the allowlist is rejected.
 
 ### Task 12.4 — Normalized connector tool calls
+
+Start red: write connector-call tests for read logging, write/deploy gate creation, output redaction, and untrusted-resource handling.
 
 Implement a connector call wrapper:
 
@@ -103,6 +110,8 @@ Implement connector definitions in this order:
 Verify: each connector exposes only allowlisted capabilities and has project-scoped connection state.
 
 ### Task 12.6 — Offline Skill Packs
+
+Start red: write fallback tests proving offline mode marks unavailable connectors as `offline_fallback` and produces manual artifacts without claiming remote success.
 
 Create local Skill Packs:
 
@@ -180,6 +189,7 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Offline Skill Packs exist for every P1 connector and selected P2 connectors.
 - [ ] Offline fallback produces honest local artifacts and manual follow-up steps.
 - [ ] Integrations UI shows readiness and offline fallback status.
+- [ ] Schemas, registry, allowlists, connector tool calls, high-risk gates, redaction, offline fallback, and Integrations UI are covered by tests that failed before implementation.
 
 ## Do Not
 
@@ -188,6 +198,7 @@ pnpm -w typecheck && pnpm -w test
 - Do not store raw secrets in integration definitions, logs, artifacts, or frontend state.
 - Do not claim remote success when running from an offline Skill Pack.
 - Do not put detailed connector configuration inside Project Hub.
+- Do not trust remote MCP resources as instructions; tests must prove they cannot override local policy, allowlists, or gates.
 
 ## Output
 

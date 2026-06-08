@@ -14,6 +14,7 @@ Turn a one-sentence requirement into a confirmed PRD and acceptance criteria. Th
 - Defaults (memorize): score scale 0–100; threshold 85; max question rounds 6; at most 10 questions per round; stuck = score gains < 3 points over 2 rounds in a row.
 - Requirement Stuck gate (spec §4.3, §6): raised when the budget runs out or the loop is stuck. Options: keep answering (extend budget), force continue to PRD (logged as a risk), or fail the project.
 - The user still confirms the requirement before development starts (PRD Ready -> Tech Plan Review).
+- TDD focus: write failing tests for loop termination, stuck detection, direct-to-PRD behavior, answer persistence, and PRD/acceptance versioning before implementing the graph nodes.
 
 ## Spec References
 
@@ -36,11 +37,15 @@ Verify: each agent is registered and returns structured output that matches its 
 
 ### Task 3.2 — RequirementState persistence
 
+Start red: write persistence tests for creating, updating, and reloading `RequirementState`, including per-round scores.
+
 Store `RequirementState` (from `@oc/shared`, spec §4.2) durably, keyed by `projectId`. Use `requirement_sessions` and `requirement_scores`. Include `completenessThreshold` (85), `maxQuestionRounds` (6), and per-round `scoreAfter`.
 
 Verify: create a session, update it, reload it — values persist including the per-round scores.
 
 ### Task 3.3 — Requirement loop graph
+
+Start red: write integration tests for vague input -> question round, complete input -> direct `PRD Ready`, and graph-owned counters.
 
 Build the loop as a LangGraph workflow (spec §4.3). Node order:
 1. `intake` -> update state.
@@ -58,6 +63,8 @@ Note on the very first pass: if the initial analysis already gives score >= 85 w
 Verify: a vague input runs at least one question round; a clearly complete input goes straight to PRD Ready.
 
 ### Task 3.4 — Loop termination (budget + stuck) — REQUIRED
+
+Start red: write tests that prove the loop stops on budget exhaustion and stuck detection. These tests must fail before the gate logic exists.
 
 This is the most important part of this phase. The loop must stop.
 - Round budget: stop asking once `maxQuestionRounds` (6) rounds have run without reaching the threshold.
@@ -99,12 +106,14 @@ pnpm -w typecheck && pnpm -w test
 - [ ] All three stuck-gate options work (keep answering / force continue+risk / fail).
 - [ ] `force_continue` records a risk.
 - [ ] Complete initial input goes straight to `PRD Ready`.
+- [ ] Requirement-state, loop, stuck/budget, answer intake, and PRD/acceptance versioning behaviors are covered by tests that failed before implementation.
 
 ## Do Not
 
 - Do not let the loop run with no upper bound. The budget and stuck checks are mandatory.
 - Do not put the budget/stuck logic inside an agent. It lives in the graph node.
 - Do not skip the gate when stuck. Silent force-continue is not allowed; it must be a recorded decision + risk.
+- Do not accept agent text as proof that the loop works; assert durable state, status transitions, gates, and persisted versions.
 
 ## Output
 

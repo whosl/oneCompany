@@ -19,6 +19,7 @@ Prove the orchestration design with a fake (no-op) agent. After this phase: a La
 - Agent registry: agents are looked up by `agentId@version`, not imported as classes. This lets us swap agents later.
 - Model routing (spec §13): pick a model tier (`cheap` / `standard` / `strong`) per agent. Not user-configurable.
 - Coding engine adapter (spec §10.4): the Development group will run on opencode behind a `CodingHarness`. M2 only defines the interface + a stub; M6 implements `OpencodeHarness`.
+- TDD focus: write failing contract tests for registry resolution, P/A/O/R event order, failure events, tool-call events, model routing, graph boundaries, and `CodingHarness.authorize`.
 
 ## Spec References
 
@@ -27,6 +28,8 @@ Prove the orchestration design with a fake (no-op) agent. After this phase: a La
 ## Tasks
 
 ### Task 2.1 — Agent registry
+
+Start red: write tests for `registerAgent`, `getAgent("dummy@1.0.0")`, `listAgents`, persistence, and unknown-agent rejection.
 
 Create `packages/agent-core/src/registry.ts`:
 
@@ -43,6 +46,8 @@ function listAgents(): AgentDefinition[];
 Verify: register a dummy agent, then `getAgent("dummy@1.0.0")` returns it; an unknown id throws.
 
 ### Task 2.2 — Single-agent executor (Agents SDK)
+
+Start red: write an event-order test for `agent.started -> agent.plan -> agent.act -> agent.observe -> agent.reflect`, plus a forced-failure test for `agent.error -> run.failed`.
 
 Create `packages/agent-core/src/executor.ts`:
 
@@ -67,6 +72,8 @@ For this phase the "agent" can be a stub that returns canned text. Real agents c
 Verify: `runAgent` with a stub emits started -> plan -> act -> observe -> reflect in order, and writes an `agent_runs` row.
 
 ### Task 2.3 — Tool-call plumbing
+
+Start red: write tests for success and failure event sequences before implementing `callTool`.
 
 Add a helper used by agents to call a tool:
 
@@ -102,6 +109,8 @@ Create `packages/agent-core/src/graph.ts`:
 Verify: build a 2-node demo graph: node A runs the stub agent; node B logs "done". Running the graph produces the agent's P/A/O/R events then finishes.
 
 ### Task 2.6 — CodingHarness interface + stub
+
+Start red: write the stub harness test first. It must fail until `StubHarness.runSlice` emits normalized events and calls `ctx.authorize` before acting.
 
 The Development group (M6) runs its coding agent on the **opencode** engine, behind a small swappable interface called `CodingHarness` (spec §10.4). In this phase you only create the interface and a fake (stub) implementation for tests. The real `OpencodeHarness` is built in M6 (see phase-06, the "opencode Engine" section).
 
@@ -187,12 +196,14 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Model router maps tiers to model ids per §13.
 - [ ] A demo LangGraph workflow runs nodes, can use a gate node, and keeps budgets in durable state.
 - [ ] `CodingHarness` interface + `StubHarness` exist; budgets/status/gates are not inside the harness.
+- [ ] Registry, executor, tool-call, graph, model-router, and harness behaviors are covered by tests that failed before implementation.
 
 ## Do Not
 
 - Do not put loop budgets or status transitions inside `runAgent` or inside the agent. They live in graph nodes (durable state).
 - Do not emit raw chain-of-thought. Emit short summaries only.
 - Do not import agents as classes in workflows. Use the registry.
+- Do not trust a demo graph without contract tests for emitted events and failure behavior.
 
 ## Output
 

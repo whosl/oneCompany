@@ -15,6 +15,7 @@ Create a working monorepo. After this phase: both apps start, the database migra
 - Workspace package: a folder with its own `package.json`. We name them `@oc/<name>`.
 - Drizzle ORM: how we talk to SQLite. Tables are defined in TypeScript, then migrated.
 - zod: runtime validation. Every shared type has a matching zod schema.
+- M0 TDD exception: this phase may already be complete. If so, do not rebuild it. Add a baseline test backfill before M1 so future phases have a working test harness.
 
 ## Spec References
 
@@ -103,6 +104,18 @@ Export everything from `packages/shared/src/index.ts`.
 
 Verify: `pnpm --filter @oc/shared typecheck` passes; `import { EventEnvelope } from "@oc/shared"` works from `apps/api`.
 
+### Task 0.8 — M0 test baseline backfill
+
+Because M0 may already be implemented, this is a backfill task rather than a strict red/green implementation task. Add tests that prove the foundation works:
+
+- Root script smoke: `pnpm -w typecheck` and `pnpm -w test` are runnable from the root.
+- Migration smoke: migrations create `data/app.sqlite` and all 18 MVP tables.
+- Shared schema tests: valid `EventEnvelope`, `RequirementState`, `DevState`, `AgentDefinition`, and `ProjectStatus` parse successfully; invalid examples fail.
+- Status-transition fixture: `STATUS_TRANSITIONS` includes every status from spec §3.1.
+- Cross-package import smoke: `apps/api` and `apps/web` can import from `@oc/shared` without long relative paths.
+
+Verify: `pnpm -w test` runs these baseline tests and passes.
+
 ## Verification (run all, all must pass)
 
 ```bash
@@ -110,6 +123,7 @@ pnpm install
 pnpm -w build
 pnpm migrate
 pnpm -w typecheck
+pnpm -w test
 # start web, confirm it shows "OneCompany"
 # start api, confirm curl localhost:3001/health -> {"ok":true}
 ```
@@ -123,15 +137,18 @@ pnpm -w typecheck
 - [ ] `pnpm migrate` creates `data/app.sqlite` with all 18 tables from §10.3.
 - [ ] `packages/shared` exports zod schemas + types for `EventEnvelope`, `AgentEvent`, `RequirementState`, `DevState`, `AgentDefinition`, `ProjectStatus`, `STATUS_TRANSITIONS`.
 - [ ] Both apps can import from `@oc/shared`.
+- [ ] M0 baseline tests pass with `pnpm -w test`.
 
 ## Do Not
 
 - Do not put business logic in this phase. Only scaffolding, DB, and types.
 - Do not define types outside `packages/shared`.
 - Do not skip any of the 18 tables, even if a phase does not use them yet.
+- Do not rewrite completed M0 work just to satisfy TDD. Backfill tests that lock the current behavior, then continue.
 
 ## Output (for later phases)
 
 - A buildable monorepo.
 - A migrated SQLite database with all tables.
 - Shared schemas/types that every later phase imports from `@oc/shared`.
+- Baseline tests that prove M0 is stable before M1 begins.

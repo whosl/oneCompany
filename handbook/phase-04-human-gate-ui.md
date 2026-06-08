@@ -17,6 +17,7 @@ Give people real cards to make decisions. Each gate type shows the right options
   - The stuck / slice-failure / change gates use their own scoped options instead of the generic set.
 - Blocking + logged: a gate stops the workflow; resolving it records `human_gate.resolved` and resumes the workflow.
 - Final placement: in the Figma UI baseline, gates render inline inside Stream Mode. The sticky Stream composer can provide custom text for the active gate, but it must still submit one of the gate's allowed decisions. UI placement never changes the server-side policy.
+- TDD focus: write failing policy tests for allowed options, server-side rejection, and logged resolution before implementing gate UI details.
 
 ## Spec References
 
@@ -25,6 +26,8 @@ Give people real cards to make decisions. Each gate type shows the right options
 ## Tasks
 
 ### Task 4.1 — Gate type registry
+
+Start red: write the option-policy unit tests first, especially the cases where `skip_risk_and_continue` must be absent.
 
 Create a definition for each gate type: its id, a title, a description template, and its allowed options. Put this in `packages/shared` so both api and web use the same list.
 
@@ -42,11 +45,15 @@ Verify: a unit test asserts that `skip_risk_and_continue` is NOT in the options 
 
 ### Task 4.2 — Enforce the policy server-side
 
+Start red: write API tests that try illegal decisions and expect rejection.
+
 When `POST /gates/:id/resolve` is called, reject any decision that is not in the gate's allowed options. Never trust the client.
 
 Verify: trying to resolve a `deployment` gate with `skip_risk_and_continue` returns an error.
 
 ### Task 4.3 — Gate card component
+
+Start red: write component tests for rendering exactly the allowed options and submitting a custom decision only when `custom` is allowed.
 
 In `apps/web`, build a `GateCard` component:
 - Shows title + description.
@@ -86,12 +93,14 @@ pnpm -w typecheck && pnpm -w test
 - [ ] `GateCard` is reusable inside the Stream Mode feed and compatible with the future sticky composer custom-input path.
 - [ ] Resolving a gate resumes the blocked workflow.
 - [ ] Every decision emits `human_gate.resolved` and is stored.
+- [ ] Gate policy, API rejection, component rendering, and resolution logging are covered by tests that failed before implementation.
 
 ## Do Not
 
 - Do not show "Skip risk and continue" on high-risk/destructive or confirmation gates.
 - Do not let the workflow continue past a gate without a recorded decision.
 - Do not trust the client to enforce options. Enforce on the server.
+- Do not rely only on manual UI clicking; server policy must be tested independently from the card component.
 
 ## Output
 

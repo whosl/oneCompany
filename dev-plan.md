@@ -18,8 +18,39 @@ Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 - Orchestration boundary (§10.1, L5). LangGraph owns macro workflow, budgets, status transitions, and gates; OpenAI Agents SDK owns single-agent ReAct. Never put status/budget logic inside an agent loop.
 - Coding engine behind an adapter (§10.4). The Development group runs on opencode through a swappable `CodingHarness`; opencode actions are governed by the same risk/sandbox/gate/redaction policies and §13 model routing, and the engine never owns budgets, status, or gates.
 - External integrations behind a gateway (§10.5). GitHub/Supabase/Vercel/Cloudflare-style connectors are post-MVP and must be registered, allowlisted, risk-graded, logged, and backed by offline Skill Packs (§10.6).
+- Test-first platform development. OneCompany itself is built with TDD: every behavior-changing task starts from a failing unit, integration, contract, or E2E test that describes the expected behavior before implementation.
 - Unhappy path is a feature. Loop budgets, stuck detection, failure gates, and `Failed`/`Paused` transitions are in scope from the milestone that introduces each loop, not bolted on later.
 - Human gates are blocking by design. A gate halts the workflow graph until resolved and is always logged.
+
+## TDD Operating Model
+
+There are two TDD surfaces:
+
+1. OneCompany platform TDD: the product being built in this plan. This applies from M1 onward and should be retroactively baselined for M0 because M0 is already complete.
+2. Generated-app TDD: the apps created by OneCompany. This is owned by M6/M7, where opencode writes failing tests first for each function slice and OneCompany runs the authoritative scoped checks.
+
+Platform TDD loop:
+
+1. Red: write or update the smallest meaningful failing test for the behavior, schema, transition, API, event, or UI state.
+2. Green: implement only enough code to pass that test.
+3. Refactor: simplify while keeping the test green.
+4. Record: when the behavior emits events, writes logs, creates artifacts, or changes status, assert those side effects in the test or in a contract fixture.
+
+Minimum test shape by milestone:
+
+| Milestone | Required test-first focus |
+| --- | --- |
+| M0 | Backfill baseline tests for workspace scripts, migrations, shared zod schemas, and app boot/import smoke. |
+| M1 | Status-machine transition tests, event writer ordering/replay tests, SSE replay tests, gate block/resume tests. |
+| M2 | Agent registry resolution/version tests, dummy-agent event contract tests, `CodingHarness` stub authorization tests. |
+| M3 | Requirement loop budget/stuck tests, scoring-state tests, PRD/acceptance persistence tests. |
+| M4 | Gate policy tests, allowed-action enforcement tests, card/API resolution tests. |
+| M5 | Shell risk-grading tests, redaction/chunking tests, sandbox routing tests, git commit metadata tests. |
+| M6 | Tech-plan versioning tests, per-slice retry tests, opencode permission/event/log bridge tests, authoritative test-boundary tests. |
+| M7 | Runner parsing tests, preview lifecycle tests, Playwright artifact tests, final-suite transition tests. |
+| M8-M10 | UI contract tests for tabs/stream/report plus integration/E2E tests for deployment and change requests. |
+| M11 | Full golden-path E2E plus negative-path regression tests. |
+| M12 | Connector allowlist/risk/audit tests and offline Skill Pack fallback tests. |
 
 ## Architecture Build Targets (recap from §10)
 
@@ -95,16 +126,18 @@ Tasks:
 - Drizzle ORM + SQLite at `data/app.sqlite`; migration runner. [S]
 - Implement the MVP §10.3 tables as Drizzle schema, including `tech_plan_versions`, `acceptance_criteria_versions`, `diffs` (the post-MVP integration tables land in M12). [M]
 - `packages/shared`: zod schemas + TS types for `EventEnvelope` + `AgentEvent` (§8.1), `RequirementState` (§4.2), `DevState` (§5.2), `AgentDefinition` (§7), and the project status enum + transition map (§3.1). [M]
+- M0 test baseline backfill: because M0 is already complete, add tests before starting M1 for migration creation, shared schema parse/serialization, cross-package imports, and app boot smoke. [S]
 
 Spec refs: §10.1, §10.2, §10.3, §3.1, §4.2, §5.2, §7, §8.1.
 
-DoD: `apps/web` and `apps/api` start locally; `pnpm migrate` creates every table; shared types/schemas import cleanly from both apps.
+DoD: `apps/web` and `apps/api` start locally; `pnpm migrate` creates every table; shared types/schemas import cleanly from both apps; `pnpm -w test` includes and passes the M0 baseline tests.
 
 ## M1 — Event Log + SSE + Status Machine + Gate Foundation
 
 Goal: the durable-state/event backbone, reusable status machine, and minimal blocking-gate primitive.
 
 Tasks:
+- Start with failing tests for status transitions, event append/replay ordering, SSE reconnect behavior, and gate block/resume semantics. [S]
 - Append-only event log writer over the `events` table; typed `emit(envelope)` API with `eventId`, per-project `seq`, `schemaVersion`, timestamp, and correlation metadata. [M]
 - Project CRUD + `project.created` and `project.status_changed` events; `project_status_history`. [S]
 - Status machine engine implementing §3.1 states + transition table, including `Paused` (enter/resume) and `Failed`. Reject illegal transitions. [M]
@@ -114,13 +147,14 @@ Tasks:
 
 Spec refs: §8, §3.1, §10.3.
 
-DoD: creating a project emits enveloped events over SSE; status transitions are validated by the engine and persisted to history; illegal transitions are rejected; a workflow can create a blocking gate and resume after an API decision.
+DoD: creating a project emits enveloped events over SSE; status transitions are validated by the engine and persisted to history; illegal transitions are rejected; a workflow can create a blocking gate and resume after an API decision; the M1 behavior is covered by tests that failed before implementation.
 
 ## M2 — Agent Registry + Orchestration Skeleton
 
 Goal: prove the LangGraph + Agents SDK boundary with a no-op agent.
 
 Tasks:
+- Start with failing tests for agent registration/version resolution, dummy-agent event contracts, forced failure events, and `CodingHarness` authorization behavior. [S]
 - Agent registry: register/resolve `agentId@version`, store in `agents` table; workflow refs by id+version (§7). [M]
 - LangGraph macro-workflow harness: nodes, durable state, budget hooks, gate-node placeholder. [M]
 - OpenAI Agents SDK single-agent executor invoked inside a node; emits `agent.started`, `agent.plan/act/observe/reflect`, `agent.error`, `run.failed`; writes `agent_runs`. [M]
@@ -130,7 +164,7 @@ Tasks:
 
 Spec refs: §7, §10.1 (orchestration boundary, L5), §10.4, §13, §8.1, §14.4.
 
-DoD: a dummy agent runs through one LangGraph node, produces the full P/A/O/R event sequence, and a forced failure produces `agent.error` + `run.failed`.
+DoD: a dummy agent runs through one LangGraph node, produces the full P/A/O/R event sequence, and a forced failure produces `agent.error` + `run.failed`; registry and harness behavior is covered by tests that failed before implementation.
 
 ## M3 — Requirement Workflow
 
@@ -307,7 +341,8 @@ DoD: each connector can run in online mode with allowlisted audited tool calls, 
 
 ## Cross-Cutting Workstreams
 
-- Platform self-testing: unit tests for the status-machine engine and budget/stuck logic; integration tests for the requirement and dev graphs; an E2E "golden path" that drives a tiny app from one sentence to delivery. Start in M1 and grow each milestone.
+- Platform TDD: write failing tests before behavior changes, keep the test scope close to the current slice, and expand to integration/E2E only when the behavior crosses package, workflow, database, shell, or UI boundaries.
+- Platform self-testing: unit tests for the status-machine engine and budget/stuck logic; integration tests for the requirement and dev graphs; an E2E "golden path" that drives a tiny app from one sentence to delivery. Backfill the M0 baseline first, then grow tests every milestone.
 - Observability: every milestone that adds a flow must add its events to the log and ensure they render in the info stream (M9) — no silent state.
 - Schema discipline: all event/state shapes live in `packages/shared` as zod schemas; DB writes validate against them.
 - Integration governance: external connector tools, opencode tools, and local shell tools all use the same event/log/redaction/risk/gate path. No connector-specific bypass.
@@ -351,6 +386,7 @@ DoD: each connector can run in online mode with allowlisted audited tool calls, 
 | --- | --- | --- |
 | LangGraph / Agents SDK boundary blurs (budgets leak into agents) | Non-deterministic loops | Enforce in M2; budgets/transitions only in graph nodes; lint/review rule |
 | Event schema churn after renderers exist | Rework in M9 | Freeze `EventEnvelope` + `AgentEvent` shapes in M0/shared; version events if needed |
+| TDD becomes slow ceremony | Slower milestones without quality gain | Keep tests behavior-focused; prefer unit/contract tests for pure logic and reserve E2E for milestone acceptance paths |
 | Command logs leak secrets or overload SQLite | Security and stability issue | Redact before persistence; chunk large output into artifacts; DB stores metadata and hashes |
 | Dependency lifecycle scripts execute unexpectedly | Supply-chain risk | `npm ci --ignore-scripts` by default; scripts require allowlist or high-risk confirmation/sandbox |
 | Docker sandbox availability on user machines | High-risk ops can't run | Detect Docker at startup (env check in settings, §14.2); degrade to gated-local with explicit risk |
@@ -370,7 +406,7 @@ DoD: each connector can run in online mode with allowlisted audited tool calls, 
 
 A concrete starting increment that yields a visible end-to-end skeleton:
 
-1. M0 fully (repo, DB, shared types).
+1. M0 fully (repo, DB, shared types) plus the M0 test baseline backfill.
 2. M1 fully (event log, SSE, status machine, gate foundation).
 3. M2 happy path (dummy agent emits P/A/O/R over SSE).
 4. M9 partial: layout shell + information stream rendering the dummy agent's events.

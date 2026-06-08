@@ -18,6 +18,7 @@ Go from a confirmed PRD to committed code. The architect writes a technical plan
 - Retry budget (spec §5.2, §5.3): `maxSliceAttempts` default 4. When exhausted, raise the Slice Failure gate.
 - Slice Failure gate options (spec §5.3, §6): retry / replan (-> Tech Plan Review) / request_skip_slice (-> Change Review) / fail (-> Failed).
 - Skipping a slice is NOT a silent waiver (spec §5.4, R4). It goes through Change Review, which must update PRD/acceptance criteria or keep the acceptance criterion blocking.
+- TDD focus: test the development workflow itself before relying on generated-app tests. Cover tech-plan versioning, task queue creation, retry budget, Slice Failure gate, Change Review, diff events, opencode permission bridge, and authoritative scoped test results.
 
 ## Spec References
 
@@ -33,11 +34,15 @@ Verify: all seven are registered and return schema-valid output.
 
 ### Task 6.2 — DevState
 
+Start red: write persistence tests for task queue and retry counters before implementing `DevState` storage.
+
 Persist `DevState` (from `@oc/shared`, spec §5.2), including the task queue, `maxSliceAttempts` (4), and `currentSliceAttempts`.
 
 Verify: create, update, reload DevState; the slice queue and counters persist.
 
 ### Task 6.3 — Technical plan + gate
+
+Start red: write an integration test for confirmed PRD -> tech plan version -> `tech_plan_confirm` gate -> approve/reject routing.
 
 - Run `architect` to produce the technical plan (architecture, stack, data model, risk, deployment approach).
 - Save a row in `tech_plan_versions`; set `techPlanVersion`.
@@ -54,6 +59,8 @@ Verify: a tech plan yields a non-empty task queue of slices.
 
 ### Task 6.5 — Per-slice loop
 
+Start red: write a slice-loop test with a stub harness where the first scoped check fails, the second passes, and only the authoritative check controls commit.
+
 For the current slice, run this as a LangGraph sub-flow (counters in durable state, NOT in the agent or the engine). The coding itself runs on opencode via `OpencodeHarness` — see the "opencode Engine" section (E1–E6) below for how to build it.
 1. Plan: build a `SliceSpec` (goal, acceptance checks, the slice-scoped `testCommand`, model tier `strong`) from the current slice.
 2. Act + Observe (engine): call `OpencodeHarness.runSlice(slice, ctx)`. opencode writes the failing tests first, implements, and iterates. Its events stream into the info stream through the event bridge (E3), and every shell/edit passes through `ctx.authorize` (risk grading, E4).
@@ -66,6 +73,8 @@ For the current slice, run this as a LangGraph sub-flow (counters in durable sta
 Verify: a simple slice goes Plan -> opencode writes failing tests -> implement -> your authoritative test is green -> commit, producing one commit and a `diff.created` event.
 
 ### Task 6.6 — Slice Failure gate (budget exhausted) — REQUIRED
+
+Start red: write a failing-slice test that exhausts 4 attempts and expects a Slice Failure gate with all four options.
 
 When `currentSliceAttempts` reaches `maxSliceAttempts` and checks still fail, raise the Slice Failure gate with options:
 - `retry` -> extend the budget, continue.
@@ -168,6 +177,8 @@ Verify: sending a trivial prompt to a session produces normalized P/A/O/R events
 
 ### E4 — Permission bridge (opencode "ask" -> your risk grading + gate)
 
+Start red: write bridge tests for low-risk allow, high-risk gate, and explicit reject before integrating with opencode.
+
 ```ts
 async function handlePermission(client, sessionId, perm, ctx) {
   const op = toToolOp(perm);              // {kind:"shell"|"edit", command?, path?} — helper you write
@@ -193,6 +204,8 @@ Verify: a command opencode wants to run (e.g. `rm -rf ...`) is graded High and r
 Verify: output containing a fake API key is redacted in the stored log and in the stream.
 
 ### E6 — runSlice (the CodingHarness implementation)
+
+Start red: write an integration test against a tiny generated app proving `runSlice` emits events, calls permission, writes tests first, and trusts only the structured reporter result.
 
 Create `packages/agent-core/src/harness/opencode-harness.ts` implementing the M2 `CodingHarness`:
 
@@ -261,6 +274,7 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Every opencode shell/edit goes through the permission bridge (risk grading + gate); nothing high-risk auto-runs.
 - [ ] The authoritative slice pass/fail comes from your own scoped test run (structured reporter), not opencode's self-report, and is shown in Tests + stream.
 - [ ] opencode uses managed keys + §13 model routing; opencode login/Zen are disabled.
+- [ ] DevState, tech-plan gate, slice loop, retry failure, Change Review, diffs, permission bridge, and authoritative test boundary are covered by tests that failed before implementation.
 
 ## Do Not
 
@@ -269,6 +283,7 @@ pnpm -w typecheck && pnpm -w test
 - Do not skip a slice silently. Always go through Change Review.
 - Do not let opencode auto-approve shell/edit. Every action goes through the permission bridge (E4).
 - Do not trust opencode's self-reported test result for transitions. Run the authoritative scoped test yourself (E6, step 3).
+- Do not count opencode's internal test runs as workflow proof; OneCompany's own tests and structured reporters decide state transitions.
 
 ## Output
 

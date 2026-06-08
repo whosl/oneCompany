@@ -20,30 +20,63 @@ You are a coding agent. You may not remember earlier steps. That is fine. Each p
 5. When all tasks pass, check every box in the phase's Definition of Done.
 6. Only then move to the next phase.
 
-## The 12 Golden Rules (never break these)
+## The 13 Golden Rules (never break these)
 
 1. Do tasks in order. Do not skip ahead.
 2. One task at a time. Finish and verify before starting the next.
-3. After writing code, always run the verify command for that task.
-4. Never leave the code in a broken state. If a check fails, fix it now.
-5. All shared types and zod schemas live in `packages/shared`. Import them; never redefine them.
-6. Every persisted event uses the `EventEnvelope` shape (see Glossary). Never write a bare event.
-7. Status changes go only through the status-machine module. Never set status by hand.
-8. Loop limits (question rounds, slice retries) and status transitions live in LangGraph nodes, never inside an agent's own reasoning loop.
-9. Never write secrets (API keys, tokens) into logs, the database, the event stream, or artifacts. Redact first.
-10. Never run a high-risk command without a human gate. See the Risk Grading table in `spec.md` §12.
-11. Do not add features that are not in the current phase. Stay in scope.
-12. If you get stuck, follow "If You Get Stuck" below. Do not guess or invent APIs.
+3. Use TDD for behavior-changing work: write the smallest meaningful failing test first, then implement.
+4. After writing code, always run the verify command for that task.
+5. Never leave the code in a broken state. If a check fails, fix it now.
+6. All shared types and zod schemas live in `packages/shared`. Import them; never redefine them.
+7. Every persisted event uses the `EventEnvelope` shape (see Glossary). Never write a bare event.
+8. Status changes go only through the status-machine module. Never set status by hand.
+9. Loop limits (question rounds, slice retries) and status transitions live in LangGraph nodes, never inside an agent's own reasoning loop.
+10. Never write secrets (API keys, tokens) into logs, the database, the event stream, or artifacts. Redact first.
+11. Never run a high-risk command without a human gate. See the Risk Grading table in `spec.md` §12.
+12. Do not add features that are not in the current phase. Stay in scope.
+13. If you get stuck, follow "If You Get Stuck" below. Do not guess or invent APIs.
+
+## TDD Operating Model
+
+There are two TDD surfaces:
+
+1. OneCompany platform TDD: the product you are building in these phase docs. For every new behavior, write a failing unit, integration, contract, or E2E test first.
+2. Generated-app TDD: the apps OneCompany creates. This lands in M6/M7: opencode writes failing tests first for each function slice, and OneCompany runs the authoritative scoped checks at the slice boundary.
+
+Platform TDD loop:
+
+1. Red: write or update the smallest meaningful failing test for the behavior, schema, transition, API, event, tool policy, or UI state.
+2. Green: implement only enough code to pass that test.
+3. Refactor: simplify while keeping the test green.
+4. Record: if the behavior emits events, writes logs, creates artifacts, changes status, or raises gates, assert those side effects too.
+
+Minimum test shape by phase:
+
+| Phase | Required test-first focus |
+| --- | --- |
+| M0 | Backfill baseline tests for workspace scripts, migrations, shared zod schemas, and app boot/import smoke. |
+| M1 | Status-machine transition tests, event writer ordering/replay tests, SSE replay tests, gate block/resume tests. |
+| M2 | Agent registry resolution/version tests, dummy-agent event contract tests, `CodingHarness` stub authorization tests. |
+| M3 | Requirement loop budget/stuck tests, scoring-state tests, PRD/acceptance persistence tests. |
+| M4 | Gate policy tests, allowed-action enforcement tests, card/API resolution tests. |
+| M5 | Shell risk-grading tests, redaction/chunking tests, sandbox routing tests, git commit metadata tests. |
+| M6 | Tech-plan versioning tests, per-slice retry tests, opencode permission/event/log bridge tests, authoritative test-boundary tests. |
+| M7 | Runner parsing tests, preview lifecycle tests, Playwright artifact tests, final-suite transition tests. |
+| M8-M10 | UI contract tests for tabs/stream/report plus integration/E2E tests for deployment and change requests. |
+| M11 | Full golden-path E2E plus negative-path regression tests. |
+| M12 | Connector allowlist/risk/audit tests and offline Skill Pack fallback tests. |
 
 ## The Per-Task Loop (do this for every task)
 
 ```text
 1. READ the task and the spec section it points to.
-2. PLAN in one sentence what file you will change and what it must do.
-3. WRITE the code in the exact file path given.
-4. RUN the verify command in the task.
-5. If it FAILS -> read the error, fix, run again. Repeat until green.
-6. If it PASSES -> move to the next task.
+2. PLAN in one sentence what behavior you are proving and what file you will change.
+3. WRITE the failing test first, unless the task is pure scaffolding or the phase explicitly says "baseline backfill".
+4. RUN the test and confirm it fails for the expected reason.
+5. WRITE the code in the exact file path given.
+6. RUN the verify command in the task.
+7. If it FAILS -> read the error, fix, run again. Repeat until green.
+8. If it PASSES -> refactor if useful, run the check once more, then move to the next task.
 ```
 
 ## If You Get Stuck
@@ -63,7 +96,7 @@ You are a coding agent. You may not remember earlier steps. That is fine. Each p
 - Database: SQLite at `data/app.sqlite`, accessed only through Drizzle ORM.
 - Naming: files `kebab-case.ts`; types/classes `PascalCase`; variables/functions `camelCase`; DB tables `snake_case`.
 - Imports: use workspace package names (for example `@oc/shared`), not long relative paths across packages.
-- Tests: `Vitest` for unit/integration, `Playwright` for browser. Test files end in `.test.ts` or `.spec.ts`.
+- Tests: `Vitest` for unit/integration, `Playwright` for browser. Test files end in `.test.ts` or `.spec.ts`. Prefer behavior and contract tests over snapshot-heavy tests.
 - Every package builds and type-checks on its own.
 
 ## Target Repository Layout (from spec §10.2)
@@ -116,6 +149,7 @@ type EventEnvelope<TPayload> = {
 - Projection: a read-only view computed from events plus the current durable-state snapshot. The information stream and swimlane are two projections over the same data (spec §8, §14.4).
 - Human gate: a point where the workflow stops and waits for a person to choose an option. Gates are blocking and always logged (spec §6).
 - Function slice: a small, testable feature unit, usually one git commit (spec §5.3).
+- TDD: write a failing test that proves the desired behavior before implementing the behavior. For generated apps, opencode writes failing slice tests first, but OneCompany still runs the authoritative scoped test before accepting the slice.
 - ReAct loop: an agent's own Plan -> Act -> Observe -> Reflect cycle inside one node.
 - Risk grading: how dangerous a shell/tool command is (Low / Medium / Medium-constrained / High / High deploy-network). See spec §12. High needs a gate; containable High runs in the Docker sandbox; deploy/tunnel run on the real machine, not the sandbox.
 - Sandbox: a Docker container used to run containable high-risk operations safely (spec §12).

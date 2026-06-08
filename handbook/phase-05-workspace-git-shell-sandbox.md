@@ -19,6 +19,7 @@ Give agents a safe way to create project files, run git, and run shell commands 
   - High (deploy/network): deploy, start Cloudflare Tunnel -> require human gate; run on the REAL workspace/network, NOT the sandbox.
 - Secret redaction (spec §8.2, R5): never write secrets to DB, artifacts, or the stream. Redact first.
 - Large output: do not store huge blobs in SQLite. Write them to `logs/` or `artifacts/` files; store only metadata (path, byte length, hash, summary) in the DB.
+- TDD focus: write failing tests for path containment, command risk classification, redaction, chunking, sandbox routing, and git commit metadata before implementing the executor.
 
 ## Spec References
 
@@ -28,6 +29,8 @@ Give agents a safe way to create project files, run git, and run shell commands 
 
 ### Task 5.1 — Workspace layout
 
+Start red: write tests for folder creation, scoped file writes, and rejecting `../` path escapes.
+
 Create `packages/workspace/src/workspace.ts`:
 - `createWorkspace(projectId, slug)` -> makes `generated-projects/{slug}/{repo,artifacts,logs}` and writes `meta.json`.
 - File helpers: `writeFile`, `readFile`, `listFiles` scoped INSIDE the project repo. Reject any path that escapes the project directory (that is a High-risk "write outside project").
@@ -36,6 +39,8 @@ Verify: creating a workspace makes the folders + `meta.json`; writing `../escape
 
 ### Task 5.2 — Git service
 
+Start red: write a git metadata test that fails until `commitSlice` creates a commit and writes the `commits` row.
+
 Create `packages/workspace/src/git.ts`:
 - `initRepo(projectPath)` -> `git init` in `repo/`.
 - `commitSlice({ projectId, taskId, summary, tests })` -> stage all, commit, and write a row in `commits` linking `hash`, `taskId`, `summary` (spec §11).
@@ -43,6 +48,8 @@ Create `packages/workspace/src/git.ts`:
 Verify: init a repo, write a file, `commitSlice` -> a commit exists and a `commits` row links to its task.
 
 ### Task 5.3 — Risk classifier
+
+Start red: write one test per risk level before implementing the classifier. Include unknown command -> `high`.
 
 Create `packages/workspace/src/risk.ts`:
 
@@ -57,6 +64,8 @@ function classifyCommand(cmd: string, ctx?: { lockfilePresent?: boolean }): Risk
 Verify: unit tests for one command per level, plus `npm install` -> high and `npm ci --ignore-scripts` (with lockfile) -> medium_constrained.
 
 ### Task 5.4 — Shell executor with gating
+
+Start red: write executor tests for low command runs, high command waits for a gate, and deploy command routes to `high_deploy`.
 
 Create `packages/workspace/src/shell.ts`:
 
@@ -74,6 +83,8 @@ Flow:
 Verify: a low command runs and logs; a high command does not run until its gate is approved; `npm install` (unpinned) is treated as high.
 
 ### Task 5.5 — Log pipeline (redact + chunk)
+
+Start red: write redaction and large-output chunking tests before implementing storage.
 
 Create `packages/workspace/src/log-pipeline.ts`:
 - `redact(text)` -> remove secrets using: known env var names, a local secret registry, and token-like patterns. Replace with `***REDACTED***`.
@@ -107,6 +118,7 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Low/medium run locally; containable high runs in Docker after a gate; deploy/tunnel run on the real machine after a gate (not sandboxed).
 - [ ] All command output passes redaction; large output stored as artifact files with DB metadata only.
 - [ ] Docker absence is surfaced, not silently bypassed.
+- [ ] Workspace containment, git, risk classifier, executor routing, redaction/chunking, and sandbox behavior are covered by tests that failed before implementation.
 
 ## Do Not
 
@@ -114,6 +126,7 @@ pnpm -w typecheck && pnpm -w test
 - Do not run deploy/tunnel inside the sandbox.
 - Do not write secrets to the DB, artifacts, or the event stream.
 - Do not store huge command outputs as DB blobs.
+- Do not add shell shortcuts that bypass `runCommand`; every command path needs the same tested policy.
 
 ## Output
 

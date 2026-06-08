@@ -12,6 +12,7 @@ Prove the whole product meets every MVP acceptance criterion in spec §18, on a 
 
 - This phase adds little new code. It runs the full system, finds gaps, and fixes them.
 - The bar is spec §18. Every bullet there must be true and demonstrated.
+- TDD focus: when a gap is found, first add a failing regression test that reproduces it, then fix the implementation. Do not patch acceptance failures without locking them into the suite.
 
 ## Spec References
 
@@ -20,6 +21,8 @@ Prove the whole product meets every MVP acceptance criterion in spec §18, on a 
 ## Tasks
 
 ### Task 11.1 — Golden-path end-to-end run
+
+Start red where possible: create or update the golden-path E2E so it fails on the missing behavior before fixing the product.
 
 Drive one small real requirement (for example: "a to-do web app") from one sentence all the way to `Delivered`:
 1. Create project -> requirement loop -> PRD + acceptance.
@@ -53,6 +56,8 @@ Tick every item from spec §18. For each, demonstrate it:
 
 ### Task 11.3 — Logging + safety audit
 
+Start red: add regression tests for any discovered redaction, chunking, or retention failure before fixing it.
+
 Confirm full retention (spec §8.2): tool calls, command + terminal output, diffs, test results, deploy logs, gate decisions, failures, change requests. Confirm redaction works and large outputs are chunked into artifacts with DB metadata only. Try to make a secret leak; confirm it does not.
 
 Verify: a deliberate secret in a command is redacted everywhere; a huge output is stored as an artifact file, not a DB blob.
@@ -70,6 +75,8 @@ Re-test the §12 grading: low/medium run locally; containable high goes to the s
 Verify: each risk level behaves per the table.
 
 ### Task 11.6 — Figma UI baseline regression
+
+Start red: add browser/visual regression tests for any missing or overlapping required UI surface before adjusting styles.
 
 Compare the implemented console against the Figma file `OneCompany Console - Claude Style Draft` and spec §14:
 - Stream Mode shows user-originated messages, agent events, inline gates, collapsed verbose details, and a sticky user composer.
@@ -100,11 +107,13 @@ pnpm -w typecheck && pnpm -w test && pnpm -w build
 - [ ] Risk grading + sandbox behave per §12.
 - [ ] Figma UI baseline surfaces and visual constraints are verified.
 - [ ] No unresolved high-risk issue remains.
+- [ ] Every hardening fix is backed by a regression test or an explicit acceptance/E2E assertion that failed before the fix.
 
 ## Do Not
 
 - Do not fake any acceptance item. If something is not really working, fix it, do not check the box.
 - Do not weaken risk grading or redaction to make a test pass.
+- Do not accept a manual-only fix for a repeatable bug; add a regression test first.
 
 ## Output
 

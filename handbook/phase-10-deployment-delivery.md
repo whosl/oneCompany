@@ -15,6 +15,7 @@ Expose the app behind a deployment gate (Cloudflare Tunnel), generate the full d
 - Delivery report (spec §17): must include all listed sections, and risks must include forced-continue decisions, approved acceptance-scope changes from skip-slice requests, and skip-risk decisions.
 - Change requests (spec §5.4, R4): a user requirement change after the tech plan, OR a skip-slice request, both go through `Change Review` and update the plan/acceptance criteria. A required feature is never silently waived.
 - Secrets (spec §12): never log API keys; if a needed third-party key is missing, agents generate mock data and clearly prompt the user.
+- TDD focus: write failing tests for deployment gating, Change Review routing, report completeness, final acceptance transitions, and missing-key mock-data behavior before implementing delivery flows.
 
 ## Spec References
 
@@ -23,6 +24,8 @@ Expose the app behind a deployment gate (Cloudflare Tunnel), generate the full d
 ## Tasks
 
 ### Task 10.1 — Deployment gate + tunnel
+
+Start red: write a deployment-flow test proving no URL is exposed before the deployment gate is approved.
 
 - Add a deployment flow: when status is `Deploying` (from M7), raise the `deployment` gate (M4). Only after approval, expose the URL.
 - Support a user-provided Cloudflare Tunnel: the user supplies/runs the tunnel; store the resulting URL in `deployments` and `DevState.deploymentUrl`.
@@ -33,6 +36,8 @@ Verify: a passing project reaches `Deploying`, shows a deployment gate, and afte
 
 ### Task 10.2 — Change request flow (finish)
 
+Start red: write tests for requirement-change impact routing and skip-slice acceptance-criteria updates.
+
 Complete `Change Review` (started in M6):
 - `change_requests` rows + `change_request.created` / `change_request.resolved` events.
 - A user requirement change after the tech plan: analyze impact on PRD, acceptance criteria, data model, tests, and code; identify affected commits and rollback options (use git from M5); then route `Change Review -> Developing` (queue-only change) or `Change Review -> Tech Plan Review` (architecture change).
@@ -41,6 +46,8 @@ Complete `Change Review` (started in M6):
 Verify: a mid-development requirement change creates a change request, routes correctly, and updates the plan; a skip request updates acceptance criteria.
 
 ### Task 10.3 — Delivery report generator
+
+Start red: write a report-completeness test that fails unless every spec §17 section is present, including risks.
 
 Create the report (DevOps & Delivery agent + a generator) covering ALL spec §17 sections: requirement summary, confirmed tech stack, feature list, directory structure, run instructions, test results, deployment URL, risks and limitations (including forced-continue, approved skip-slice scope changes, and skip-risk decisions), and follow-up recommendations. Write it to `artifacts/` and emit `artifact.created`.
 
@@ -76,6 +83,7 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Delivery report includes every §17 section and records forced-continue / skip-slice / skip-risk decisions in risks.
 - [ ] Final acceptance gate -> `Delivered` or back to `Developing`.
 - [ ] Missing API key -> mock data + user prompt; secrets never logged.
+- [ ] Deployment, Change Review, delivery report, final acceptance, and missing-key behavior are covered by tests that failed before implementation.
 
 ## Do Not
 
@@ -83,6 +91,7 @@ pnpm -w typecheck && pnpm -w test
 - Do not run the tunnel in the sandbox.
 - Do not silently drop a required feature on skip.
 - Do not put any secret value in the report, logs, artifacts, or stream.
+- Do not mark delivery complete from agent text alone; assert persisted deployment/report/gate/status artifacts.
 
 ## Output
 

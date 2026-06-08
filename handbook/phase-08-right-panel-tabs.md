@@ -14,6 +14,7 @@ Build the five right-panel tabs from spec §14.5: Files, Preview, Terminal, Test
 - Files tab is read-only: it shows files and diffs. No editing in the viewer (spec §2.3). Code is changed by agents or the terminal, never by typing in the Files tab.
 - The Terminal is a free terminal, but it is NOT a bypass (spec §14.5, L3): its output is logged (M5 pipeline) and its commands go through risk grading (M5). High-risk commands typed here still need a gate.
 - Follow the Figma baseline `OneCompany Console / Stream Mode` for the right-side density and hierarchy: compact tab row, browser-like Preview surface, file/artifact-oriented Files tab, governed Terminal, normalized Tests, and Report sections. Do not add a sixth tab or extra side panel.
+- TDD focus: write UI contract tests for exactly five tabs, read-only files, preview empty/live states, terminal risk path, tests rendering, and report section rendering before implementing each tab.
 
 ## Spec References
 
@@ -23,11 +24,15 @@ Build the five right-panel tabs from spec §14.5: Files, Preview, Terminal, Test
 
 ### Task 8.1 — Tab shell
 
+Start red: write a component test that expects exactly Files / Preview / Terminal / Tests / Report and no sixth tab.
+
 In `apps/web`, build a right-panel container with five tabs: Files, Preview, Terminal, Tests, Report. Keep it simple and not crowded (spec §14.5), using the warm compact console style from spec §14.8. Selecting a tab shows its content.
 
 Verify: all five tabs render and switch.
 
 ### Task 8.2 — Files tab
+
+Start red: write tests for file-tree rendering, read-only content, and diff display.
 
 - Show a file tree for the project `repo/` and `artifacts/` (via a `GET /projects/:id/files` endpoint backed by M5 `listFiles`).
 - Clicking a file shows its content (read-only).
@@ -45,6 +50,8 @@ Verify: the tree lists real files; clicking shows content; a changed file shows 
 Verify: when a preview is running, the tab shows the live app.
 
 ### Task 8.4 — Terminal tab
+
+Start red: write a UI/API test proving terminal commands call M5 `runCommand` and high-risk commands surface a gate instead of executing.
 
 - A terminal UI that sends commands to the M5 `runCommand` executor for the project.
 - Show output streamed back (via the `tool_call.*` events or a dedicated stream).
@@ -82,12 +89,14 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Terminal runs through M5 risk grading + logging; high-risk commands are gated.
 - [ ] Tests tab shows normalized results with artifact links.
 - [ ] Report tab shows PRD, acceptance cases, and existing report sections.
+- [ ] Tab shell, Files, Preview, Terminal, Tests, and Report behaviors are covered by tests that failed before implementation.
 
 ## Do Not
 
 - Do not add a sixth tab.
 - Do not allow editing files in the Files tab.
 - Do not let the Terminal bypass risk grading or logging.
+- Do not hardcode fake tab data; render from backing services or an explicit empty state.
 - Do not render fake/placeholder data in the Report tab.
 
 ## Output

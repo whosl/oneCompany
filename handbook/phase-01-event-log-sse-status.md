@@ -14,6 +14,7 @@ Build the backbone everything else uses: an append-only event log, a live SSE st
 - `seq`: a per-project counter starting at 1, increasing by 1 for each new event. Used to order events and to replay.
 - Control source vs audit source (spec §8, R1): durable state decides what happens next; the event log is history + what the UI streams. Status lives in the `projects` table (durable). Events only record that it changed.
 - Blocking gate: the workflow calls "create gate" and then waits. A person (or, for now, an API call) resolves it. Only then does the workflow continue.
+- TDD focus: write failing tests for transition legality, event sequencing, SSE replay, and gate create/resolve before implementing each primitive.
 
 ## Spec References
 
@@ -22,6 +23,8 @@ Build the backbone everything else uses: an append-only event log, a live SSE st
 ## Tasks
 
 ### Task 1.1 — Event log writer
+
+Start red: write the unit test described in Verify first. Confirm it fails because `emit()` does not exist or does not persist ordered envelopes yet.
 
 Create `packages/shared/src/events/log.ts` (or in `apps/api` if simpler) with one function:
 
@@ -58,6 +61,8 @@ Verify: `POST /projects` returns a project with status `Draft Requirement` and a
 
 ### Task 1.3 — Status-machine module
 
+Start red: write the allowed/rejected transition tests first, including terminal and `Paused` cases.
+
 Create `packages/shared/src/status/machine.ts`:
 
 ```ts
@@ -73,6 +78,8 @@ Verify: unit tests — `Developing -> Testing` is allowed; `Developing -> Delive
 
 ### Task 1.4 — SSE endpoint
 
+Start red: write an integration test or contract test for `afterSeq` replay before wiring the endpoint.
+
 In `apps/api`, add `GET /projects/:id/events/stream`:
 - It is an SSE response.
 - Optional query `?afterSeq=N`: first replay all stored events for the project with `seq > N` (in order), then stream new ones live.
@@ -81,6 +88,8 @@ In `apps/api`, add `GET /projects/:id/events/stream`:
 Verify: open the stream for a project, then emit an event from another request; the client receives it. With `?afterSeq=0`, all past events arrive in seq order.
 
 ### Task 1.5 — Gate foundation
+
+Start red: write a gate lifecycle test for open -> resolve -> resolved event before implementing the helpers.
 
 Create gate primitives (in `apps/api` plus helpers in `@oc/shared`):
 - `createGate(projectId, gateType, options)`: inserts a `human_gates` row with status `open`, emits `human_gate.created`, returns `gateId`.
@@ -116,12 +125,14 @@ pnpm -w typecheck && pnpm -w test
 - [ ] SSE stream replays from `afterSeq` then streams live events.
 - [ ] Gate foundation can create, wait on, and resolve a blocking gate via API, emitting both gate events.
 - [ ] The dev event-viewer page shows events live.
+- [ ] The event log, status machine, SSE replay, and gate lifecycle tests fail first and pass after implementation.
 
 ## Do Not
 
 - Do not let any code update `projects.status` directly. Always go through `setStatus` + the status machine.
 - Do not reuse or skip `seq` numbers.
 - Do not build gate UI here. That is M4.
+- Do not accept untested status transitions or gate decisions; these become workflow safety boundaries later.
 
 ## Output
 

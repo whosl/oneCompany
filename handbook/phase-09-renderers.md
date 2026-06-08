@@ -17,6 +17,7 @@ Build the left panel: the default information stream and a switch to swimlane mo
 - Top nav (spec §14.2): project switcher, status, phase, active agent group, run/pause, deploy entry, avatar dropdown (settings live here).
 - The Figma UI baseline is `OneCompany Console - Claude Style Draft`: https://www.figma.com/design/r1RF1q4KzBEQHLBWVhGD0X. Use the frames `Stream Mode`, `Swimlane Mode`, `Settings Modal`, `Project Hub Modal`, and `Claude-inspired Style Tokens` as the visual baseline.
 - Settings is global environment/secrets/readiness only. Project Hub is project management. Do not merge these surfaces.
+- TDD focus: write projection tests first, then UI contract tests for top nav, Settings, Project Hub, stream rendering, swimlane rendering, and lossless mode switching.
 
 ## Spec References
 
@@ -25,6 +26,8 @@ Build the left panel: the default information stream and a switch to swimlane mo
 ## Tasks
 
 ### Task 9.1 — Event projection (shared)
+
+Start red: write projection tests from fixed event fixtures before building the store. Include user messages, gates, tool calls, diffs, and test results.
 
 Create one client-side store that subscribes to the SSE stream and builds a projection: the ordered event list plus a derived "current snapshot" (status, phase, active agents, latest P/A/O/R per agent, user messages/answers, open gates, latest tool/test/diff summaries). Both renderers read from THIS store only.
 
@@ -50,6 +53,8 @@ Build the main layout: top nav across the top; below it a resizable left/right s
 Verify: the layout renders, the split is draggable, defaults match spec.
 
 ### Task 9.4 — Top nav
+
+Start red: write UI tests for coherent status/phase/group pills and the Settings/Project Hub entry points.
 
 Build the top nav with: project switcher, current status, current phase, active agent group indicator, run/pause control, deployment entry, and an avatar dropdown.
 
@@ -88,6 +93,8 @@ Verify: Project Hub shows multiple projects from real project data; selecting a 
 
 ### Task 9.7 — Information stream renderer
 
+Start red: write renderer tests for ordered events, collapsed verbose details, user-vs-agent styling, inline gates, and composer submission through the correct API.
+
 Render the projection as a chronological feed: user requirement + answers, user custom instructions, completeness score, agent events in order, P/A/O/R summaries, tool calls, command output, diffs, test results, human gate cards (reuse M4 `GateCard`), and risk warnings. Collapse verbose details by default (spec §14.3).
 
 Add the sticky user composer at the bottom of Stream Mode. It supports answering gap questions, adding supplementary requirements, providing custom gate text, and choosing gate options. It must submit through the current workflow/gate API and must not imply approval unless the selected gate option allows it.
@@ -95,6 +102,8 @@ Add the sticky user composer at the bottom of Stream Mode. It supports answering
 Verify: events appear in order; verbose blocks are collapsed but expandable; a raised gate shows its card inline; a user message card is visibly distinct from agent cards; the composer can send an answer/custom gate note through the correct API.
 
 ### Task 9.8 — Swimlane renderer
+
+Start red: write a lossless-switching test that feeds one projection and asserts stream and swimlane expose the same user/gate/agent data.
 
 Add a button to switch the left panel to swimlane mode. Render the SAME projection as a grid: rows = agents, columns = Plan/Act/Observe/Reflect. Active cells emphasized, completed cells compact, failed cells show risk/retry (from failure events). Switching back and forth must not lose or change data (spec §14.4).
 
@@ -124,6 +133,7 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Information stream shows all required items, verbose collapsed, with user cards, inline gate cards, and sticky user composer.
 - [ ] Swimlane shows agents x P/A/O/R with active/completed/failed states plus user/gate markers from the same projection.
 - [ ] Switching stream <-> swimlane is lossless and shows the same data.
+- [ ] Projection, top nav, Settings, Project Hub, information stream, swimlane, and mode-switch behaviors are covered by tests that failed before implementation.
 
 ## Do Not
 
@@ -132,6 +142,7 @@ pnpm -w typecheck && pnpm -w test
 - Do not put project management in settings; use Project Hub.
 - Do not let the Stream composer bypass gate policies.
 - Do not add a third left-panel mode (spec §20 excludes the crowded option).
+- Do not test stream and swimlane as separate data systems; both must be verified from the same projection fixture.
 
 ## Output
 

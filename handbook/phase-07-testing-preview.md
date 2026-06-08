@@ -15,6 +15,7 @@ Run real tests and start a local preview of the generated app. Keep per-slice ch
   - Final acceptance suite: the full app-wide run during the `Testing` phase — unit + integration + typecheck + build + Playwright E2E + acceptance cases.
 - Testing phase transitions (spec §3.1): `Developing -> Testing` when all slices accepted; `Testing -> Developing` if the full suite fails; `Testing -> Deploying` if it passes and deployment is requested; else `Testing -> Awaiting Acceptance`.
 - Local preview (spec §15, §16): the generated app must actually start and be reachable at a local URL. Playwright verifies that same URL. Preview must work BEFORE any deployment.
+- TDD focus: write failing tests for runner result parsing, preview lifecycle, `test_results` persistence, status routing, and Playwright artifact handling before implementing the testing phase.
 
 ## Spec References
 
@@ -23,6 +24,8 @@ Run real tests and start a local preview of the generated app. Keep per-slice ch
 ## Tasks
 
 ### Task 7.1 — Test runners
+
+Start red: write parser tests using sample Vitest/typecheck/build/Playwright outputs before implementing the runners.
 
 Create `packages/workspace/src/test-runner.ts` with functions that run inside the generated project via M5 `runCommand` and parse results:
 - `runVitest()` — unit + integration.
@@ -35,6 +38,8 @@ Each returns a normalized result: suite name, passed/failed counts, status, and 
 Verify: each runner runs against a sample generated app and returns a normalized result.
 
 ### Task 7.2 — Local preview server
+
+Start red: write a preview lifecycle test for start -> reachable URL -> stored state -> stop.
 
 Create `packages/workspace/src/preview.ts`:
 - `startPreview(projectId)` -> start the generated app's dev/preview server, capture the local URL, store it in `DevState.previewUrl`, and emit an event/artifact.
@@ -50,6 +55,8 @@ Verify: `startPreview` returns a reachable local URL (an HTTP GET to it succeeds
 Verify: running a suite writes a `test_results` row and emits `test.result`.
 
 ### Task 7.4 — Testing phase flow
+
+Start red: write status-routing tests for all-green -> forward and forced failure -> `Developing`.
 
 When M6 reports all slices accepted, set status `Testing` and run the FULL suite app-wide:
 - Run typecheck + build + Vitest + Playwright E2E + acceptance cases.
@@ -82,12 +89,14 @@ pnpm -w typecheck && pnpm -w test
 - [ ] The `Testing` phase runs the FULL app-wide suite, separate from per-slice checks.
 - [ ] Testing failure -> `Developing`; pass -> `Deploying` (if requested) or `Awaiting Acceptance`.
 - [ ] Playwright verifies the same preview URL the Preview tab will use.
+- [ ] Runner parsing, preview lifecycle, result persistence, artifact storage, and Testing status routing are covered by tests that failed before implementation.
 
 ## Do Not
 
 - Do not merge per-slice checks and the final suite. They are separate (spec §5.5).
 - Do not attempt deployment before a working local preview exists.
 - Do not mark Testing passed if any suite failed.
+- Do not rely on command exit codes alone when structured reporter output is available; parse and persist normalized results.
 
 ## Output
 
