@@ -101,6 +101,74 @@ Create `packages/agent-core/src/graph.ts`:
 
 Verify: build a 2-node demo graph: node A runs the stub agent; node B logs "done". Running the graph produces the agent's P/A/O/R events then finishes.
 
+### Task 2.6 — CodingHarness interface + stub
+
+The Development group (M6) runs its coding agent on the **opencode** engine, behind a small swappable interface called `CodingHarness` (spec §10.4). In this phase you only create the interface and a fake (stub) implementation for tests. The real `OpencodeHarness` is built in M6 (see phase-06, the "opencode Engine" section).
+
+Create `packages/agent-core/src/harness/types.ts`:
+
+```ts
+export interface SliceSpec {
+  projectId: string;
+  sliceId: string;
+  goal: string;                 // what this slice must achieve
+  acceptanceChecks: string[];   // human-readable checks
+  testCommand: string;          // authoritative scoped test, e.g. "pnpm vitest run slice-02 --reporter=json"
+  modelTier: "cheap" | "standard" | "strong"; // §13 routing for this agent
+}
+
+export interface ToolOp {
+  kind: "shell" | "edit" | "read" | "other";
+  command?: string;             // for shell
+  path?: string;                // for edit/read
+}
+
+export type AuthDecision =
+  | { allow: true }
+  | { allow: false; reason: string };
+
+export interface DevContext {
+  repoPath: string;                                  // generated-projects/{slug}/repo
+  emit: (event: unknown) => void;                    // EventEnvelope/AgentEvent emitter (M1)
+  authorize: (op: ToolOp) => Promise<AuthDecision>;  // host risk-grades it (M5/§12)
+}
+
+export interface SliceResult {
+  passed: boolean;              // authoritative test result
+  summary: string;
+  changedFiles: string[];
+}
+
+export interface CodingHarness {
+  // Run ONE function slice. The harness streams normalized events through ctx.emit,
+  // and MUST call ctx.authorize(op) before any shell/edit. It returns the outcome;
+  // it never decides budgets, status, or gates — LangGraph does (spec §10.1, L5).
+  runSlice(slice: SliceSpec, ctx: DevContext): Promise<SliceResult>;
+}
+```
+
+Create a stub for tests `packages/agent-core/src/harness/stub.ts`:
+
+```ts
+import type { CodingHarness } from "./types";
+
+export const StubHarness: CodingHarness = {
+  async runSlice(slice, ctx) {
+    ctx.emit({ type: "agent.plan", summary: `plan ${slice.sliceId}` });
+    const dec = await ctx.authorize({ kind: "shell", command: slice.testCommand });
+    ctx.emit({ type: "agent.act", summary: dec.allow ? "ran tests" : "blocked" });
+    ctx.emit({ type: "agent.observe", summary: "stub result" });
+    return { passed: dec.allow, summary: "stub", changedFiles: [] };
+  },
+};
+```
+
+Rules:
+- Keep budgets, retries, status, and gates OUT of the harness. The harness only does the coding work for one slice and reports the result.
+- The host (LangGraph) provides `authorize` so every shell/edit is risk-graded (§12). The harness must call it before acting.
+
+Verify: a unit test runs `StubHarness.runSlice(...)` with a fake `ctx`, sees `agent.plan/act/observe` emitted, and confirms `authorize` was called once.
+
 ## Verification
 
 ```bash
@@ -118,6 +186,7 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Tool calls emit `tool_call.started` and then `output` or `failed`.
 - [ ] Model router maps tiers to model ids per §13.
 - [ ] A demo LangGraph workflow runs nodes, can use a gate node, and keeps budgets in durable state.
+- [ ] `CodingHarness` interface + `StubHarness` exist; budgets/status/gates are not inside the harness.
 
 ## Do Not
 
@@ -130,3 +199,4 @@ pnpm -w typecheck && pnpm -w test
 - `runAgent` (single-agent executor) and `callTool`, used by all real agents.
 - The agent registry and model router.
 - The LangGraph harness with gate nodes and durable-state budgets, used by M3 and M6.
+- The `CodingHarness` interface + `StubHarness`, implemented by `OpencodeHarness` in M6.

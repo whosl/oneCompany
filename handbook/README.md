@@ -73,7 +73,7 @@ apps/
   web/                 # Next.js control console (Tailwind, shadcn/ui)
   api/                 # Hono backend API + SSE endpoints
 packages/
-  agent-core/          # agent registry, LangGraph workflows, OpenAI Agents SDK integration, model routing
+  agent-core/          # agent registry, LangGraph workflows, OpenAI Agents SDK + CodingHarness/opencode, model routing
   workflow/            # requirement + development graph definitions
   workspace/           # project workspace, git, shell, sandbox, file ops, risk grading
   shared/              # shared types + zod schemas (events, states, status machine)
@@ -118,6 +118,7 @@ type EventEnvelope<TPayload> = {
 - ReAct loop: an agent's own Plan -> Act -> Observe -> Reflect cycle inside one node.
 - Risk grading: how dangerous a shell/tool command is (Low / Medium / Medium-constrained / High / High deploy-network). See spec §12. High needs a gate; containable High runs in the Docker sandbox; deploy/tunnel run on the real machine, not the sandbox.
 - Sandbox: a Docker container used to run containable high-risk operations safely (spec §12).
+- Coding engine / CodingHarness: the Development group's coding runs on opencode (an external AI coding agent) behind a swappable `CodingHarness` interface. opencode does the per-slice TDD work; LangGraph keeps budgets/status/gates; the authoritative test result comes from our own scoped test run (spec §10.4).
 
 ## Status Machine (reference — from spec §3.1)
 
@@ -205,11 +206,11 @@ Do these in order.
 | --- | --- | --- | --- |
 | M0 | [phase-00-foundations.md](./phase-00-foundations.md) | Monorepo, DB, shared types boot | — |
 | M1 | [phase-01-event-log-sse-status.md](./phase-01-event-log-sse-status.md) | Event log + SSE + status machine + gate base | M0 |
-| M2 | [phase-02-agent-registry.md](./phase-02-agent-registry.md) | Agent registry + orchestration skeleton | M1 |
+| M2 | [phase-02-agent-registry.md](./phase-02-agent-registry.md) | Agent registry + orchestration skeleton + CodingHarness | M1 |
 | M3 | [phase-03-requirement-workflow.md](./phase-03-requirement-workflow.md) | One sentence -> PRD + acceptance | M2 |
 | M4 | [phase-04-human-gate-ui.md](./phase-04-human-gate-ui.md) | Gate cards + per-gate policy | M1 |
 | M5 | [phase-05-workspace-git-shell-sandbox.md](./phase-05-workspace-git-shell-sandbox.md) | Safe exec, git, sandbox, logging | M0 |
-| M6 | [phase-06-development-workflow.md](./phase-06-development-workflow.md) | Tech plan -> slice loop -> commits | M3, M4, M5 |
+| M6 | [phase-06-development-workflow.md](./phase-06-development-workflow.md) | Tech plan -> opencode slice loop -> commits | M3, M4, M5 |
 | M7 | [phase-07-testing-preview.md](./phase-07-testing-preview.md) | Tests + local preview | M5, M6 |
 | M8 | [phase-08-right-panel-tabs.md](./phase-08-right-panel-tabs.md) | Files/Preview/Terminal/Tests/Report | M1, M5, M7 |
 | M9 | [phase-09-renderers.md](./phase-09-renderers.md) | Info stream + swimlane | M1, M2 |

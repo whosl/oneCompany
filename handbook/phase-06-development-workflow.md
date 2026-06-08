@@ -54,16 +54,16 @@ Verify: a tech plan yields a non-empty task queue of slices.
 
 ### Task 6.5 — Per-slice loop
 
-For the current slice, run this as a LangGraph sub-flow (counters in durable state, NOT in the agent):
-1. Plan: `coding`/`planner` defines the task details.
-2. Act: write the failing tests FIRST (via `test-designer` + workspace file writes), then implement code.
-3. Observe: run the slice-scoped checks via M5 `runCommand` — typecheck, this slice's unit/integration tests, build, targeted browser check. Capture results.
+For the current slice, run this as a LangGraph sub-flow (counters in durable state, NOT in the agent or the engine). The coding itself runs on opencode via `OpencodeHarness` — see the "opencode Engine" section (E1–E6) below for how to build it.
+1. Plan: build a `SliceSpec` (goal, acceptance checks, the slice-scoped `testCommand`, model tier `strong`) from the current slice.
+2. Act + Observe (engine): call `OpencodeHarness.runSlice(slice, ctx)`. opencode writes the failing tests first, implements, and iterates. Its events stream into the info stream through the event bridge (E3), and every shell/edit passes through `ctx.authorize` (risk grading, E4).
+3. Authoritative check: regardless of what opencode reports, run the slice-scoped `testCommand` yourself via M5 `runCommand` with a structured reporter (e.g. `vitest --reporter=json`), parse pass/fail, and emit `test.result`. This is the value the loop trusts (spec §10.4, O4).
 4. Reflect: `review`/`qa` summarizes pass/fail and whether replanning is needed.
-5. Fix loop: if checks fail and `currentSliceAttempts < maxSliceAttempts`, increment and repeat from Act.
-6. Commit: when checks pass, `commitSlice` (M5) and emit `diff.created`; write to `diffs`.
+5. Fix loop: if the authoritative check fails and `currentSliceAttempts < maxSliceAttempts`, increment and repeat from step 2.
+6. Commit: when the authoritative check passes, `commitSlice` (M5) and emit `diff.created`; write to `diffs`.
 7. Move to the next slice.
 
-Verify: a simple slice goes Plan -> failing tests -> implement -> green -> commit, producing one commit and a `diff.created` event.
+Verify: a simple slice goes Plan -> opencode writes failing tests -> implement -> your authoritative test is green -> commit, producing one commit and a `diff.created` event.
 
 ### Task 6.6 — Slice Failure gate (budget exhausted) — REQUIRED
 
@@ -90,6 +90,156 @@ Record each change set in the `diffs` table and emit `diff.created` so the UI (M
 
 Verify: a committed slice has a `diffs` row and a `diff.created` event.
 
+## opencode Engine (OpencodeHarness, E1–E6)
+
+This implements the `CodingHarness` interface from M2 (Task 2.6) using **opencode** (spec §10.4). Do the steps in order. The opencode SDK evolves, so pin a version and check its docs for the exact method/event names; the shapes below match `@opencode-ai/sdk` and may need small adjustments at your pinned version.
+
+### E1 — Install + pin opencode, set providers/keys
+
+- Add the SDK: `pnpm add @opencode-ai/sdk` and pin an exact version in `package.json` (no `^`). Record the version in the project README.
+- Models/keys: opencode picks models from providers via Models.dev and reads API keys from the environment. Use OneCompany-managed keys (the same ones Settings reports as "ready", §14.6). Do NOT use opencode's interactive login or its hosted "Zen" models (spec §13, O5).
+- Map §13 tiers to concrete `provider/model` ids (e.g. strong = `anthropic/claude-...`). Reuse the M2 model router (`pickModel`) so there is one routing policy.
+
+Verify: `node -e "require('@opencode-ai/sdk')"` resolves; the pinned version is in the lockfile.
+
+### E2 — Start/stop a local opencode server per project
+
+Create `packages/agent-core/src/harness/opencode-server.ts`:
+
+```ts
+import { createOpencodeServer } from "@opencode-ai/sdk";
+
+export async function startProjectServer(repoPath: string) {
+  // Local-first: loopback only. opencode serves on 127.0.0.1:<port>.
+  const server = await createOpencodeServer({
+    hostname: "127.0.0.1",
+    // omit port (or use 0) to pick a free port; use server.url for the client
+    config: {
+      permission: { edit: "ask", bash: "ask" }, // force "ask"; see E4
+    },
+  });
+  return server; // { url, close() }
+}
+```
+
+Rules:
+- One server per project, pointed at that project's `repoPath` (`generated-projects/{slug}/repo`). Bind to `127.0.0.1` only.
+- Start it when the development group begins; call `server.close()` on completion or pause.
+- Optionally set a server password (env) since it is a local HTTP server.
+
+Verify: starting a server returns a `http://127.0.0.1:<port>` url; `createOpencodeClient({ baseUrl }).session.list()` returns an empty list; `server.close()` frees the port.
+
+### E3 — Event bridge (opencode events -> your events)
+
+Create `packages/agent-core/src/harness/event-bridge.ts`:
+
+```ts
+import { createOpencodeClient } from "@opencode-ai/sdk";
+
+export async function bridgeEvents(
+  baseUrl: string,
+  emit: (e: unknown) => void,
+  onPermission: (p: any) => void,
+) {
+  const client = createOpencodeClient({ baseUrl });
+  const events = await client.event.subscribe();
+  for await (const ev of events.stream) {
+    switch (ev.type) {
+      case "message.part.updated":         // streamed assistant/tool output
+        emit(mapToAgentEvent(ev));         // -> agent.plan/act/observe/reflect or tool_call.*
+        break;
+      case "permission.updated":           // opencode wants to run a shell/edit
+        onPermission(ev.properties);
+        break;
+      // map other types you care about (session.updated, message.updated, ...)
+    }
+  }
+  return client;
+}
+// mapToAgentEvent(ev) is a helper YOU write: turn an opencode event into your
+// EventEnvelope/AgentEvent (§8.1). Keep summaries short; never raw chain-of-thought.
+```
+
+Rules:
+- Translate opencode events into your `EventEnvelope`/`AgentEvent` (§8.1): plan/act/observe/reflect, `tool_call.*`, command output, `diff.created`. The info stream + swimlane then render them unchanged (§14.3.1).
+- Large tool/command output is folded behind an artifact link, not inlined (§8.2, R5).
+
+Verify: sending a trivial prompt to a session produces normalized P/A/O/R events on your SSE stream.
+
+### E4 — Permission bridge (opencode "ask" -> your risk grading + gate)
+
+```ts
+async function handlePermission(client, sessionId, perm, ctx) {
+  const op = toToolOp(perm);              // {kind:"shell"|"edit", command?, path?} — helper you write
+  const decision = await ctx.authorize(op); // M5/§12 risk grading + (high risk) M4 gate
+  await client.postSessionByIdPermissionsByPermissionId({
+    path: { id: sessionId, permissionId: perm.id },
+    body: { response: decision.allow ? "allow" : "reject" },
+  });
+}
+```
+
+Rules:
+- opencode runs in `ask` mode (E2 config). Every shell/edit raises a permission you must answer.
+- Low risk -> auto-allow; medium -> per §12; high -> raise the `dangerous_operation` gate (M4) and answer only after the human decides. Nothing auto-runs at high risk (O3).
+- Never configure opencode to auto-approve everything; that bypasses governance.
+
+Verify: a command opencode wants to run (e.g. `rm -rf ...`) is graded High and raises a gate; an `ls` is auto-allowed.
+
+### E5 — Log bridge (redact + chunk)
+
+- Pipe all opencode tool/command output through the M5 redaction + chunking pipeline before persisting or showing it (R5). Store metadata (path, bytes, hash, summary) in the log store; show a folded preview + "open in Terminal".
+
+Verify: output containing a fake API key is redacted in the stored log and in the stream.
+
+### E6 — runSlice (the CodingHarness implementation)
+
+Create `packages/agent-core/src/harness/opencode-harness.ts` implementing the M2 `CodingHarness`:
+
+```ts
+import { createOpencodeClient } from "@opencode-ai/sdk";
+import type { CodingHarness } from "./types";
+import { startProjectServer } from "./opencode-server";
+import { bridgeEvents } from "./event-bridge";
+
+export const OpencodeHarness: CodingHarness = {
+  async runSlice(slice, ctx) {
+    const server = await startProjectServer(ctx.repoPath);
+    try {
+      const client = createOpencodeClient({ baseUrl: server.url });
+      const { data: session } = await client.session.create();
+      // start event + permission bridges (E3/E4)
+      bridgeEvents(server.url, ctx.emit, (perm) =>
+        handlePermission(client, session.id, perm, ctx));
+      // TDD prompt: write failing tests first, then implement, then run them
+      await client.session.prompt({
+        path: { id: session.id },
+        body: {
+          model: pickModel(slice.modelTier),     // §13 routing + managed keys (or set config.model in E2)
+          parts: [{ type: "text", text: tddPrompt(slice) }],
+        },
+      });
+      // AUTHORITATIVE check: run the scoped test ourselves (do not trust self-report)
+      const res = await runCommand(ctx.repoPath, slice.testCommand); // M5
+      const passed = parseReporter(res.stdout).passed;               // helper you write
+      ctx.emit({ type: "test.result", sliceId: slice.sliceId, passed });
+      return { passed, summary: passed ? "green" : "red", changedFiles: res.changedFiles };
+    } finally {
+      await server.close();
+    }
+  },
+};
+// tddPrompt(slice): a helper that builds the instruction text from the SliceSpec
+// (goal + acceptance checks + "write failing tests first, then implement").
+```
+
+Rules:
+- opencode does the intra-slice TDD loop; the **authoritative** pass/fail is the test command you run (O4). LangGraph decides retry/commit on that value, not opencode's word.
+- Budgets/retries/commit live in Task 6.5/6.6 (LangGraph), never here.
+- Wire this `OpencodeHarness` as the `CodingHarness` used by the Task 6.5 loop. `StubHarness` (M2) stays for unit tests.
+
+Verify: `OpencodeHarness.runSlice` on a tiny slice writes a failing test, implements until your authoritative `vitest --reporter=json` is green, streams P/A/O/R + a `test.result`, and asks permission before any shell/edit.
+
 ## Verification
 
 ```bash
@@ -107,14 +257,21 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Retry budget (4) is enforced; exhaustion raises the Slice Failure gate with all four options working.
 - [ ] Skip requests go through Change Review and update acceptance criteria (or stay blocking) — never a silent waiver.
 - [ ] Diffs recorded and `diff.created` emitted.
+- [ ] The per-slice coding runs on `OpencodeHarness` (one local opencode server per project, loopback `127.0.0.1`).
+- [ ] Every opencode shell/edit goes through the permission bridge (risk grading + gate); nothing high-risk auto-runs.
+- [ ] The authoritative slice pass/fail comes from your own scoped test run (structured reporter), not opencode's self-report, and is shown in Tests + stream.
+- [ ] opencode uses managed keys + §13 model routing; opencode login/Zen are disabled.
 
 ## Do Not
 
 - Do not run the full app-wide test suite inside the per-slice loop. That is M7.
 - Do not put the retry counter inside the agent. It lives in durable state.
 - Do not skip a slice silently. Always go through Change Review.
+- Do not let opencode auto-approve shell/edit. Every action goes through the permission bridge (E4).
+- Do not trust opencode's self-reported test result for transitions. Run the authoritative scoped test yourself (E6, step 3).
 
 ## Output
 
 - Committed code produced slice by slice, with diffs and a versioned tech plan.
 - Change Review handling, reused by M10 for user change requests.
+- `OpencodeHarness` + event/permission/log bridges — the M2 `CodingHarness` interface, now implemented.

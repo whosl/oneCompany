@@ -1,11 +1,11 @@
 # OneCompany MVP Product And Architecture Spec
 
-Version: 0.3
-Status: draft, revised after business-logic, implementation-plan, Figma UI baseline, and development-engine review
+Version: 0.3.1
+Status: draft, revised after business-logic, implementation-plan, Figma UI baseline, and development-engine review, with the Figma console fixes applied
 Date: 2026-06-08
 Language: TypeScript full stack
 
-## Revision Notes (0.1 -> 0.3)
+## Revision Notes (0.1 -> 0.3.1)
 
 Changes are traceable by ID. H/M/L items landed in 0.2 (business-logic review); R items landed in 0.2.1 (implementation-plan review).
 
@@ -49,6 +49,10 @@ Changes are traceable by ID. H/M/L items landed in 0.2 (business-logic review); 
 - O3 — Three bridges connect opencode to OneCompany governance: event bridge (→ `EventEnvelope`/`AgentEvent`), permission bridge (→ §12 risk grading + sandbox + gate), and log bridge (→ §8.2 redaction + chunking) (§10.4, §12).
 - O4 — opencode runs the intra-slice TDD loop, but authoritative pass/fail is produced by OneCompany's own scoped test run at the slice boundary and surfaced to the frontend; LangGraph decides transitions on that authoritative result (§10.4, §15, §14.5).
 - O5 — opencode model selection is governed by §13 routing using OneCompany-managed keys; opencode's own login/Zen provider paths are disabled (§10.4, §13).
+
+### 0.3.1 — Figma baseline applied
+
+- U7 — Figma console fixes A–F applied and reflected in §14: top-nav lifecycle coherence, a locked requirement score with settled (green) vs upcoming (copper) chip semantics, the requirement-confirm gate rendered as a resolved historical card, a raw-vs-normalized requirement distinction, a gate-aware composer hint, a Preview-tab health indicator, a per-check Tests tab with a failing trace, and a full nine-stage Project Hub lifecycle timeline ending in Delivered (§14.3, §14.5, §14.7).
 
 ## 1. Product Positioning
 
@@ -784,6 +788,8 @@ It displays:
 
 The stream must clearly distinguish user-originated items from agent-originated items. The Figma baseline shows a user message card immediately after the current requirement summary so the user can see what was submitted and what can still be edited in the requirement loop.
 
+The requirement summary card shows requirement completeness as a single locked score once development has started (for example 92), with a progress bar at the same proportion. Its chips encode state by color: settled facts use the success (green) style (for example `角色权限已定`, `TDD 已启用`), while an upcoming required action uses the accent/copper style (for example `需要部署确认`). A chip must not remain an unresolved warning for something already decided.
+
 Stream Mode must include a persistent user composer near the bottom of the left panel. The composer supports:
 
 - Answering current gap questions.
@@ -882,9 +888,9 @@ The tab design should avoid overcrowding. The right side should combine the usef
 The Figma baseline fixes the following tab-level UX expectations:
 
 - Files: source and artifact tree, read-only file content, and diff display.
-- Preview: browser-like preview surface with local preview URL or deployment URL.
+- Preview: browser-like preview surface with local preview URL or deployment URL, plus a preview-health indicator (reachability, Playwright readiness, and console-error count).
 - Terminal: free terminal surface connected to the governed shell executor.
-- Tests: normalized suite status with pass/fail summaries and artifact links.
+- Tests: the final acceptance suite as per-check rows (TypeScript, Vitest unit/integration, build, Playwright E2E, acceptance), each with a pass/fail/pending status, a failing check's trace and suggested fix, and artifact links. The tab keeps the per-slice checks visibly separate from the final Testing-phase suite (§5.5, H3).
 - Report: PRD, acceptance cases, run instructions, risk summary, deployment/preview URL, and delivery report sections.
 
 ### 14.6 Settings Modal
@@ -916,7 +922,7 @@ It should include:
 - Search and filters for project status, risk, and delivery state.
 - Project list with name, generated-project path, status, completeness, open gates, risk count, and recent update time.
 - Selected project summary with status, active group, completeness, open gates, risk items, commit count, and created time.
-- Lifecycle/status flow timeline from Draft Requirement through Testing/Delivery state.
+- A user-facing lifecycle timeline that summarizes the §3 status machine along the full path to delivery: Draft, Asking, PRD, Tech plan, Developing, Testing, Deploy, Acceptance, Delivered. Completed and active stages use the accent style, pending stages are muted, and a marker shows the current stage (for example the function-slice loop during Developing).
 - Open human gate summary and actions such as Resolve Gate and View Log.
 - Preview and deployment summary, including local preview URL, deployment URL/tunnel state, Open Preview, and Deploy actions.
 - Project artifact cards for PRD, acceptance cases, delivery report, project folder, logs, screenshots/traces, and generated source.
@@ -925,6 +931,8 @@ It should include:
 Project Hub is the primary UI for multi-project management in MVP. The top-nav dropdown may show a compact recent-project list, but the modal is the canonical management surface.
 
 The compact project-switcher dropdown and the full Project Hub modal are mutually exclusive. Opening Project Hub should close or hide the compact dropdown so the Hub search/filter area is not visually overlapped.
+
+Project Hub is also where the local-first posture surfaces (for example a `local-first` indicator and a project count), and a short footer reinforces the split: Project Hub manages project instances, while Settings manages only the global environment and secrets (§14.6).
 
 ### 14.8 Visual Style Tokens
 

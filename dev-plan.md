@@ -1,6 +1,6 @@
 # OneCompany MVP Development Plan
 
-Based on: `spec_0.2.md` / version 0.3
+Based on: `spec_0.2.md` / version 0.3.1
 Date: 2026-06-08
 Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 
@@ -54,9 +54,9 @@ Implementation must follow this baseline for the MVP console's structure and vis
 - Claude-inspired warm console palette.
 - Left panel default Stream Mode with user messages, agent events, inline gates, and sticky user composer.
 - Left panel Swimlane Mode over the same projection.
-- Right panel exactly five tabs: Files, Preview, Terminal, Tests, Report.
+- Right panel exactly five tabs: Files, Preview (with a preview-health indicator), Terminal, Tests (per-check rows + failing trace; per-slice checks separate from the final suite), Report.
 - Avatar dropdown opens Settings for global environment/secrets/readiness only.
-- Project switcher opens Project Hub for multi-project management.
+- Project switcher opens Project Hub for multi-project management, including the 9-stage lifecycle timeline (Draft → Asking → PRD → Tech plan → Developing → Testing → Deploy → Acceptance → Delivered).
 
 ## Milestone Overview
 
@@ -216,9 +216,9 @@ Goal: the five MVP tabs (§14.5), wired to backing services.
 Tasks:
 - Implement the Figma-baseline tab shell with exactly five tabs and compact Claude-style surface treatment. [S]
 - Files: tree for generated source + artifacts, file content view, diff view (read-only; no in-viewer editing per §2.3). [M]
-- Preview: browser-like preview surface embedding local preview URL from M7 and deployment URL when available (§16). [S]
+- Preview: browser-like preview surface embedding local preview URL from M7 and deployment URL when available; show a preview-health indicator (reachable / Playwright ready / console-error count) (§16, §14.5). [S]
 - Terminal: free terminal whose output is captured to logs and subject to risk grading (§14.5, L3). [M]
-- Tests: render unit/integration/typecheck/build/E2E/acceptance results, pass/fail summaries, and artifact links (§15 backing from M7). [S]
+- Tests: render unit/integration/typecheck/build/E2E/acceptance results as per-check rows with pass/fail/pending status, a failing check's trace + suggested fix, and artifact links; keep per-slice checks visibly separate from the final suite (§15 backing from M7, §14.5). [S]
 - Report: PRD, acceptance cases, run instructions, delivery report, risks, deployment/preview URL, and final acceptance summary (§17). [S]
 
 Spec refs: §14.5, §2.3, §16, §17.
@@ -232,7 +232,7 @@ Goal: two renderers over one event source (§14.3, §14.4).
 Tasks:
 - Implement shared Claude-inspired style tokens from the Figma baseline: warm surfaces, dark ink text, copper/orange accent, muted warm borders, success/warning/danger states (§14.8). [S]
 - Top nav (visual option 2): project switcher, coherent status/phase/active-group/progress pills, run/pause, deploy entry, avatar dropdown w/ settings (§14.2). [M]
-- Project Hub modal from the project switcher: project search/filter/list, selected-project metrics, status flow, open gate summary, preview/deploy summary, artifacts, Open/Pause/Archive/New Project actions; compact dropdown and full Hub are mutually exclusive (§14.7). [M]
+- Project Hub modal from the project switcher: project search/filter/list, selected-project metrics, a 9-stage lifecycle timeline (Draft→Asking→PRD→Tech plan→Developing→Testing→Deploy→Acceptance→Delivered) with a current-stage marker, open gate summary, preview/deploy summary, artifacts, Open/Pause/Archive/New Project actions; compact dropdown and full Hub are mutually exclusive (§14.7). [M]
 - Settings modal from the avatar dropdown: workspace paths, API key/secret readiness, Cloudflare Tunnel configuration, environment checks, and read-only policy chips; exclude project management, model routing, sandbox policy, and shell-risk configuration (§14.6). [M]
 - Layout shell: top nav + resizable left/right split, default 42–46% / 54–58% (§14.1). [S]
 - Information stream renderer (Opencode/Claude-Code-style contract, §14.3.1): real-time SSE-appended feed (newest at bottom, pin-to-bottom auto-scroll); runs grouped by `runId`/`agentId`/`correlationId`; Plan/Act/Observe/Reflect segments with the active one expanded and completed ones collapsed; tool-call rows expandable to args/result with large output folded to artifact links (R5); streamed + secret-redacted command output with "open in Terminal"; inline diff/test chips linking to Files/Tests; explicit user vs agent vs gate styling with the raw user input preserved separately from the normalized summary; inline gate cards showing only allowed options (custom text binds to an allowed decision, never implicit approval), at most one blocking gate emphasized and past gates collapsed to resolved chips; sticky context-aware composer. Engine-agnostic over the normalized event stream (§14.3, §14.3.1, §8). [M]
