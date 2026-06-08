@@ -10,9 +10,15 @@ import {
 import { getAgent } from "./registry.js";
 import { pickModel } from "./router.js";
 
+export type AgentRunner = (
+  agentIdAtVersion: string,
+  task: unknown,
+) => Promise<{ output: unknown }> | { output: unknown };
+
 export type ExecutorContext = {
   db: Db;
   onEvent?: (envelope: EventEnvelope) => void;
+  runner?: AgentRunner;
 };
 
 export type RunAgentInput = {
@@ -68,7 +74,12 @@ export async function runAgent(
   });
   notify(ctx, started);
 
-  if (input.forceFail) {
+  let output: unknown = { summary: "stub", modelId };
+
+  if (ctx.runner) {
+    const runnerResult = await ctx.runner(input.agentIdAtVersion, input.task);
+    output = runnerResult.output;
+  } else if (input.forceFail) {
     return failRun(ctx, {
       projectId: input.projectId,
       agentId: agent.id,
@@ -79,11 +90,15 @@ export async function runAgent(
     });
   }
 
+  if (!ctx.runner) {
+    output = { summary: "stub", modelId };
+  }
+
   const summaries = {
-    plan: `Plan for ${String(input.task ?? "task")}`,
+    plan: `Plan for ${agent.role}`,
     act: `Acting with ${modelId}`,
-    observe: "Observed stub outcome",
-    reflect: "Reflected on stub run",
+    observe: ctx.runner ? "Observed structured output" : "Observed stub outcome",
+    reflect: "Reflected on run",
   };
 
   for (const [phase, summary] of Object.entries({
@@ -119,7 +134,7 @@ export async function runAgent(
 
   return {
     runId,
-    output: { summary: "stub", modelId },
+    output,
     failed: false,
     modelId,
   };

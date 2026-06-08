@@ -6,7 +6,23 @@ export {
   registerAgent,
 } from "./registry.js";
 export { pickModel, type ModelTier } from "./router.js";
-export { runAgent, type ExecutorContext, type RunAgentInput, type RunAgentResult } from "./executor.js";
+export {
+  runAgent,
+  type AgentRunner,
+  type ExecutorContext,
+  type RunAgentInput,
+  type RunAgentResult,
+} from "./executor.js";
+export {
+  registerRequirementAgents,
+  REQUIREMENT_AGENT_DEFINITIONS,
+  REQUIREMENT_AGENT_IDS,
+} from "./agents/requirement/definitions.js";
+export { runScriptedRequirementAgent } from "./agents/requirement/scripted-runner.js";
+export type {
+  RequirementAgentTask,
+  RequirementFixtureProfile,
+} from "./agents/requirement/types.js";
 export { callTool, type CallToolInput, type CallToolResult, type ToolContext } from "./tools.js";
 export { DUMMY_AGENT } from "./fixtures.js";
 export { runDemoGraph, buildDemoGraph } from "./graph/demo-graph.js";

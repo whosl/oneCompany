@@ -1,6 +1,6 @@
 # M3 Implementation Plan — Requirement Workflow（需求确认工作流）
 
-Status: ready to execute
+Status: complete (M3 DoD passed)
 Branch: `feat/m3-requirement-workflow`（从 `feat/m2-agent-orchestration` 切出）
 Source: `spec.md` v0.3.2 §3.1、§4、§6、§7、§8.1、§10.1、§10.3、§13；`handbook/phase-03-requirement-workflow.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 6–8 days（一名工程师）
@@ -360,15 +360,15 @@ curl -X POST .../requirement/start -d '{"requirement":"完整的 ...（complete 
 
 ## 10. Definition of Done
 
-- [ ] 五个需求 Agent 已注册，输出通过 `@oc/shared` schema 校验
-- [ ] `RequirementState` 持久化（threshold、budget、每轮 `scoreAfter`）
-- [ ] 循环产出版本化 PRD + acceptance criteria
-- [ ] 循环 **必定终止**：预算耗尽与 stuck 均触发 Requirement Stuck gate
-- [ ] 三个 gate 选项均可工作（keep_answering / force_continue / fail）
-- [ ] `force_continue` 写入 `RequirementState.risks`
-- [ ] 完整初始输入可 `Draft Requirement → PRD Ready` 直通（R3）
-- [ ] 状态、循环、gate、答题、PRD 版本化均有先红后绿的测试
-- [ ] 预算/stuck 逻辑不在 Agent 内；workflow 不 import 具体 Agent class
+- [x] 五个需求 Agent 已注册，输出通过 `@oc/shared` schema 校验
+- [x] `RequirementState` 持久化（threshold、budget、每轮 `scoreAfter`）
+- [x] 循环产出版本化 PRD + acceptance criteria
+- [x] 循环 **必定终止**：预算耗尽与 stuck 均触发 Requirement Stuck gate
+- [x] 三个 gate 选项均可工作（keep_answering / force_continue / fail）
+- [x] `force_continue` 写入 `RequirementState.risks`
+- [x] 完整初始输入可 `Draft Requirement → PRD Ready` 直通（R3）
+- [x] 状态、循环、gate、答题、PRD 版本化均有先红后绿的测试
+- [x] 预算/stuck 逻辑不在 Agent 内；workflow 不 import 具体 Agent class
 
 ## 11. Out of Scope
 

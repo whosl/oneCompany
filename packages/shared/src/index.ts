@@ -3,11 +3,13 @@ export * from "./schemas/dev-state.js";
 export * from "./schemas/event-envelope.js";
 export * from "./schemas/project-status.js";
 export * from "./schemas/requirement-state.js";
+export * from "./schemas/requirement-agents.js";
 export * from "./db/schema.js";
 export { createDb, type Db } from "./db/client.js";
 export { getDbPath } from "./db/paths.js";
 export { MVP_TABLE_COUNT, MVP_TABLE_NAMES } from "./db/mvp-tables.js";
 export { emit, listEvents, type EmitInput } from "./events/log.js";
+export { validRequirementState } from "./test-fixtures/m0-baseline.js";
 export {
   assertTransition,
   canTransition,
