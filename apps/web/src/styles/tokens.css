@@ -2,6 +2,7 @@
   --oc-app-bg: oklch(0.98 0.01 85);
   --oc-surface-base: oklch(0.99 0.008 90);
   --oc-surface-raised: oklch(0.97 0.012 80);
+  --oc-surface-warm: oklch(0.95 0.03 75);
   --oc-border-muted: oklch(0.88 0.02 75);
   --oc-text-primary: oklch(0.22 0.02 50);
   --oc-text-muted: oklch(0.5 0.02 70);

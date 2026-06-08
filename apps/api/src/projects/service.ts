@@ -133,10 +133,48 @@ export function createProjectService(db: Db, onEvent: (envelope: EventEnvelope) 
     };
   };
 
+  const listProjects = (): ProjectRecord[] => {
+    return db
+      .select()
+      .from(projects)
+      .orderBy(desc(projects.updated_at))
+      .all()
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        status: parseProjectStatus(row.status),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+  };
+
+  const pauseProject = (projectId: string): ProjectRecord => {
+    return setStatus(projectId, "Paused", "user.pause");
+  };
+
+  const resumeProject = (projectId: string): ProjectRecord => {
+    const project = getProject(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+    if (project.status !== "Paused") {
+      throw new Error(`Project is not paused: ${projectId}`);
+    }
+    const pausedFrom = getPausedFrom(db, projectId);
+    if (!pausedFrom) {
+      throw new Error(`Paused-from status not found for project: ${projectId}`);
+    }
+    return setStatus(projectId, pausedFrom, "user.resume");
+  };
+
   return {
     createProject,
     getProject,
     setStatus,
+    listProjects,
+    pauseProject,
+    resumeProject,
   };
 }
 

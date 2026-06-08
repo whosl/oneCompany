@@ -17,6 +17,10 @@ import { createProjectRoutes } from "./projects/routes.js";
 import { createProjectService } from "./projects/service.js";
 import { createRequirementRoutes } from "./requirement/routes.js";
 import { createRequirementService } from "./requirement/service.js";
+import { createConsoleRoutes } from "./console/routes.js";
+import { createConsoleService } from "./console/service.js";
+import { createEnvironmentRoutes } from "./environment/routes.js";
+import { createEnvironmentService } from "./environment/service.js";
 import { createPanelRoutes } from "./panel/routes.js";
 import { createPanelService } from "./panel/service.js";
 import { createWorkspaceRoutes } from "./workspace/routes.js";
@@ -45,10 +49,13 @@ export function createApp(deps: AppDependencies) {
   const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
   const testing = createTestingService(deps.db, projects, workspace, onEvent);
   const panel = createPanelService(deps.db, projects, workspace);
+  const consoleService = createConsoleService(deps.db, projects, gates);
+  const environment = createEnvironmentService();
   resumeRef.requirement = requirement;
   resumeRef.development = development;
 
   app.get("/health", (c) => c.json({ ok: true }));
+  app.route("/environment", createEnvironmentRoutes(environment));
   app.route("/projects", createProjectRoutes(projects, workspace));
   app.route("/projects", createWorkspaceRoutes(workspace));
   app.route("/projects", createEventRoutes(deps.db));
@@ -59,6 +66,7 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createDevelopmentRoutes(development));
   app.route("/projects", createTestingRoutes(testing));
   app.route("/projects", createPanelRoutes(panel));
+  app.route("/projects", createConsoleRoutes(consoleService));
 
   return {
     app,

@@ -1,6 +1,6 @@
 # M9 Implementation Plan — Info Stream + Swimlane + Console Shell（单投影双渲染器 + 顶栏/Hub/Settings）
 
-Status: ready to execute
+Status: complete
 Branch: `feat/m9-renderers`（从 `feat/m8-right-panel-tabs` 切出）
 Source: `spec.md` v0.3.2 §8、§14.1–§14.8、§14.3.1、§20；`handbook/phase-09-renderers.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 10–14 days（一名工程师）
@@ -454,19 +454,19 @@ pnpm --filter @oc/web dev
 
 ## 9. Definition of Done
 
-- [ ] 单一 `ConsoleProjection` 馈送 Stream 与 Swimlane（无 per-view store）
-- [ ] §14.8 token 扩展并用于 shell 组件
-- [ ] Layout：顶栏 + 可拖拽分栏（默认 ~44/56）；右侧 M8 五 Tab
-- [ ] Top nav：switcher、status、phase、group、run/pause、deploy 入口、avatar
-- [ ] Settings 从 avatar 打开；仅全局环境/就绪；排除 model/sandbox/risk/项目管理
-- [ ] Project Hub 从 switcher 打开；多项目列表 + 9 阶段时间线 + artifact/gate 摘要
-- [ ] 顶栏 pills 与 lifecycle 一致（Developing 不显示 requirement completeness 为 phase）
-- [ ] Hub 与 compact dropdown 互斥
-- [ ] Stream：用户卡、P/A/O/R、内联 gate、折叠 verbose、sticky composer（§14.3.1）
-- [ ] Swimlane：agents × P/A/O/R + user/gate markers；失败态可见
-- [ ] Stream ↔ Swimlane 切换无损（同一 fixture 测试）
-- [ ] Console API + 投影 + 各 UI 模块先红后绿测试
-- [ ] `pnpm -w test` + `pnpm -w typecheck` 绿
+- [x] 单一 `ConsoleProjection` 馈送 Stream 与 Swimlane（无 per-view store）
+- [x] §14.8 token 扩展并用于 shell 组件
+- [x] Layout：顶栏 + 可拖拽分栏（默认 ~44/56）；右侧 M8 五 Tab
+- [x] Top nav：switcher、status、phase、group、run/pause、deploy 入口、avatar
+- [x] Settings 从 avatar 打开；仅全局环境/就绪；排除 model/sandbox/risk/项目管理
+- [x] Project Hub 从 switcher 打开；多项目列表 + 9 阶段时间线 + artifact/gate 摘要
+- [x] 顶栏 pills 与 lifecycle 一致（Developing 不显示 requirement completeness 为 phase）
+- [x] Hub 与 compact dropdown 互斥
+- [x] Stream：用户卡、P/A/O/R、内联 gate、折叠 verbose、sticky composer（§14.3.1）
+- [x] Swimlane：agents × P/A/O/R + user/gate markers；失败态可见
+- [x] Stream ↔ Swimlane 切换无损（同一 fixture 测试）
+- [x] Console API + 投影 + 各 UI 模块先红后绿测试
+- [x] `pnpm -w test` + `pnpm -w typecheck` 绿
 
 ## 10. Out of Scope
 

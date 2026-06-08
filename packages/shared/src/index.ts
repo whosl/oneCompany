@@ -7,6 +7,7 @@ export * from "./schemas/requirement-agents.js";
 export * from "./schemas/dev-agents.js";
 export * from "./schemas/testing.js";
 export * from "./schemas/panel.js";
+export * from "./schemas/console.js";
 export * from "./db/schema.js";
 export { createDb, type Db } from "./db/client.js";
 export { getDbPath } from "./db/paths.js";

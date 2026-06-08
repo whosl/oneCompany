@@ -1,6 +1,8 @@
 import type {
+  ConsoleSnapshot,
   DiffPatchResponse,
   DiffsListResponse,
+  EnvironmentReadiness,
   FileContentResponse,
   FilesListResponse,
   PreviewStatus,
@@ -93,3 +95,63 @@ export const panelApi = {
 };
 
 export type PanelApi = typeof panelApi;
+
+export type ProjectSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const consoleApi = {
+  listProjects() {
+    return requestJson<{ projects: ProjectSummary[] }>("/projects");
+  },
+
+  createProject(name: string) {
+    return requestJson<ProjectSummary>("/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  getSnapshot(projectId: string) {
+    return requestJson<ConsoleSnapshot>(`/projects/${projectId}/console/snapshot`);
+  },
+
+  pauseProject(projectId: string) {
+    return requestJson<ProjectSummary>(`/projects/${projectId}/pause`, { method: "POST" });
+  },
+
+  resumeProject(projectId: string) {
+    return requestJson<ProjectSummary>(`/projects/${projectId}/resume`, { method: "POST" });
+  },
+
+  getEnvironmentReadiness() {
+    return requestJson<EnvironmentReadiness>("/environment/readiness");
+  },
+
+  startRequirement(projectId: string, requirement: string) {
+    return requestJson(`/projects/${projectId}/requirement/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requirement, profile: "happy_path" }),
+    });
+  },
+
+  submitRequirementAnswers(projectId: string, answers: string[]) {
+    return requestJson(`/projects/${projectId}/requirement/answers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    });
+  },
+
+  resolveGate: panelApi.resolveGate,
+  listOpenGates: panelApi.listOpenGates,
+};
+
+export type ConsoleApi = typeof consoleApi;
