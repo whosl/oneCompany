@@ -73,6 +73,7 @@ Tasks map 1:1 to `phase-00-foundations.md`. Do them **in order**; each has a ver
 | 0.5 | DB + migrate runner | `pnpm migrate` creates sqlite |
 | 0.6 | 18 MVP tables | sqlite lists 18 tables |
 | 0.7 | Shared zod types | `pnpm -w typecheck` |
+| 0.8 | M0 test baseline backfill | `pnpm -w test` |
 
 ## 5. Task Details
 
@@ -110,6 +111,7 @@ Drizzle + better-sqlite3 in `@oc/shared`; 18 tables per spec §10.3 (not integra
 - [x] `@oc/shared` exports all required schemas/types
 - [x] Both apps import from `@oc/shared`
 - [x] No integration tables, no `packages/integrations`, no business logic
+- [x] M0 baseline tests pass with `pnpm -w test` (Task 0.8)
 
 ## 7. What Later Phases Need
 

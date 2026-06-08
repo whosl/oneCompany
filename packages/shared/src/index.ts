@@ -6,3 +6,4 @@ export * from "./schemas/requirement-state.js";
 export * from "./db/schema.js";
 export { createDb, type Db } from "./db/client.js";
 export { getDbPath } from "./db/paths.js";
+export { MVP_TABLE_COUNT, MVP_TABLE_NAMES } from "./db/mvp-tables.js";

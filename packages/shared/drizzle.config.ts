@@ -1,7 +1,7 @@
 import { defineConfig } from "drizzle-kit";
-import path from "node:path";
+import { getDbPath } from "./src/db/paths.ts";
 
-const dbPath = path.resolve(process.cwd(), "../../data/app.sqlite");
+const dbPath = getDbPath();
 
 export default defineConfig({
   schema: "./src/db/schema.ts",
