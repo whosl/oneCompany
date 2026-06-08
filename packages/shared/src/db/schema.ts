@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
@@ -70,12 +70,16 @@ export const acceptanceCriteriaVersions = sqliteTable("acceptance_criteria_versi
   created_at: text("created_at").notNull(),
 });
 
-export const agents = sqliteTable("agents", {
-  id: text("id").primaryKey(),
-  version: text("version").notNull(),
-  definition: text("definition").notNull(),
-  created_at: text("created_at").notNull(),
-});
+export const agents = sqliteTable(
+  "agents",
+  {
+    id: text("id").notNull(),
+    version: text("version").notNull(),
+    definition: text("definition").notNull(),
+    created_at: text("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.id, table.version] })],
+);
 
 export const agentRuns = sqliteTable("agent_runs", {
   id: text("id").primaryKey(),

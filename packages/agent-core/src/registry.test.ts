@@ -50,4 +50,23 @@ describe("registry — M2", () => {
       cleanup();
     }
   });
+
+  it("keeps multiple versions of the same agent id", () => {
+    const { db, cleanup } = setupTestDb();
+    try {
+      registerAgent(db, DUMMY_AGENT);
+      registerAgent(db, {
+        ...DUMMY_AGENT,
+        version: "2.0.0",
+        role: "Dummy Agent v2",
+      });
+
+      expect(getAgent(db, "dummy@1.0.0").version).toBe("1.0.0");
+      expect(getAgent(db, "dummy@2.0.0").version).toBe("2.0.0");
+      expect(getAgent(db, "dummy@2.0.0").role).toBe("Dummy Agent v2");
+      expect(listAgents(db)).toHaveLength(2);
+    } finally {
+      cleanup();
+    }
+  });
 });

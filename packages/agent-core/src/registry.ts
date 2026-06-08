@@ -33,9 +33,8 @@ export function registerAgent(db: Db, def: AgentDefinition): void {
       created_at: now,
     })
     .onConflictDoUpdate({
-      target: agents.id,
+      target: [agents.id, agents.version],
       set: {
-        version: parsed.version,
         definition: JSON.stringify(parsed),
         created_at: now,
       },

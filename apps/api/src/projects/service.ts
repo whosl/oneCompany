@@ -43,92 +43,100 @@ export type ProjectRecord = {
 };
 
 export function createProjectService(db: Db, onEvent: (envelope: EventEnvelope) => void) {
-  return {
-    createProject(name: string): ProjectRecord {
-      const id = randomUUID();
-      const slug = `${slugify(name) || "project"}-${id.slice(0, 8)}`;
-      const now = new Date().toISOString();
+  const getProject = (projectId: string): ProjectRecord | null => {
+    const [row] = db.select().from(projects).where(eq(projects.id, projectId)).limit(1).all();
+    if (!row) {
+      return null;
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      status: parseProjectStatus(row.status),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  };
 
-      db.insert(projects)
-        .values({
-          id,
-          name,
-          slug,
-          status: "Draft Requirement",
-          created_at: now,
-          updated_at: now,
-        })
-        .run();
+  const createProject = (name: string): ProjectRecord => {
+    const id = randomUUID();
+    const slug = `${slugify(name) || "project"}-${id.slice(0, 8)}`;
+    const now = new Date().toISOString();
 
-      const envelope = emit(db, {
-        projectId: id,
-        payload: { type: "project.created", projectId: id, name },
-      });
-      onEvent(envelope);
-
-      return {
+    db.insert(projects)
+      .values({
         id,
         name,
         slug,
         status: "Draft Requirement",
-        createdAt: now,
-        updatedAt: now,
-      };
-    },
+        created_at: now,
+        updated_at: now,
+      })
+      .run();
 
-    getProject(projectId: string): ProjectRecord | null {
-      const [row] = db.select().from(projects).where(eq(projects.id, projectId)).limit(1).all();
-      if (!row) {
-        return null;
-      }
-      return {
-        id: row.id,
-        name: row.name,
-        slug: row.slug,
-        status: parseProjectStatus(row.status),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      };
-    },
+    const envelope = emit(db, {
+      projectId: id,
+      payload: { type: "project.created", projectId: id, name },
+    });
+    onEvent(envelope);
 
-    setStatus(projectId: string, nextStatus: ProjectStatus, trigger: string): ProjectRecord {
-      const project = this.getProject(projectId);
-      if (!project) {
-        throw new Error(`Project not found: ${projectId}`);
-      }
+    return {
+      id,
+      name,
+      slug,
+      status: "Draft Requirement",
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
 
-      const pausedFrom = project.status === "Paused" ? getPausedFrom(db, projectId) : undefined;
-      assertTransition(project.status, nextStatus, { pausedFrom });
+  const setStatus = (
+    projectId: string,
+    nextStatus: ProjectStatus,
+    trigger: string,
+  ): ProjectRecord => {
+    const project = getProject(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
 
-      const now = new Date().toISOString();
-      db.update(projects)
-        .set({ status: nextStatus, updated_at: now })
-        .where(eq(projects.id, projectId))
-        .run();
+    const pausedFrom = project.status === "Paused" ? getPausedFrom(db, projectId) : undefined;
+    assertTransition(project.status, nextStatus, { pausedFrom });
 
-      db.insert(projectStatusHistory)
-        .values({
-          id: randomUUID(),
-          project_id: projectId,
-          from_status: project.status,
-          to_status: nextStatus,
-          trigger,
-          created_at: now,
-        })
-        .run();
+    const now = new Date().toISOString();
+    db.update(projects)
+      .set({ status: nextStatus, updated_at: now })
+      .where(eq(projects.id, projectId))
+      .run();
 
-      const envelope = emit(db, {
-        projectId,
-        payload: { type: "project.status_changed", projectId, status: nextStatus },
-      });
-      onEvent(envelope);
+    db.insert(projectStatusHistory)
+      .values({
+        id: randomUUID(),
+        project_id: projectId,
+        from_status: project.status,
+        to_status: nextStatus,
+        trigger,
+        created_at: now,
+      })
+      .run();
 
-      return {
-        ...project,
-        status: nextStatus,
-        updatedAt: now,
-      };
-    },
+    const envelope = emit(db, {
+      projectId,
+      payload: { type: "project.status_changed", projectId, status: nextStatus },
+    });
+    onEvent(envelope);
+
+    return {
+      ...project,
+      status: nextStatus,
+      updatedAt: now,
+    };
+  };
+
+  return {
+    createProject,
+    getProject,
+    setStatus,
   };
 }
 

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { events, toolCalls } from "@oc/shared";
+import { REDACTED, events, toolCalls } from "@oc/shared";
 import { describe, expect, it } from "vitest";
 import { callTool } from "./tools.js";
 import { seedProject, setupTestDb } from "./test-utils.js";
@@ -68,6 +68,33 @@ describe("callTool — M2", () => {
 
       const [row] = db.select().from(toolCalls).all();
       expect(row?.status).toBe("failed");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("redacts secret-like output before logging events", async () => {
+    const { db, cleanup } = setupTestDb();
+    try {
+      const projectId = seedProject(db);
+      const secret = "sk-test1234567890abcdef";
+      await callTool(
+        { db, projectId },
+        {
+          toolName: "echo",
+          args: {},
+          impl: async () => `token=${secret}`,
+        },
+      );
+
+      const outputEvent = db
+        .select()
+        .from(events)
+        .where(eq(events.project_id, projectId))
+        .all()
+        .find((row) => row.type === "tool_call.output");
+      expect(outputEvent?.payload).not.toContain(secret);
+      expect(outputEvent?.payload).toContain(REDACTED);
     } finally {
       cleanup();
     }

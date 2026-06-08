@@ -28,3 +28,9 @@ export {
   parseProjectStatus,
   type TransitionContext,
 } from "./status/machine.js";
+export {
+  REDACTED,
+  redact,
+  type RedactionIncident,
+  type SecretRegistry,
+} from "./redaction.js";

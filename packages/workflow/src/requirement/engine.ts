@@ -208,13 +208,7 @@ async function decideAndContinue(
     return toResult(deps, waiting);
   }
 
-  const gate = deps.createGate(payload.state.projectId, REQUIREMENT_STUCK_GATE_TYPE);
-  const waiting = updateSessionMeta(payload, {
-    phase: "awaiting_gate",
-    gateId: gate.id,
-  });
-  saveRequirementSession(deps.db, payload.state.projectId, waiting);
-  return toResult(deps, waiting);
+  throw new Error("Requirement loop reached an unexpected state");
 }
 
 export async function startRequirement(

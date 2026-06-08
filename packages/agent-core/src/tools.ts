@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { emit, toolCalls, type Db, type EventEnvelope } from "@oc/shared";
+import { emit, redact, toolCalls, type Db, type EventEnvelope } from "@oc/shared";
 
 export type ToolContext = {
   db: Db;
@@ -20,6 +20,11 @@ export type CallToolResult =
 
 function notify(ctx: ToolContext, envelope: EventEnvelope): void {
   ctx.onEvent?.(envelope);
+}
+
+function formatToolText(value: unknown): string {
+  const raw = typeof value === "string" ? value : JSON.stringify(value);
+  return redact(raw).text.slice(0, 500);
 }
 
 export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<CallToolResult> {
@@ -49,8 +54,7 @@ export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<
 
   try {
     const output = await input.impl();
-    const summary =
-      typeof output === "string" ? output : JSON.stringify(output).slice(0, 500);
+    const summary = formatToolText(output);
 
     const completed = emit(ctx.db, {
       projectId: ctx.projectId,
@@ -67,7 +71,7 @@ export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<
 
     return { ok: true, output, toolCallId };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatToolText(error instanceof Error ? error.message : String(error));
 
     const failed = emit(ctx.db, {
       projectId: ctx.projectId,

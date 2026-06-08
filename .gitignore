@@ -1,5 +1,6 @@
 node_modules
-data/app.sqlite
+data/*
+!data/.gitkeep
 .next
 dist
 generated-projects/*

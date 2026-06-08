@@ -46,6 +46,43 @@ describe("SSE stream — M1", () => {
     }
   });
 
+  it("does not duplicate replayed events", async () => {
+    const { app, projects, cleanup } = setupTestApp();
+    try {
+      const project = projects.createProject("SSE Dedupe");
+      projects.setStatus(project.id, "Asking Questions", "analysis_started");
+      projects.setStatus(project.id, "PRD Ready", "analysis_complete");
+
+      const response = await app.request(
+        `/projects/${project.id}/events/stream?afterSeq=0`,
+      );
+      expect(response.status).toBe(200);
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const seqs: number[] = [];
+
+      while (seqs.length < 3) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value);
+        const matches = [...buffer.matchAll(/^data: (.+)$/gm)];
+        for (const match of matches.slice(seqs.length)) {
+          const envelope = JSON.parse(match[1]!) as { seq: number };
+          seqs.push(envelope.seq);
+        }
+      }
+
+      expect(seqs).toEqual([1, 2, 3]);
+      expect(new Set(seqs).size).toBe(seqs.length);
+    } finally {
+      cleanup();
+    }
+  });
+
   it("streams a live event after the client connects", async () => {
     const { app, projects, cleanup } = setupTestApp();
     try {
