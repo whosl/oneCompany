@@ -5,6 +5,9 @@ import { createEventRoutes } from "./events/routes.js";
 import { createGateResumeHandler } from "./gates/resume.js";
 import { createGateRoutes, createProjectGateRoutes } from "./gates/routes.js";
 import { createGateService } from "./gates/service.js";
+import { createDevelopmentRoutes } from "./development/routes.js";
+import { createDevelopmentService } from "./development/service.js";
+import type { DevelopmentService } from "./development/service.js";
 import type { RequirementService } from "./requirement/service.js";
 import { createOrchestrationRoutes } from "./orchestration/routes.js";
 import { createProjectRoutes } from "./projects/routes.js";
@@ -23,18 +26,20 @@ export function createApp(deps: AppDependencies) {
   const app = new Hono();
   const onEvent = broadcastEvent;
   const projects = createProjectService(deps.db, onEvent);
-  const resumeRef: { requirement?: RequirementService } = {};
+  const resumeRef: { requirement?: RequirementService; development?: DevelopmentService } = {};
   const gates = createGateService(deps.db, onEvent, {
     onGateResolved: async (gate, decision) => {
-      await createGateResumeHandler(resumeRef.requirement)(gate, decision);
+      await createGateResumeHandler(resumeRef)(gate, decision);
     },
   });
-  const requirement = createRequirementService(deps.db, projects, gates, onEvent);
-  resumeRef.requirement = requirement;
   const workspace = createWorkspaceService(deps.db, projects, gates, {
     onEvent,
     generatedProjectsRoot: deps.generatedProjectsRoot,
   });
+  const requirement = createRequirementService(deps.db, projects, gates, onEvent);
+  const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
+  resumeRef.requirement = requirement;
+  resumeRef.development = development;
 
   app.get("/health", (c) => c.json({ ok: true }));
   app.route("/projects", createProjectRoutes(projects, workspace));
@@ -44,12 +49,14 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createProjectGateRoutes(gates));
   app.route("/projects", createOrchestrationRoutes(deps.db, onEvent));
   app.route("/projects", createRequirementRoutes(requirement));
+  app.route("/projects", createDevelopmentRoutes(development));
 
   return {
     app,
     projects,
     gates,
     requirement,
+    development,
     workspace,
   };
 }

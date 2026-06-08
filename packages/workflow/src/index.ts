@@ -31,3 +31,36 @@ export {
   REQUIREMENT_STUCK_OPTIONS,
   STUCK_BUDGET_EXTENSION,
 } from "./requirement/types.js";
+export {
+  startDevelopment,
+  resumeDevelopmentAfterGate,
+  getDevelopmentStatus,
+  runSliceIteration,
+} from "./development/engine.js";
+export {
+  allSlicesPassed,
+  getCurrentSlice,
+  hasPendingSlices,
+  isSliceBudgetExhausted,
+  shouldRaiseSliceFailureGate,
+} from "./development/slice-policy.js";
+export { parseVitestJson } from "./development/test-runner.js";
+export {
+  createDevSession,
+  loadDevSession,
+  saveDevSession,
+  incrementSliceAttempts,
+  resetSliceAttemptsForNewSlice,
+  markSlicePassed,
+} from "./development/state.js";
+export type {
+  DevelopmentRunResult,
+  DevelopmentSessionPayload,
+  DevelopmentWorkflowDeps,
+  DevelopmentWorkflowPhase,
+} from "./development/types.js";
+export {
+  TECH_PLAN_CONFIRM_GATE,
+  SLICE_FAILURE_GATE,
+  CHANGE_REVIEW_GATE,
+} from "./development/types.js";

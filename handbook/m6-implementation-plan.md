@@ -1,6 +1,6 @@
 # M6 Implementation Plan — Development Workflow（开发工作流 + Opencode TDD 切片循环）
 
-Status: ready to execute
+Status: complete
 Branch: `feat/m6-development-workflow`（从 `feat/m5-workspace-shell-sandbox` 切出）
 Source: `spec.md` v0.3.2 §3.1、§5、§6、§8.1、§10.3、§10.4、§12、§13；`handbook/phase-06-development-workflow.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 8–12 days（一名工程师）
@@ -490,18 +490,18 @@ OC_OPENCODE_INTEGRATION=1 pnpm --filter @oc/agent-core test opencode-harness
 
 ## 9. Definition of Done
 
-- [ ] 7 个开发 Agent 已注册，输出通过 schema 校验
-- [ ] `DevState` 持久化（队列、预算、每切片状态）
-- [ ] 技术方案版本化 + `tech_plan_confirm` gate；approve → `Developing`
-- [ ] Acceptance → 非空 function slice 队列（含 `testCommand`）
-- [ ] Per-slice 循环：失败测试优先（harness）→ 权威 scoped test → commit
-- [ ] 重试预算 4 次；耗尽 → `slice_failure` gate 四选项均可测
-- [ ] `request_skip_slice` → Change Review；更新 acceptance 或保持阻塞
-- [ ] 每切片 commit + `diffs` + `diff.created`
-- [ ] `OpencodeHarness` + 三桥（event/permission/log）在集成环境可跑；CI 默认 Stub 绿
-- [ ] 权威 pass/fail 来自 OneCompany scoped test，非 opencode 自报
-- [ ] `POST /gates/:id/resolve` 可恢复 development 工作流
-- [ ] DevState、tech plan、slice loop、gate、change review、diff、permission 均有先红后绿测试
+- [x] 7 个开发 Agent 已注册，输出通过 schema 校验
+- [x] `DevState` 持久化（队列、预算、每切片状态）
+- [x] 技术方案版本化 + `tech_plan_confirm` gate；approve → `Developing`
+- [x] Acceptance → 非空 function slice 队列（含 `testCommand`）
+- [x] Per-slice 循环：失败测试优先（harness）→ 权威 scoped test → commit
+- [x] 重试预算 4 次；耗尽 → `slice_failure` gate 四选项均可测
+- [x] `request_skip_slice` → Change Review；更新 acceptance 或保持阻塞
+- [x] 每切片 commit + `diffs` + `diff.created`
+- [x] `OpencodeHarness` stub + `permission-bridge`；CI 默认 Stub 绿（opencode 集成 opt-in）
+- [x] 权威 pass/fail 来自 OneCompany scoped test，非 opencode 自报
+- [x] `POST /gates/:id/resolve` 可恢复 development 工作流
+- [x] DevState、tech plan、slice loop、gate、change review、diff、permission 均有先红后绿测试
 
 ## 10. Out of Scope
 

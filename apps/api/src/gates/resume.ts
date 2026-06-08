@@ -1,24 +1,50 @@
 import type { GateRecord } from "./service.js";
+import type { DevelopmentService } from "../development/service.js";
 import type { RequirementService } from "../requirement/service.js";
 
-export function createGateResumeHandler(requirement?: RequirementService) {
+const DEVELOPMENT_GATE_TYPES = new Set([
+  "tech_plan_confirm",
+  "slice_failure",
+  "change_review",
+]);
+
+export function createGateResumeHandler(services: {
+  requirement?: RequirementService;
+  development?: DevelopmentService;
+}) {
   return async (gate: GateRecord, decision: string): Promise<void> => {
-    if (gate.gateType !== "requirement_stuck" || !requirement) {
+    if (gate.gateType === "requirement_stuck" && services.requirement) {
+      try {
+        await services.requirement.resumeAfterGate(gate.projectId, decision);
+      } catch (error) {
+        if (isBenignResumeError(error, "Requirement session not found")) {
+          return;
+        }
+        throw error;
+      }
       return;
     }
 
-    try {
-      await requirement.resumeAfterGate(gate.projectId, decision);
-    } catch (error) {
-      if (error instanceof Error) {
-        const benign =
-          error.message.includes("Expected awaiting_gate") ||
-          error.message.includes("Requirement session not found");
-        if (benign) {
+    if (DEVELOPMENT_GATE_TYPES.has(gate.gateType) && services.development) {
+      try {
+        await services.development.resumeAfterGate(gate.projectId, decision);
+      } catch (error) {
+        if (isBenignResumeError(error, "Development session not found")) {
           return;
         }
+        throw error;
       }
-      throw error;
     }
   };
+}
+
+function isBenignResumeError(error: unknown, notFoundMessage: string): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return (
+    error.message.includes("Expected awaiting_gate") ||
+    error.message.includes("Expected awaiting_gate or change_review") ||
+    error.message.includes(notFoundMessage)
+  );
 }

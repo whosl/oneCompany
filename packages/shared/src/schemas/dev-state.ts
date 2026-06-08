@@ -6,7 +6,9 @@ export const FunctionSliceTaskSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   acceptanceChecks: z.array(z.string()).optional(),
-  status: z.enum(["pending", "in_progress", "passed", "failed"]).optional(),
+  testCommand: z.string(),
+  expectedFiles: z.array(z.string()).optional(),
+  status: z.enum(["pending", "in_progress", "passed", "failed", "skipped"]).optional(),
 });
 
 export const TestResultSchema = z.object({

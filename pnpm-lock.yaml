@@ -234,6 +234,9 @@ importers:
       '@oc/shared':
         specifier: workspace:^
         version: link:../shared
+      '@oc/workspace':
+        specifier: workspace:^
+        version: link:../workspace
       drizzle-orm:
         specifier: ^0.39.3
         version: 0.39.3(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)

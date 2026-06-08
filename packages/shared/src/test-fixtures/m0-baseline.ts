@@ -49,7 +49,13 @@ export const validDevState: DevState = {
   worktreePath: "/tmp/generated-projects/baseline/repo",
   sandboxMode: "local",
   techPlanVersion: "tp-1",
-  taskQueue: [{ id: "slice-1", title: "Scaffold app" }],
+  taskQueue: [
+    {
+      id: "slice-1",
+      title: "Scaffold app",
+      testCommand: "pnpm vitest run src/scaffold.test.ts --reporter=json",
+    },
+  ],
   maxSliceAttempts: 4,
   currentSliceAttempts: 0,
   testResults: [],

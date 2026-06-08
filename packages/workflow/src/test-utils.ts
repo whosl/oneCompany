@@ -5,25 +5,34 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import {
+  registerDevelopmentAgents,
   registerRequirementAgents,
   runAgent,
+  runScriptedDevAgent,
   runScriptedRequirementAgent,
+  StubHarness,
+  type DevAgentTask,
   type RequirementAgentTask,
 } from "@oc/agent-core";
+import { initRepo } from "@oc/workspace";
 import {
+  acceptanceCriteriaVersions,
   assertTransition,
   createDb,
   emit,
   getAllowedOptions,
   humanGates,
   parseProjectStatus,
+  prdVersions,
   projectStatusHistory,
   projects,
   serializeGatePayload,
   type Db,
   type EventEnvelope,
+  type FunctionSliceTask,
   type ProjectStatus,
 } from "@oc/shared";
+import type { DevelopmentWorkflowDeps } from "./development/types.js";
 import type { RequirementWorkflowDeps } from "./requirement/types.js";
 
 export function setupTestDb(): { db: Db; cleanup: () => void } {
@@ -164,6 +173,111 @@ export function setupWorkflowTest(): {
     db,
     deps: createWorkflowDeps(db),
     projectId,
+    cleanup,
+  };
+}
+
+export function seedPrdReadyProject(db: Db, name = "M6 Dev Project"): { projectId: string; repoPath: string } {
+  const projectId = randomUUID();
+  const now = new Date().toISOString();
+  db.insert(projects)
+    .values({
+      id: projectId,
+      name,
+      slug: `m6-${projectId.slice(0, 8)}`,
+      status: "PRD Ready",
+      created_at: now,
+      updated_at: now,
+    })
+    .run();
+
+  db.insert(prdVersions)
+    .values({
+      id: randomUUID(),
+      project_id: projectId,
+      version: "prd-1",
+      content: "# PRD\nBuild a todo app",
+      created_at: now,
+    })
+    .run();
+
+  db.insert(acceptanceCriteriaVersions)
+    .values({
+      id: randomUUID(),
+      project_id: projectId,
+      version: "ac-1",
+      content: "- User can create items\n- User can mark complete",
+      created_at: now,
+    })
+    .run();
+
+  const repoPath = mkdtempSync(path.join(tmpdir(), "oc-dev-repo-"));
+  initRepo(repoPath);
+
+  return { projectId, repoPath };
+}
+
+export type DevelopmentDepsOptions = {
+  authoritativeAttemptsBeforePass?: number;
+  alwaysFail?: boolean;
+};
+
+export function createDevelopmentDeps(
+  db: Db,
+  repoPath: string,
+  options: DevelopmentDepsOptions = {},
+): DevelopmentWorkflowDeps {
+  let attempt = 0;
+  const attemptsBeforePass = options.authoritativeAttemptsBeforePass ?? 1;
+
+  return {
+    db,
+    repoPath,
+    harness: StubHarness,
+    authorize: async () => ({ allow: true }),
+    runAuthoritativeCheck: async (_slice: FunctionSliceTask) => {
+      if (options.alwaysFail) {
+        return { passed: false, details: "fixture always fail" };
+      }
+      attempt += 1;
+      return {
+        passed: attempt >= attemptsBeforePass,
+        details: attempt >= attemptsBeforePass ? "ok" : "fail",
+      };
+    },
+    runAgent: async (input) =>
+      runAgent(
+        {
+          db,
+          runner: async (agentIdAtVersion, task) => ({
+            output: runScriptedDevAgent(agentIdAtVersion, task as DevAgentTask),
+          }),
+        },
+        input,
+      ),
+    createGate: (projectId, gateType) => createGate(db, projectId, gateType),
+    setStatus: (projectId, status, trigger) => setProjectStatus(db, projectId, status, trigger),
+    getProjectStatus: (projectId) => getProjectStatus(db, projectId),
+  };
+}
+
+export function setupDevelopmentTest(
+  options: DevelopmentDepsOptions = {},
+): {
+  db: Db;
+  deps: DevelopmentWorkflowDeps;
+  projectId: string;
+  repoPath: string;
+  cleanup: () => void;
+} {
+  const { db, cleanup } = setupTestDb();
+  registerDevelopmentAgents(db);
+  const { projectId, repoPath } = seedPrdReadyProject(db);
+  return {
+    db,
+    deps: createDevelopmentDeps(db, repoPath, options),
+    projectId,
+    repoPath,
     cleanup,
   };
 }

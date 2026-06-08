@@ -3,6 +3,7 @@ export const MVP_TABLE_NAMES = [
   "projects",
   "project_status_history",
   "requirement_sessions",
+  "dev_sessions",
   "requirement_scores",
   "prd_versions",
   "tech_plan_versions",

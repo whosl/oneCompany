@@ -1,0 +1,121 @@
+import type { AgentDefinition, Db } from "@oc/shared";
+import { registerAgent } from "../../registry.js";
+
+const AGENT_VERSION = "1.0.0";
+
+export const DEVELOPMENT_AGENT_IDS = {
+  architect: `architect@${AGENT_VERSION}`,
+  testDesigner: `test-designer@${AGENT_VERSION}`,
+  planner: `planner@${AGENT_VERSION}`,
+  coding: `coding@${AGENT_VERSION}`,
+  review: `review@${AGENT_VERSION}`,
+  qa: `qa@${AGENT_VERSION}`,
+  devopsDelivery: `devops-delivery@${AGENT_VERSION}`,
+} as const;
+
+export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
+  {
+    id: "architect",
+    version: AGENT_VERSION,
+    group: "development",
+    role: "Architect Agent",
+    description: "Produces the technical plan",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    tools: [],
+    modelPolicy: { tier: "strong" },
+    riskLevel: "low",
+    permissions: ["read"],
+    executor: "scripted",
+  },
+  {
+    id: "test-designer",
+    version: AGENT_VERSION,
+    group: "development",
+    role: "Test Designer Agent",
+    description: "Designs scoped tests per slice",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    tools: [],
+    modelPolicy: { tier: "standard" },
+    riskLevel: "low",
+    permissions: ["read"],
+    executor: "scripted",
+  },
+  {
+    id: "planner",
+    version: AGENT_VERSION,
+    group: "development",
+    role: "Planner Agent",
+    description: "Splits acceptance into function slices",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    tools: [],
+    modelPolicy: { tier: "strong" },
+    riskLevel: "low",
+    permissions: ["read"],
+    executor: "scripted",
+  },
+  {
+    id: "coding",
+    version: AGENT_VERSION,
+    group: "development",
+    role: "Coding Agent",
+    description: "Implements a function slice",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    tools: ["shell", "edit"],
+    modelPolicy: { tier: "strong" },
+    riskLevel: "medium",
+    permissions: ["read", "write"],
+    executor: "scripted",
+  },
+  {
+    id: "review",
+    version: AGENT_VERSION,
+    group: "development",
+    role: "Review Agent",
+    description: "Reviews slice changes",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    tools: [],
+    modelPolicy: { tier: "strong" },
+    riskLevel: "low",
+    permissions: ["read"],
+    executor: "scripted",
+  },
+  {
+    id: "qa",
+    version: AGENT_VERSION,
+    group: "development",
+    role: "QA Agent",
+    description: "Validates slice quality",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    tools: [],
+    modelPolicy: { tier: "standard" },
+    riskLevel: "low",
+    permissions: ["read"],
+    executor: "scripted",
+  },
+  {
+    id: "devops-delivery",
+    version: AGENT_VERSION,
+    group: "development",
+    role: "DevOps Delivery Agent",
+    description: "Summarizes delivery artifacts",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    tools: [],
+    modelPolicy: { tier: "standard" },
+    riskLevel: "low",
+    permissions: ["read"],
+    executor: "scripted",
+  },
+];
+
+export function registerDevelopmentAgents(db: Db): void {
+  for (const definition of DEVELOPMENT_AGENT_DEFINITIONS) {
+    registerAgent(db, definition);
+  }
+}

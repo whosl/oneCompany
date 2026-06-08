@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { MVP_TABLE_COUNT, MVP_TABLE_NAMES } from "./mvp-tables.js";
 
 describe("migration smoke — M0 baseline", () => {
-  it("creates all 18 MVP tables via drizzle-kit push", () => {
+  it(`creates all ${MVP_TABLE_COUNT} MVP tables via drizzle-kit push`, () => {
     const tempDir = mkdtempSync(path.join(tmpdir(), "oc-m0-migrate-"));
     const dbPath = path.join(tempDir, "app.sqlite");
 

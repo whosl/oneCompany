@@ -32,7 +32,16 @@ export type {
   GateHooks,
   OrchestrationContext,
 } from "./graph/types.js";
+export {
+  registerDevelopmentAgents,
+  DEVELOPMENT_AGENT_DEFINITIONS,
+  DEVELOPMENT_AGENT_IDS,
+} from "./agents/development/definitions.js";
+export { runScriptedDevAgent } from "./agents/development/scripted-runner.js";
+export type { DevAgentTask, DevFixtureProfile } from "./agents/development/types.js";
 export { StubHarness } from "./harness/stub.js";
+export { OpencodeHarness } from "./harness/opencode-harness.js";
+export { handlePermission, toToolOp, type AuthorizeFn } from "./harness/permission-bridge.js";
 export type {
   AuthDecision,
   CodingHarness,

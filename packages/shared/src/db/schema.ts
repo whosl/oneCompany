@@ -30,6 +30,16 @@ export const requirementSessions = sqliteTable("requirement_sessions", {
   updated_at: text("updated_at").notNull(),
 });
 
+export const devSessions = sqliteTable("dev_sessions", {
+  id: text("id").primaryKey(),
+  project_id: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  state: text("state").notNull(),
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+});
+
 export const requirementScores = sqliteTable("requirement_scores", {
   id: text("id").primaryKey(),
   project_id: text("project_id")
