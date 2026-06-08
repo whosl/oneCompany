@@ -43,3 +43,25 @@ export {
   type ShellDeps,
 } from "./shell.js";
 export { createAuthorize, type AuthorizeDeps } from "./authorize.js";
+export {
+  startPreview,
+  stopPreview,
+  getPreviewHandle,
+  getPreviewHealth,
+  clearPreviewRegistry,
+  type PreviewHandle,
+} from "./preview.js";
+export {
+  runSuite,
+  runVitest,
+  runTypecheck,
+  runBuild,
+  runPlaywright,
+  parseVitestJson,
+  parseTypecheckOutput,
+  parseBuildOutput,
+  parsePlaywrightJson,
+  DEFAULT_SUITE_ORDER,
+  type RunnerDeps,
+  type SuiteSpec,
+} from "./runners/index.js";

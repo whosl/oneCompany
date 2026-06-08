@@ -32,8 +32,15 @@ import {
   type FunctionSliceTask,
   type ProjectStatus,
 } from "@oc/shared";
-import type { DevelopmentWorkflowDeps } from "./development/types.js";
+import type { FinalSuiteId, NormalizedRunnerResult } from "@oc/shared";
+import {
+  createDevSession,
+  loadDevSession,
+  saveDevSession,
+} from "./development/state.js";
+import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./development/types.js";
 import type { RequirementWorkflowDeps } from "./requirement/types.js";
+import type { TestingWorkflowDeps } from "./testing/types.js";
 
 export function setupTestDb(): { db: Db; cleanup: () => void } {
   const tempDir = mkdtempSync(path.join(tmpdir(), "oc-workflow-test-"));
@@ -258,6 +265,111 @@ export function createDevelopmentDeps(
     createGate: (projectId, gateType) => createGate(db, projectId, gateType),
     setStatus: (projectId, status, trigger) => setProjectStatus(db, projectId, status, trigger),
     getProjectStatus: (projectId) => getProjectStatus(db, projectId),
+  };
+}
+
+export type TestingDepsOptions = {
+  suiteResults?: Partial<Record<FinalSuiteId, NormalizedRunnerResult["status"]>>;
+  previewUrl?: string;
+};
+
+export function seedTestingProject(
+  db: Db,
+  repoPath: string,
+): { projectId: string; payload: DevelopmentSessionPayload } {
+  const projectId = randomUUID();
+  const now = new Date().toISOString();
+  db.insert(projects)
+    .values({
+      id: projectId,
+      name: "M7 Testing Project",
+      slug: `m7-${projectId.slice(0, 8)}`,
+      status: "Testing",
+      created_at: now,
+      updated_at: now,
+    })
+    .run();
+
+  const payload = createDevSession(db, projectId, repoPath, "testing_pass");
+  const withSlices: DevelopmentSessionPayload = {
+    ...payload,
+    state: {
+      ...payload.state,
+      taskQueue: [
+        {
+          id: "slice-1",
+          title: "Done",
+          testCommand: "pnpm vitest run --reporter=json",
+          status: "passed",
+        },
+      ],
+      techPlanVersion: "tp-1",
+    },
+    meta: { ...payload.meta, phase: "completed" },
+    testing: { phase: "idle", suiteResults: [] },
+  };
+  saveDevSession(db, projectId, withSlices);
+  return { projectId, payload: withSlices };
+}
+
+export function createTestingDeps(
+  db: Db,
+  repoPath: string,
+  options: TestingDepsOptions = {},
+): TestingWorkflowDeps {
+  const suiteOverrides = options.suiteResults ?? {};
+
+  return {
+    db,
+    repoPath,
+    loadSession: (projectId) => loadDevSession(db, projectId),
+    saveSession: (projectId, payload) => saveDevSession(db, projectId, payload),
+    startPreview: async (projectId) => ({
+      url: options.previewUrl ?? `http://127.0.0.1:4173`,
+      port: 4173,
+      stop: async () => undefined,
+    }),
+    stopPreview: async () => undefined,
+    runSuite: async (suite) => {
+      const override = suiteOverrides[suite];
+      if (override) {
+        return { suite, status: override, details: `fixture ${override}` };
+      }
+      return { suite, status: "passed", details: "fixture pass" };
+    },
+    runAgent: async (input) =>
+      runAgent(
+        {
+          db,
+          runner: async (agentIdAtVersion, task) => ({
+            output: runScriptedDevAgent(agentIdAtVersion, task as DevAgentTask),
+          }),
+        },
+        input,
+      ),
+    setStatus: (projectId, status, trigger) => setProjectStatus(db, projectId, status, trigger),
+    getProjectStatus: (projectId) => getProjectStatus(db, projectId),
+  };
+}
+
+export function setupTestingTest(options: TestingDepsOptions = {}): {
+  db: Db;
+  deps: TestingWorkflowDeps;
+  projectId: string;
+  repoPath: string;
+  cleanup: () => void;
+} {
+  const { db, cleanup } = setupTestDb();
+  registerDevelopmentAgents(db);
+  const repoPath = mkdtempSync(path.join(tmpdir(), "oc-testing-repo-"));
+  initRepo(repoPath);
+  const { projectId } = seedTestingProject(db, repoPath);
+  return {
+    db,
+    deps: createTestingDeps(db, repoPath, options),
+    projectId,
+    repoPath,
+    cleanup,
   };
 }
 

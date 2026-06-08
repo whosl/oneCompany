@@ -1,0 +1,64 @@
+import type { NormalizedRunnerResult } from "@oc/shared";
+import { runCommand } from "../shell.js";
+import type { RunnerDeps, SuiteSpec } from "./types.js";
+
+export type VitestJsonReport = {
+  numFailedTests?: number;
+  numPassedTests?: number;
+  success?: boolean;
+};
+
+export function parseVitestJson(stdout: string): {
+  passed: boolean;
+  details: string;
+  passedCount?: number;
+  failedCount?: number;
+} {
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return { passed: false, details: "empty vitest output" };
+  }
+
+  let report: VitestJsonReport;
+  try {
+    report = JSON.parse(trimmed) as VitestJsonReport;
+  } catch {
+    return { passed: false, details: "invalid vitest json output" };
+  }
+
+  const failed = report.numFailedTests ?? 0;
+  const passed = report.success ?? failed === 0;
+  return {
+    passed,
+    details: `vitest: failed=${failed}, passed=${report.numPassedTests ?? 0}`,
+    passedCount: report.numPassedTests,
+    failedCount: failed,
+  };
+}
+
+export async function runVitest(
+  deps: RunnerDeps,
+  spec: SuiteSpec = {
+    suite: "final:vitest",
+    command: "pnpm vitest run --reporter=json",
+  },
+): Promise<NormalizedRunnerResult> {
+  const result = await runCommand(deps.shell, {
+    projectId: deps.shell.projectId,
+    cmd: spec.command,
+    cwd: spec.cwd ?? deps.repoPath,
+  });
+
+  const output =
+    result.outputRef.kind === "inline" ? (result.outputRef.text ?? "") : "";
+  const parsed = parseVitestJson(output);
+
+  return {
+    suite: spec.suite,
+    status: parsed.passed ? "passed" : "failed",
+    passedCount: parsed.passedCount,
+    failedCount: parsed.failedCount,
+    details: parsed.details,
+    logRef: result.outputRef.kind === "chunk" ? result.outputRef.path : undefined,
+  };
+}

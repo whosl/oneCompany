@@ -7,7 +7,13 @@ import type {
   SliceSpec,
   ToolOp,
 } from "@oc/agent-core";
-import type { DevState, EventEnvelope, FunctionSliceTask, ProjectStatus } from "@oc/shared";
+import type {
+  DevState,
+  EventEnvelope,
+  FunctionSliceTask,
+  ProjectStatus,
+  TestingSessionMeta,
+} from "@oc/shared";
 
 export type DevelopmentWorkflowPhase =
   | "idle"
@@ -34,6 +40,7 @@ export type DevelopmentSessionMeta = {
 export type DevelopmentSessionPayload = {
   state: DevState;
   meta: DevelopmentSessionMeta;
+  testing?: TestingSessionMeta;
 };
 
 export type AuthoritativeCheckResult = {

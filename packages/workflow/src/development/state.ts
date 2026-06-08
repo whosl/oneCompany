@@ -158,5 +158,12 @@ export function skipSlice(state: DevState, sliceId: string): DevState {
 function parseSessionPayload(raw: string): DevelopmentSessionPayload {
   const parsed = JSON.parse(raw) as DevelopmentSessionPayload;
   DevStateSchema.parse(parsed.state);
+  if (parsed.testing) {
+    parsed.testing = {
+      ...parsed.testing,
+      phase: parsed.testing.phase ?? "idle",
+      suiteResults: parsed.testing.suiteResults ?? [],
+    };
+  }
   return parsed;
 }

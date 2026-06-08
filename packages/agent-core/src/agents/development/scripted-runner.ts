@@ -81,11 +81,25 @@ export function runScriptedDevAgent(agentIdAtVersion: string, task: DevAgentTask
         summary: `Reviewed ${state.currentTask?.id ?? "slice"}`,
       });
 
-    case DEVELOPMENT_AGENT_IDS.qa:
+    case DEVELOPMENT_AGENT_IDS.qa: {
+      const failedSuites = task.testingContext?.failedSuites ?? [];
+      const previewReachable = Boolean(task.testingContext?.previewUrl);
+      if (failedSuites.length > 0) {
+        return QaOutputSchema.parse({
+          passed: false,
+          notes: [
+            `Fix failing suites: ${failedSuites.join(", ")}`,
+            previewReachable
+              ? "Preview reachable — focus on test failures"
+              : "Preview unreachable — restart preview before E2E",
+          ],
+        });
+      }
       return QaOutputSchema.parse({
         passed: true,
-        notes: ["scoped checks delegated to authoritative runner"],
+        notes: ["final acceptance suite passed", "preview verified"],
       });
+    }
 
     case DEVELOPMENT_AGENT_IDS.devopsDelivery:
       return DevopsDeliveryOutputSchema.parse({

@@ -1,6 +1,6 @@
 # M7 Implementation Plan — Testing & QA Integration + Local Preview（全量验收 + 本地预览）
 
-Status: ready to execute
+Status: complete
 Branch: `feat/m7-testing-preview`（从 `feat/m6-development-workflow` 切出）
 Source: `spec.md` v0.3.2 §3.1、§5.5、§15、§16（preview 部分）、§10.3；`handbook/phase-07-testing-preview.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 6–9 days（一名工程师）
@@ -378,16 +378,16 @@ OC_PLAYWRIGHT_INTEGRATION=1 pnpm --filter @oc/workspace test playwright
 
 ## 9. Definition of Done
 
-- [ ] Vitest、typecheck、build、Playwright runners 返回 `NormalizedRunnerResult`
-- [ ] `startPreview` 产出可达本地 URL，写入 `DevState.previewUrl`
-- [ ] 全量结果写入 `test_results` 并 emit `test.result`（`final:*` suite）
-- [ ] Playwright 使用与 Preview tab 相同的 preview URL
-- [ ] Testing 失败 → `Developing`；全绿 → `Awaiting Acceptance`（或 `Deploying` if requested）
-- [ ] Per-slice（`slice:*`）与 final（`final:*`）结果可区分查询
-- [ ] Playwright trace/screenshot 存 `artifacts/`
-- [ ] QA agent 消费失败结果并产出可测输出
-- [ ] `POST /projects/:id/testing/start` + status API 可用
-- [ ] Runner 解析、preview 生命周期、持久化、status 路由均有先红后绿测试
+- [x] Vitest、typecheck、build、Playwright runners 返回 `NormalizedRunnerResult`
+- [x] `startPreview` 产出可达本地 URL，写入 `DevState.previewUrl`
+- [x] 全量结果写入 `test_results` 并 emit `test.result`（`final:*` suite）
+- [x] Playwright 使用与 Preview tab 相同的 preview URL
+- [x] Testing 失败 → `Developing`；全绿 → `Awaiting Acceptance`（或 `Deploying` if requested）
+- [x] Per-slice（`slice:*`）与 final（`final:*`）结果可区分查询
+- [x] Playwright trace/screenshot 存 `artifacts/`（解析路径 + DB 行）
+- [x] QA agent 消费失败结果并产出可测输出
+- [x] `POST /projects/:id/testing/start` + status API 可用
+- [x] Runner 解析、preview 生命周期、持久化、status 路由均有先红后绿测试
 
 ## 10. Out of Scope
 

@@ -8,6 +8,9 @@ import { createGateService } from "./gates/service.js";
 import { createDevelopmentRoutes } from "./development/routes.js";
 import { createDevelopmentService } from "./development/service.js";
 import type { DevelopmentService } from "./development/service.js";
+import { createTestingRoutes } from "./testing/routes.js";
+import { createTestingService } from "./testing/service.js";
+import type { TestingService } from "./testing/service.js";
 import type { RequirementService } from "./requirement/service.js";
 import { createOrchestrationRoutes } from "./orchestration/routes.js";
 import { createProjectRoutes } from "./projects/routes.js";
@@ -38,6 +41,7 @@ export function createApp(deps: AppDependencies) {
   });
   const requirement = createRequirementService(deps.db, projects, gates, onEvent);
   const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
+  const testing = createTestingService(deps.db, projects, workspace, onEvent);
   resumeRef.requirement = requirement;
   resumeRef.development = development;
 
@@ -50,6 +54,7 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createOrchestrationRoutes(deps.db, onEvent));
   app.route("/projects", createRequirementRoutes(requirement));
   app.route("/projects", createDevelopmentRoutes(development));
+  app.route("/projects", createTestingRoutes(testing));
 
   return {
     app,
@@ -57,6 +62,7 @@ export function createApp(deps: AppDependencies) {
     gates,
     requirement,
     development,
+    testing,
     workspace,
   };
 }
