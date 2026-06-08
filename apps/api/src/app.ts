@@ -4,6 +4,7 @@ import { broadcastEvent } from "./events/broadcast.js";
 import { createEventRoutes } from "./events/routes.js";
 import { createGateRoutes } from "./gates/routes.js";
 import { createGateService } from "./gates/service.js";
+import { createOrchestrationRoutes } from "./orchestration/routes.js";
 import { createProjectRoutes } from "./projects/routes.js";
 import { createProjectService } from "./projects/service.js";
 
@@ -21,6 +22,7 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createProjectRoutes(projects));
   app.route("/projects", createEventRoutes(deps.db));
   app.route("/gates", createGateRoutes(gates));
+  app.route("/projects", createOrchestrationRoutes(deps.db, onEvent));
 
   return {
     app,

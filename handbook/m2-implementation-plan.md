@@ -1,6 +1,6 @@
 # M2 Implementation Plan — Agent Registry + Orchestration Skeleton
 
-Status: ready to execute
+Status: complete (M2 DoD passed)
 Branch: `feat/m2-agent-orchestration` (from `feat/m1-event-backbone`)
 Source: `spec.md` v0.3.2 §7, §8.1, §10.1, §10.4, §13; `handbook/phase-02-agent-registry.md`; `dev-plan.md` (TDD Operating Model)
 Estimated effort: 4–6 days (one engineer)
@@ -302,15 +302,15 @@ curl -X POST localhost:3001/projects/<id>/demo-run
 
 ## 8. Definition of Done
 
-- [ ] `registerAgent` / `getAgent` / `listAgents`，`agents` 表持久化
-- [ ] `runAgent` 完整 P/A/O/R + `agent_runs`
-- [ ] 强制失败 → `agent.error` + `run.failed`，图继续
-- [ ] `callTool` → `tool_call.started` + output/failed
-- [ ] `pickModel` 三档映射 + 测试
-- [ ] LangGraph demo 图跑通，预算在 durable state
-- [ ] `CodingHarness` + `StubHarness`，`authorize` 必调
-- [ ] 所有 M2 测试先红后绿
-- [ ] 无 chain-of-thought 泄露；workflow 不硬编码 Agent class
+- [x] `registerAgent` / `getAgent` / `listAgents`，`agents` 表持久化
+- [x] `runAgent` 完整 P/A/O/R + `agent_runs`
+- [x] 强制失败 → `agent.error` + `run.failed`，图继续
+- [x] `callTool` → `tool_call.started` + output/failed
+- [x] `pickModel` 三档映射 + 测试
+- [x] LangGraph demo 图跑通，预算在 durable state
+- [x] `CodingHarness` + `StubHarness`，`authorize` 必调
+- [x] 所有 M2 测试先红后绿
+- [x] 无 chain-of-thought 泄露；workflow 不硬编码 Agent class
 
 ## 9. Out of Scope
 

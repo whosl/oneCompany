@@ -10,12 +10,24 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external drizzle-orm --external @langchain/langgraph --external @langchain/core",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "better-sqlite3": "^11.8.1",
+    "drizzle-kit": "^0.30.4",
     "tsup": "^8.3.6",
-    "typescript": "^5.7.3"
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.42",
+    "@langchain/langgraph": "^0.2.74",
+    "@oc/shared": "workspace:^",
+    "drizzle-orm": "^0.39.3"
   }
 }

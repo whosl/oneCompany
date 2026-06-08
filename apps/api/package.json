@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external drizzle-orm --external better-sqlite3",
+    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external @oc/agent-core --external drizzle-orm --external better-sqlite3",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",
+    "@oc/agent-core": "workspace:^",
     "@oc/shared": "workspace:*",
     "drizzle-orm": "^0.39.3",
     "hono": "^4.7.2"
