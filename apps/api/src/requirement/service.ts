@@ -41,8 +41,8 @@ export function createRequirementService(
         },
         input,
       ),
-    createGate: (projectId, gateType, options) => {
-      const gate = gates.createGate(projectId, gateType, options);
+    createGate: (projectId, gateType) => {
+      const gate = gates.createGate(projectId, gateType);
       return { id: gate.id };
     },
     setStatus: (projectId, status, trigger) => {

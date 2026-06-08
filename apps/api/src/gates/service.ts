@@ -1,6 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
-import { emit, humanGates, type Db, type EventEnvelope } from "@oc/shared";
+import { and, eq } from "drizzle-orm";
+import {
+  assertAllowedDecision,
+  emit,
+  getAllowedOptions,
+  getGateDefinition,
+  humanGates,
+  normalizeDecision,
+  parseGatePayload,
+  serializeGatePayload,
+  type Db,
+  type EventEnvelope,
+  type GateMetadata,
+  type ResolveGateInput,
+} from "@oc/shared";
 
 export type GateRecord = {
   id: string;
@@ -8,14 +21,44 @@ export type GateRecord = {
   gateType: string;
   status: "open" | "resolved";
   options: string[];
+  metadata?: GateMetadata;
   decision: string | null;
   createdAt: string;
   resolvedAt: string | null;
 };
 
-export function createGateService(db: Db, onEvent: (envelope: EventEnvelope) => void) {
+export type GateServiceOptions = {
+  onGateResolved?: (gate: GateRecord, decision: string) => Promise<void>;
+};
+
+function toGateRecord(row: typeof humanGates.$inferSelect): GateRecord {
+  const payload = parseGatePayload(row.options);
   return {
-    createGate(projectId: string, gateType: string, options: string[]): GateRecord {
+    id: row.id,
+    projectId: row.project_id,
+    gateType: row.gate_type,
+    status: row.status as "open" | "resolved",
+    options: payload.options,
+    metadata: payload.metadata,
+    decision: row.decision,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at,
+  };
+}
+
+export function createGateService(
+  db: Db,
+  onEvent: (envelope: EventEnvelope) => void,
+  options: GateServiceOptions = {},
+) {
+  return {
+    createGate(
+      projectId: string,
+      gateType: string,
+      metadata?: GateMetadata,
+    ): GateRecord {
+      getGateDefinition(gateType);
+      const allowedOptions = [...getAllowedOptions(gateType, metadata)];
       const id = randomUUID();
       const now = new Date().toISOString();
 
@@ -25,7 +68,7 @@ export function createGateService(db: Db, onEvent: (envelope: EventEnvelope) => 
           project_id: projectId,
           gate_type: gateType,
           status: "open",
-          options: JSON.stringify(options),
+          options: serializeGatePayload(allowedOptions, metadata),
           decision: null,
           created_at: now,
           resolved_at: null,
@@ -43,7 +86,8 @@ export function createGateService(db: Db, onEvent: (envelope: EventEnvelope) => 
         projectId,
         gateType,
         status: "open",
-        options,
+        options: allowedOptions,
+        metadata,
         decision: null,
         createdAt: now,
         resolvedAt: null,
@@ -51,23 +95,23 @@ export function createGateService(db: Db, onEvent: (envelope: EventEnvelope) => 
     },
 
     getGate(gateId: string): GateRecord | null {
-      const [row] = db.select().from(humanGates).where(eq(humanGates.id, gateId)).limit(1).all();
+      const row = db.select().from(humanGates).where(eq(humanGates.id, gateId)).all()[0];
       if (!row) {
         return null;
       }
-      return {
-        id: row.id,
-        projectId: row.project_id,
-        gateType: row.gate_type,
-        status: row.status as "open" | "resolved",
-        options: JSON.parse(row.options) as string[],
-        decision: row.decision,
-        createdAt: row.created_at,
-        resolvedAt: row.resolved_at,
-      };
+      return toGateRecord(row);
     },
 
-    resolveGate(gateId: string, decision: string): GateRecord {
+    listOpenGates(projectId: string): GateRecord[] {
+      return db
+        .select()
+        .from(humanGates)
+        .where(and(eq(humanGates.project_id, projectId), eq(humanGates.status, "open")))
+        .all()
+        .map(toGateRecord);
+    },
+
+    async resolveGate(gateId: string, input: ResolveGateInput): Promise<GateRecord> {
       const gate = this.getGate(gateId);
       if (!gate) {
         throw new Error(`Gate not found: ${gateId}`);
@@ -75,6 +119,9 @@ export function createGateService(db: Db, onEvent: (envelope: EventEnvelope) => 
       if (gate.status !== "open") {
         throw new Error(`Gate is not open: ${gateId}`);
       }
+
+      const decision = normalizeDecision(input);
+      assertAllowedDecision(gate.gateType, decision, gate.metadata);
 
       const now = new Date().toISOString();
       db.update(humanGates)
@@ -97,20 +144,26 @@ export function createGateService(db: Db, onEvent: (envelope: EventEnvelope) => 
       });
       onEvent(envelope);
 
-      return {
+      const resolved: GateRecord = {
         ...gate,
         status: "resolved",
         decision,
         resolvedAt: now,
       };
+
+      if (options.onGateResolved) {
+        await options.onGateResolved(resolved, decision);
+      }
+
+      return resolved;
     },
 
     async waitForGate(
       gateId: string,
-      options: { pollMs?: number; timeoutMs?: number } = {},
+      waitOptions: { pollMs?: number; timeoutMs?: number } = {},
     ): Promise<string> {
-      const pollMs = options.pollMs ?? 100;
-      const timeoutMs = options.timeoutMs ?? 10_000;
+      const pollMs = waitOptions.pollMs ?? 100;
+      const timeoutMs = waitOptions.timeoutMs ?? 10_000;
       const started = Date.now();
 
       while (Date.now() - started < timeoutMs) {

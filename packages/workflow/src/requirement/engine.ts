@@ -1,5 +1,6 @@
 import {
   AnalystOutputSchema,
+  getAllowedOptions,
   IntakeOutputSchema,
   PrdAcceptanceOutputSchema,
   QuestionPlannerOutputSchema,
@@ -31,7 +32,6 @@ import type {
 } from "./types.js";
 import {
   REQUIREMENT_STUCK_GATE_TYPE,
-  REQUIREMENT_STUCK_OPTIONS,
   STUCK_BUDGET_EXTENSION as BUDGET_EXTENSION,
 } from "./types.js";
 
@@ -163,7 +163,9 @@ function toResult(
       payload.meta.phase === "awaiting_answers" ? lastRound?.questions : undefined,
     gateId: payload.meta.gateId,
     gateOptions:
-      payload.meta.phase === "awaiting_gate" ? [...REQUIREMENT_STUCK_OPTIONS] : undefined,
+      payload.meta.phase === "awaiting_gate"
+        ? [...getAllowedOptions(REQUIREMENT_STUCK_GATE_TYPE)]
+        : undefined,
     state: payload.state,
   };
 }
@@ -184,11 +186,7 @@ async function decideAndContinue(
   }
 
   if (shouldRaiseStuckGate(payload.state)) {
-    const gate = deps.createGate(
-      payload.state.projectId,
-      REQUIREMENT_STUCK_GATE_TYPE,
-      [...REQUIREMENT_STUCK_OPTIONS],
-    );
+    const gate = deps.createGate(payload.state.projectId, REQUIREMENT_STUCK_GATE_TYPE);
     const waiting = updateSessionMeta(payload, {
       phase: "awaiting_gate",
       gateId: gate.id,
@@ -210,11 +208,7 @@ async function decideAndContinue(
     return toResult(deps, waiting);
   }
 
-  const gate = deps.createGate(
-    payload.state.projectId,
-    REQUIREMENT_STUCK_GATE_TYPE,
-    [...REQUIREMENT_STUCK_OPTIONS],
-  );
+  const gate = deps.createGate(payload.state.projectId, REQUIREMENT_STUCK_GATE_TYPE);
   const waiting = updateSessionMeta(payload, {
     phase: "awaiting_gate",
     gateId: gate.id,

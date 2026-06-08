@@ -14,10 +14,12 @@ import {
   assertTransition,
   createDb,
   emit,
+  getAllowedOptions,
   humanGates,
   parseProjectStatus,
   projectStatusHistory,
   projects,
+  serializeGatePayload,
   type Db,
   type EventEnvelope,
   type ProjectStatus,
@@ -103,7 +105,6 @@ function createGate(
   db: Db,
   projectId: string,
   gateType: string,
-  options: string[],
   onEvent?: (envelope: EventEnvelope) => void,
 ): { id: string } {
   const id = randomUUID();
@@ -114,7 +115,7 @@ function createGate(
       project_id: projectId,
       gate_type: gateType,
       status: "open",
-      options: JSON.stringify(options),
+      options: serializeGatePayload([...getAllowedOptions(gateType)]),
       decision: null,
       created_at: now,
       resolved_at: null,
@@ -144,7 +145,7 @@ export function createWorkflowDeps(db: Db): RequirementWorkflowDeps {
         },
         input,
       ),
-    createGate: (projectId, gateType, options) => createGate(db, projectId, gateType, options),
+    createGate: (projectId, gateType) => createGate(db, projectId, gateType),
     setStatus: (projectId, status, trigger) => setProjectStatus(db, projectId, status, trigger),
     getProjectStatus: (projectId) => getProjectStatus(db, projectId),
   };

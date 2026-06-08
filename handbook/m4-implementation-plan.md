@@ -1,6 +1,6 @@
 # M4 Implementation Plan — Human Gate UI + Gate Policies（人工闸门 UI + 策略）
 
-Status: ready to execute
+Status: complete (M4 DoD passed)
 Branch: `feat/m4-human-gate-ui`（从 `feat/m3-requirement-workflow` 切出）
 Source: `spec.md` v0.3.2 §6、§8.1、§8.2、§14.3；`handbook/phase-04-human-gate-ui.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 4–5 days（一名工程师）
@@ -321,14 +321,14 @@ curl -X POST localhost:3001/gates/<gateId>/resolve \
 
 ## 9. Definition of Done
 
-- [ ] 8 种 gate 类型在 shared registry 有定义且选项正确
-- [ ] 服务端拒绝不允许的 decision（含 skip 越权）
-- [ ] `skip_risk_and_continue` 不出现在禁止类 gate 上
-- [ ] `GateCard` 渲染 option tabs + optional custom，通过 API resolve
-- [ ] `GateCard` props 布局无关，可嵌入未来 Stream feed
-- [ ] resolve gate 后阻塞工作流恢复（M3 `requirement_stuck` 实测）
-- [ ] 每次决议有 `human_gate.resolved` + DB 存储
-- [ ] 策略、API、resume、组件均有先红后绿测试
+- [x] 8 种 gate 类型在 shared registry 有定义且选项正确
+- [x] 服务端拒绝不允许的 decision（含 skip 越权）
+- [x] `skip_risk_and_continue` 不出现在禁止类 gate 上
+- [x] `GateCard` 渲染 option tabs + optional custom，通过 API resolve
+- [x] `GateCard` props 布局无关，可嵌入未来 Stream feed
+- [x] resolve gate 后阻塞工作流恢复（M3 `requirement_stuck` 实测）
+- [x] 每次决议有 `human_gate.resolved` + DB 存储
+- [x] 策略、API、resume、组件均有先红后绿测试
 
 ## 10. Out of Scope
 

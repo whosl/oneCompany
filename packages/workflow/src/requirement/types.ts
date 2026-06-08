@@ -27,7 +27,7 @@ export type RequirementWorkflowDeps = {
   runAgent: (
     input: RunAgentInput & { task: RequirementAgentTask },
   ) => Promise<RunAgentResult>;
-  createGate: (projectId: string, gateType: string, options: string[]) => { id: string };
+  createGate: (projectId: string, gateType: string) => { id: string };
   setStatus: (projectId: string, status: ProjectStatus, trigger: string) => void;
   getProjectStatus: (projectId: string) => ProjectStatus;
 };
