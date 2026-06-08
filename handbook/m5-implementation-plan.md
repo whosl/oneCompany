@@ -1,6 +1,6 @@
 # M5 Implementation Plan — Workspace, Git, Shell, Sandbox（工作区 + Git + Shell + 沙箱）
 
-Status: ready to execute
+Status: in progress (core package complete; API thin layer pending)
 Branch: `feat/m5-workspace-shell-sandbox`（从 `feat/m4-human-gate-ui` 切出）
 Source: `spec.md` v0.3.2 §8.2、§10.2、§11、§12；`handbook/phase-05-workspace-git-shell-sandbox.md`；`dev-plan.md`（TDD Operating Model）
 Estimated effort: 5–7 days（一名工程师）
@@ -394,14 +394,15 @@ pnpm --filter @oc/api dev
 
 ## 9. Definition of Done
 
-- [ ] 项目有 `generated-projects/{slug}/{repo,artifacts,logs}` + `meta.json`；路径逃逸拒绝
-- [ ] Git init + `commitSlice` 写入 `commits` 表并关联 taskId
-- [ ] 风险分类对齐 §12；unknown → high；`npm install` → high；约束 `npm ci` → medium_constrained
-- [ ] low/medium 本地执行；containable high 经 gate 后 Docker；deploy/tunnel 经 gate 后真实网络
-- [ ] 命令输出经 redaction；大输出 chunk 到文件，DB 仅 metadata
-- [ ] Docker 缺失时 surfaced，不静默本地执行 high
-- [ ] `createAuthorize` 可供 `StubHarness` / 未来 `OpencodeHarness` 注入
-- [ ] containment、git、risk、executor、redaction、sandbox、authorize 均有先红后绿测试
+- [x] 项目有 `generated-projects/{slug}/{repo,artifacts,logs}` + `meta.json`；路径逃逸拒绝
+- [x] Git init + `commitSlice` 写入 `commits` 表并关联 taskId
+- [x] 风险分类对齐 §12；unknown → high；`npm install` → high；约束 `npm ci` → medium_constrained
+- [x] low/medium 本地执行；containable high 经 gate 后 Docker；deploy/tunnel 经 gate 后真实网络
+- [x] 命令输出经 redaction；大输出 chunk 到文件，DB 仅 metadata
+- [x] Docker 缺失时 surfaced，不静默本地执行 high
+- [x] `createAuthorize` 可供 `StubHarness` / 未来 `OpencodeHarness` 注入
+- [x] containment、git、risk、executor、redaction、sandbox、authorize 均有先红后绿测试
+- [ ] API 薄层：`ensureWorkspace` + `GET /projects/:id/files`（Task 5.7）
 
 ## 10. Out of Scope
 
