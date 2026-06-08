@@ -1,6 +1,6 @@
 # OneCompany MVP Development Plan
 
-Based on: `spec_0.2.md` / version 0.2.1
+Based on: `spec_0.2.md` / version 0.3
 Date: 2026-06-08
 Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 
@@ -16,6 +16,7 @@ Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 - Durable state plus event log. Durable workflow state and task state are the control source for transitions and recovery; the append-only event log (§8) is the audit and UI streaming source. Build both boundaries early.
 - Vertical slices over horizontal layers. Prefer thin end-to-end paths (one agent, one event, one panel) before breadth.
 - Orchestration boundary (§10.1, L5). LangGraph owns macro workflow, budgets, status transitions, and gates; OpenAI Agents SDK owns single-agent ReAct. Never put status/budget logic inside an agent loop.
+- Coding engine behind an adapter (§10.4). The Development group runs on opencode through a swappable `CodingHarness`; opencode actions are governed by the same risk/sandbox/gate/redaction policies and §13 model routing, and the engine never owns budgets, status, or gates.
 - Unhappy path is a feature. Loop budgets, stuck detection, failure gates, and `Failed`/`Paused` transitions are in scope from the milestone that introduces each loop, not bolted on later.
 - Human gates are blocking by design. A gate halts the workflow graph until resolved and is always logged.
 
@@ -24,7 +25,7 @@ Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 ```text
 apps/web        Next.js control console (Tailwind, shadcn/ui)
 apps/api        Hono API + SSE endpoints
-packages/agent-core   agent registry, LangGraph workflows, Agents SDK integration, model routing
+packages/agent-core   agent registry, LangGraph workflows, Agents SDK + CodingHarness/opencode, model routing
 packages/workflow     requirement + development graph definitions
 packages/workspace    project workspace, git, shell, sandbox, file ops, risk grading
 packages/shared       shared types + zod schemas (events, states, status machine)
@@ -33,17 +34,41 @@ data/app.sqlite       local DB (Drizzle ORM)
 generated-projects/   per-project repo + artifacts + logs + meta.json
 ```
 
+## UI Baseline From Figma
+
+Figma file: `OneCompany Console - Claude Style Draft`
+
+URL: https://www.figma.com/design/r1RF1q4KzBEQHLBWVhGD0X
+
+Reference frames:
+
+- `OneCompany Console / Stream Mode`
+- `OneCompany Console / Swimlane Mode`
+- `OneCompany Console / Settings Modal`
+- `OneCompany Console / Project Hub Modal`
+- `Claude-inspired Style Tokens`
+
+Implementation must follow this baseline for the MVP console's structure and visual tone:
+
+- Top nav plus lower left/right split.
+- Claude-inspired warm console palette.
+- Left panel default Stream Mode with user messages, agent events, inline gates, and sticky user composer.
+- Left panel Swimlane Mode over the same projection.
+- Right panel exactly five tabs: Files, Preview, Terminal, Tests, Report.
+- Avatar dropdown opens Settings for global environment/secrets/readiness only.
+- Project switcher opens Project Hub for multi-project management.
+
 ## Milestone Overview
 
 | ID | Milestone | Depends on | Effort | Exit demo |
 | --- | --- | --- | --- | --- |
 | M0 | Foundations & repo setup | — | M | App boots, DB migrates, types shared |
 | M1 | Event log + SSE + status machine + gate foundation | M0 | M | Create project, stream events, drive transitions, persist a blocking gate |
-| M2 | Agent registry + orchestration skeleton | M1 | M | Dummy agent runs a node, emits P/A/O/R + error events |
+| M2 | Agent registry + orchestration skeleton | M1 | M | Dummy agent runs a node, emits P/A/O/R + error events; CodingHarness stub in place |
 | M3 | Requirement workflow | M2 | L | One sentence → Q&A loop (with budget) → PRD + acceptance |
 | M4 | Human gate UI + gate policies | M1 | M | Gate cards render; decisions logged; allowed actions enforced |
 | M5 | Workspace, git, shell, sandbox | M0 | L | Safe command exec, git per-slice, sandbox high-risk |
-| M6 | Development workflow (TDD loop) | M3, M4, M5 | L | Tech plan → function-slice loop → committed code |
+| M6 | Development workflow (TDD loop, opencode) | M3, M4, M5 | L | Tech plan → governed opencode TDD slice loop → committed code |
 | M7 | Testing & QA integration + local preview | M5, M6 | M | Preview reachable; per-slice checks + final acceptance suite surfaced |
 | M8 | Right panel tabs | M1, M5, M7 | M | Files / Preview / Terminal / Tests / Report functional |
 | M9 | Info stream + swimlane renderers | M1, M2 | M | Both renderers over one event stream |
@@ -97,8 +122,9 @@ Tasks:
 - OpenAI Agents SDK single-agent executor invoked inside a node; emits `agent.started`, `agent.plan/act/observe/reflect`, `agent.error`, `run.failed`; writes `agent_runs`. [M]
 - Internal model routing policy (cheap/standard/strong) per §13, not user-configurable. [S]
 - Tool-call plumbing: `tool_call.started/output/failed` events. [S]
+- `CodingHarness` interface (`runSlice` + `authorize`) plus a test stub; the Development group binds to `OpencodeHarness` in M6. Budgets/status/gates stay out of the harness (§10.4). [S]
 
-Spec refs: §7, §10.1 (orchestration boundary, L5), §13, §8.1, §14.4.
+Spec refs: §7, §10.1 (orchestration boundary, L5), §10.4, §13, §8.1, §14.4.
 
 DoD: a dummy agent runs through one LangGraph node, produces the full P/A/O/R event sequence, and a forced failure produces `agent.error` + `run.failed`.
 
@@ -126,10 +152,11 @@ Tasks:
 - Per-gate action policy (L4): "Skip risk and continue" only for low/medium operation gates; scoped options for stuck/failure/change gates. [S]
 - Minimal app shell for gate cards if the full M9 layout is not ready yet. [S]
 - Frontend gate cards: option tabs + custom input; resolution posts decision and resumes blocked workflow. [M]
+- Prepare `GateCard` so it can render inline inside the Stream Mode feed and share its custom-input path with the sticky Stream composer when M9 lands. [S]
 
 Spec refs: §6, §8.1, §8.2 (decisions retained).
 
-DoD: each gate type renders a card, enforces allowed actions, resumes the blocked workflow after resolution, and records the decision in the event log.
+DoD: each gate type renders a card, enforces allowed actions, resumes the blocked workflow after resolution, records the decision in the event log, and can be embedded in the Stream Mode feed without changing gate policy.
 
 ## M5 — Workspace, Git, Shell, Sandbox
 
@@ -150,19 +177,22 @@ DoD: low/medium commands run locally and are logged after redaction; constrained
 
 ## M6 — Development Workflow (Plan + ReAct + TDD)
 
-Goal: from confirmed PRD to committed code via the function-slice loop.
+Goal: from confirmed PRD to committed code via the function-slice loop, running on the opencode engine.
 
 Tasks:
 - Dev agents: Architect, Test Designer, Planner, Coding, Review, QA, DevOps & Delivery (§5.1). [L]
+- `OpencodeHarness`: start/stop a local per-project opencode server (`opencode serve` / `createOpencodeServer()`, loopback, per-project port, optional password) pointed at `generated-projects/{slug}/repo`; pin the opencode version (§10.4, O2). [M]
+- Three governance bridges (O3): event bridge (opencode SSE → `EventEnvelope`/`AgentEvent`), permission bridge (`permission.asked` → §12 risk grading/sandbox/gate, answered via opencode's permission API), log bridge (→ §8.2 redaction/chunking) (§10.4, §12). [L]
+- Model/credentials (O5): pass the §13-selected provider+model into each opencode session using OneCompany-managed keys; disable opencode login/Zen paths (§13). [S]
 - `DevState` with function-slice task queue, `maxSliceAttempts` (4), `currentSliceAttempts` (§5.2). [M]
 - Tech plan generation + versioning (`tech_plan_versions`) + Tech Plan Review gate; reject → replan (§3, §5). [M]
-- Per-slice loop: Plan → Act (failing tests first) → Observe (scoped checks) → Reflect → Fix → Commit (§5.3). [L]
+- Per-slice loop: opencode runs the intra-slice TDD loop (Plan → failing tests → implement → run → fix); OneCompany then runs the authoritative scoped test at the slice boundary via a structured reporter (e.g. `vitest --reporter=json`) to drive the transition and the Tests/stream status, then commits (§5.3, §10.4, O4). [L]
 - Loop termination (H1/R4): retry-budget exhaustion → Slice Failure gate (retry/replan/request skip/fail). Skip requests route through Change Review instead of silently waiving a feature. [M]
 - Diff capture: `diffs` table + `diff.created` events (§8.1). [S]
 
-Spec refs: §5, §3.1 (Developing transitions), §10.3.
+Spec refs: §5, §3.1 (Developing transitions), §10.3, §10.4, §12, §13.
 
-DoD: a confirmed PRD produces a tech plan (gated), then function slices that each write failing tests, implement, pass scoped checks, and commit; an unfixable slice surfaces the Slice Failure gate, and skip requests enter Change Review.
+DoD: a confirmed PRD produces a tech plan (gated), then function slices that each write failing tests, implement, pass scoped checks, and commit; an unfixable slice surfaces the Slice Failure gate, and skip requests enter Change Review; opencode runs under the permission bridge (no ungoverned shell/edit) and each slice's authoritative pass/fail comes from OneCompany's own scoped test run.
 
 ## M7 — Testing & QA Integration + Local Preview
 
@@ -184,30 +214,34 @@ DoD: the generated app can start a local preview URL; per-slice checks run insid
 Goal: the five MVP tabs (§14.5), wired to backing services.
 
 Tasks:
-- Files: tree for source + artifacts, file content view, diff view (read-only; no in-viewer editing per §2.3). [M]
-- Preview: embed local preview URL from M7 and deployment URL when available (§16). [S]
+- Implement the Figma-baseline tab shell with exactly five tabs and compact Claude-style surface treatment. [S]
+- Files: tree for generated source + artifacts, file content view, diff view (read-only; no in-viewer editing per §2.3). [M]
+- Preview: browser-like preview surface embedding local preview URL from M7 and deployment URL when available (§16). [S]
 - Terminal: free terminal whose output is captured to logs and subject to risk grading (§14.5, L3). [M]
-- Tests: render unit/integration/typecheck/build/E2E/acceptance results (§7 backing from M7). [S]
-- Report: PRD, run instructions, delivery report, risks, deployment URL, acceptance summary (§17). [S]
+- Tests: render unit/integration/typecheck/build/E2E/acceptance results, pass/fail summaries, and artifact links (§15 backing from M7). [S]
+- Report: PRD, acceptance cases, run instructions, delivery report, risks, deployment/preview URL, and final acceptance summary (§17). [S]
 
 Spec refs: §14.5, §2.3, §16, §17.
 
-DoD: all five tabs function against live data; the terminal is governed (logged + risk-graded), not a bypass.
+DoD: all five tabs function against live data, match the Figma information hierarchy, and the terminal is governed (logged + risk-graded), not a bypass.
 
 ## M9 — Info Stream + Swimlane Renderers
 
 Goal: two renderers over one event source (§14.3, §14.4).
 
 Tasks:
-- Top nav (visual option 2): project switcher, status, phase, active group, run/pause, deploy entry, avatar dropdown w/ settings (§14.2). [M]
+- Implement shared Claude-inspired style tokens from the Figma baseline: warm surfaces, dark ink text, copper/orange accent, muted warm borders, success/warning/danger states (§14.8). [S]
+- Top nav (visual option 2): project switcher, coherent status/phase/active-group/progress pills, run/pause, deploy entry, avatar dropdown w/ settings (§14.2). [M]
+- Project Hub modal from the project switcher: project search/filter/list, selected-project metrics, status flow, open gate summary, preview/deploy summary, artifacts, Open/Pause/Archive/New Project actions; compact dropdown and full Hub are mutually exclusive (§14.7). [M]
+- Settings modal from the avatar dropdown: workspace paths, API key/secret readiness, Cloudflare Tunnel configuration, environment checks, and read-only policy chips; exclude project management, model routing, sandbox policy, and shell-risk configuration (§14.6). [M]
 - Layout shell: top nav + resizable left/right split, default 42–46% / 54–58% (§14.1). [S]
-- Information stream renderer: chronological feed with collapsed verbose details (§14.3). [M]
-- Swimlane renderer: agent rows × Plan/Act/Observe/Reflect; failed/retry cells driven by `agent.error`/`run.failed`/`tool_call.failed` (§14.4, M2 of spec). [M]
+- Information stream renderer (Opencode/Claude-Code-style contract, §14.3.1): real-time SSE-appended feed (newest at bottom, pin-to-bottom auto-scroll); runs grouped by `runId`/`agentId`/`correlationId`; Plan/Act/Observe/Reflect segments with the active one expanded and completed ones collapsed; tool-call rows expandable to args/result with large output folded to artifact links (R5); streamed + secret-redacted command output with "open in Terminal"; inline diff/test chips linking to Files/Tests; explicit user vs agent vs gate styling with the raw user input preserved separately from the normalized summary; inline gate cards showing only allowed options (custom text binds to an allowed decision, never implicit approval), at most one blocking gate emphasized and past gates collapsed to resolved chips; sticky context-aware composer. Engine-agnostic over the normalized event stream (§14.3, §14.3.1, §8). [M]
+- Swimlane renderer: agent rows × Plan/Act/Observe/Reflect; failed/retry cells driven by `agent.error`/`run.failed`/`tool_call.failed`; user and gate events represented as compact cells/markers from the same projection (§14.4, M2 of spec). [M]
 - Shared selectors so both renderers read the same event projection plus current durable state snapshot — no separate UI state systems (§8, §14.4). [S]
 
-Spec refs: §14.1–§14.4, §8, §20.
+Spec refs: §14.1–§14.8, §8, §20.
 
-DoD: switching stream ↔ swimlane shows the same underlying events and current state snapshot; pause/run control reflects status; no duplicated UI state store.
+DoD: switching stream ↔ swimlane shows the same underlying events and current state snapshot; user messages and gates remain visible in both renderers; pause/run control reflects status; Settings and Project Hub open from the correct nav entries; no duplicated UI state store; the stream follows the §14.3.1 contract (P/A/O/R run grouping, large output folded to artifact links, single emphasized blocking gate, raw user input shown separately from the normalized summary).
 
 ## M10 — Deployment, Delivery, Change Requests
 
@@ -229,11 +263,12 @@ Goal: meet every §18 acceptance criterion.
 
 Tasks:
 - Walk the §18 checklist end-to-end on a real sample app; fix gaps. [M]
+- Verify the Figma UI baseline: Stream user cards/composer, Swimlane same-projection rendering, five right tabs, avatar Settings, project-switcher Project Hub, and Claude-inspired console tokens (§14). [S]
 - Verify logging completeness and safety (§8.2): tool calls, command + terminal output, diffs, test results, deploy logs, gate decisions, failures, change requests, redaction, and large-output artifact chunking. [S]
 - Verify all terminal/`Failed`/`Paused` transitions are reachable (§3.1). [S]
 - Regression pass on risk grading + sandbox boundaries (§12). [S]
 
-Spec refs: §18, §8.2, §3.1, §12.
+Spec refs: §18, §14, §8.2, §3.1, §12.
 
 DoD: the §18 acceptance mapping below is fully green.
 
@@ -253,7 +288,9 @@ DoD: the §18 acceptance mapping below is fully green.
 | Requirement analysis, scoring, gap questioning, PRD | M3 |
 | Requirement loop terminates + stuck gate | M3, M4 |
 | Human confirm requirement + tech plan via cards | M4, M6 |
+| Console matches Figma UI baseline: top nav, Stream user cards/composer, Swimlane, five tabs, Settings, Project Hub | M8, M9 |
 | Dev group implements slices, records events | M2, M6 |
+| Dev group runs on opencode under full governance + authoritative test status | M6, M5, M7 |
 | Per-slice retry budget + slice failure gate | M6, M4 |
 | Tests generated/run; per-slice + final suite | M7 |
 | Generated app previewable + Playwright verifies preview URL | M7, M8 |
@@ -277,6 +314,10 @@ DoD: the §18 acceptance mapping below is fully green.
 | Generated-app stack variety explodes scope | Slips M6/M7 | MVP supports only the default stack (§10.1); others are future scope |
 | Cloudflare Tunnel friction | M10 slips | MVP only requires user-provided tunnel; token automation is future (§16) |
 | LLM nondeterminism breaks E2E golden path | Flaky acceptance | Pin models/seeds where possible; assert on structure/events, not exact text |
+| opencode upstream API/CLI churn | Adapter breakage | Pin opencode version behind `CodingHarness`; integration-test the adapter; keep one real harness + a stub |
+| opencode bypasses governance (shell/edit without asking) | Security/policy hole | Force permission-ask mode; route every `permission.asked` through §12; deny-by-default; no auto-approve for high risk |
+| opencode self-reports tests as passing | False-green slices | Authoritative pass/fail from OneCompany's own scoped test run (O4); opencode test runs are informational only |
+| opencode uses its own model/keys/Zen path | Routing, cost, credential drift | Pass §13 provider+model per session with managed keys; disable opencode login/Zen (O5) |
 
 ## Suggested First Two-Week Slice
 

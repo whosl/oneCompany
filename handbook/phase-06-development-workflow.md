@@ -4,6 +4,8 @@
 
 Go from a confirmed PRD to committed code. The architect writes a technical plan (gated), then work is split into function slices, and each slice is built test-first and committed. A slice that cannot pass after its retry budget raises a gate.
 
+> Engine note (spec v0.3, §10.4): the per-slice loop runs on **opencode** via `OpencodeHarness` (a local `opencode serve` per project, loopback). opencode does the intra-slice TDD loop; OneCompany runs the **authoritative** scoped test at the slice boundary and shows it in Tests + stream. opencode actions go through the **permission bridge** (§12 risk/sandbox/gate) and **log bridge** (§8.2 redaction). Model selection follows §13 with managed keys. The bridge wiring is an additive follow-up to the tasks below; the slice loop, budgets, gates, and commit policy here are unchanged.
+
 ## Prerequisites
 
 - M3 done (PRD + acceptance criteria exist). M4 done (gates: tech plan confirm, slice failure, change review). M5 done (workspace, git, shell, sandbox, logging).
@@ -19,7 +21,7 @@ Go from a confirmed PRD to committed code. The architect writes a technical plan
 
 ## Spec References
 
-`spec_0.2.md` §5 (all), §3.1 (Developing/Tech Plan/Change Review), §10.3.
+`spec_0.2.md` §5 (all), §3.1 (Developing/Tech Plan/Change Review), §10.3, §10.4, §12, §13.
 
 ## Tasks
 

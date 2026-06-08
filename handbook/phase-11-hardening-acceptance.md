@@ -38,6 +38,7 @@ Tick every item from spec §18. For each, demonstrate it:
 - [ ] Requirement group: analysis, scoring, gap questioning, PRD.
 - [ ] Requirement loop terminates on its own (budget/stuck) and shows the stuck gate.
 - [ ] Human confirms requirement + tech plan via option cards + custom input.
+- [ ] Console matches the Figma baseline: top nav, Stream Mode user cards + sticky composer, Swimlane switcher, five right tabs, avatar Settings, and project-switcher Project Hub.
 - [ ] Dev group implements slices and records agent events.
 - [ ] Per-slice retry budget enforced; Slice Failure gate appears when exhausted.
 - [ ] Tests generated and run: per-slice checks + final full suite.
@@ -68,6 +69,18 @@ Re-test the §12 grading: low/medium run locally; containable high goes to the s
 
 Verify: each risk level behaves per the table.
 
+### Task 11.6 — Figma UI baseline regression
+
+Compare the implemented console against the Figma file `OneCompany Console - Claude Style Draft` and spec §14:
+- Stream Mode shows user-originated messages, agent events, inline gates, collapsed verbose details, and a sticky user composer.
+- Swimlane Mode renders the same projection as agent x Plan/Act/Observe/Reflect, with user/gate markers still discoverable.
+- Right panel has exactly Files / Preview / Terminal / Tests / Report.
+- Settings opens from avatar and contains only global environment/secrets/readiness.
+- Project Hub opens from the project switcher and manages multiple projects.
+- The UI uses the Claude-inspired warm console tokens and does not drift into the excluded crowded layout.
+
+Verify: manual visual pass plus browser screenshots for desktop and a narrow viewport show no clipped text, overlapping controls, or missing required surfaces.
+
 ## Verification
 
 ```bash
@@ -75,6 +88,7 @@ pnpm -w typecheck && pnpm -w test && pnpm -w build
 # full golden-path integration run reaches Delivered
 # safety: secret redaction holds; large output chunked
 # reachability: Failed + Paused + resume; illegal transition rejected
+# UI: Stream composer, Settings, Project Hub, Swimlane, and right tabs verified against Figma baseline
 ```
 
 ## Definition of Done
@@ -84,6 +98,7 @@ pnpm -w typecheck && pnpm -w test && pnpm -w build
 - [ ] Logging is complete, redaction holds, large outputs are chunked.
 - [ ] `Failed` and `Paused` reachable; illegal transitions rejected.
 - [ ] Risk grading + sandbox behave per §12.
+- [ ] Figma UI baseline surfaces and visual constraints are verified.
 - [ ] No unresolved high-risk issue remains.
 
 ## Do Not

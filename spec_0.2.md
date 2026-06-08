@@ -1,11 +1,11 @@
 # OneCompany MVP Product And Architecture Spec
 
-Version: 0.2.1
-Status: draft, revised after business-logic and implementation-plan review
+Version: 0.3
+Status: draft, revised after business-logic, implementation-plan, Figma UI baseline, and development-engine review
 Date: 2026-06-08
 Language: TypeScript full stack
 
-## Revision Notes (0.1 -> 0.2.1)
+## Revision Notes (0.1 -> 0.3)
 
 Changes are traceable by ID. H/M/L items landed in 0.2 (business-logic review); R items landed in 0.2.1 (implementation-plan review).
 
@@ -32,6 +32,23 @@ Changes are traceable by ID. H/M/L items landed in 0.2 (business-logic review); 
 - R3 — Initial complete requirements can move directly from `Draft Requirement` to `PRD Ready` (§3.1).
 - R4 — Skipping a slice must enter Change Review and update acceptance criteria; it cannot silently waive a required feature (§5.3, §5.4).
 - R5 — Logging must redact secrets before persistence and store large outputs as artifact chunks (§8.2).
+
+### 0.2.2 — Figma UI baseline
+
+- U1 — Claude-inspired warm console style fixed as the MVP visual baseline, with explicit color-token intent and compact engineering-console density (§14, §14.8).
+- U2 — Stream Mode now includes user-originated messages and a sticky user composer; it is not only an agent event feed (§14.3).
+- U3 — Settings is fixed as an avatar-dropdown modal for global environment and secret readiness only; it does not manage projects or expose model/sandbox/risk-policy configuration (§14.2, §14.6).
+- U4 — Project Hub is fixed as a project-switcher modal for multi-project management, project status/risk/gate overview, preview/deploy state, and project artifacts (§14.2, §14.7).
+- U5 — Right panel five-tab layout is visually fixed from the Figma baseline: Files, Preview, Terminal, Tests, Report (§14.5).
+- U6 — Stream and Swimlane modes remain two renderers over the same event-and-state projection; switching modes must preserve user messages, gates, agent events, and tool/test/diff summaries (§8, §14.4).
+
+### 0.3 — development engine (opencode)
+
+- O1 — Development-group coding execution runs on opencode behind a swappable `CodingHarness` boundary; LangGraph still owns macro workflow, budgets, status, and gates (§10.1, §10.4).
+- O2 — Each project runs its own local opencode server (`opencode serve`, loopback only), lifecycle-managed and isolated to that project's workspace (§10.4, §11).
+- O3 — Three bridges connect opencode to OneCompany governance: event bridge (→ `EventEnvelope`/`AgentEvent`), permission bridge (→ §12 risk grading + sandbox + gate), and log bridge (→ §8.2 redaction + chunking) (§10.4, §12).
+- O4 — opencode runs the intra-slice TDD loop, but authoritative pass/fail is produced by OneCompany's own scoped test run at the slice boundary and surfaced to the frontend; LangGraph decides transitions on that authoritative result (§10.4, §15, §14.5).
+- O5 — opencode model selection is governed by §13 routing using OneCompany-managed keys; opencode's own login/Zen provider paths are disabled (§10.4, §13).
 
 ## 1. Product Positioning
 
@@ -533,6 +550,7 @@ The system is local-first and full-stack TypeScript.
 | Backend API | Hono, TypeScript |
 | Agent orchestration | LangGraph.js |
 | Agent SDK | OpenAI Agents SDK TS |
+| Development coding engine | opencode (headless, local, via CodingHarness adapter) |
 | Database | SQLite |
 | ORM | Drizzle ORM |
 | Testing | Vitest, Playwright |
@@ -548,6 +566,8 @@ Orchestration boundary (L5). LangGraph.js and the OpenAI Agents SDK have non-ove
 - OpenAI Agents SDK owns single-agent execution inside a node: one agent's internal ReAct reasoning, its tool calls, and tool/agent handoffs scoped to that step.
 - Loop termination, status changes, and gates live in LangGraph, never inside an individual agent's ReAct loop. An agent reports outcomes; LangGraph decides transitions.
 
+Coding engine boundary. Single-agent execution inside a node is further abstracted behind a `CodingHarness` adapter so the Development group can run on the opencode engine while the rest of the system stays unchanged. The Requirement group and non-coding agents use the OpenAI Agents SDK; the Development group uses `OpencodeHarness`. See §10.4.
+
 ### 10.2 Suggested Monorepo Structure
 
 ```text
@@ -555,7 +575,7 @@ apps/
   web/                 # Next.js control console
   api/                 # Hono backend API and SSE endpoints
 packages/
-  agent-core/          # agent registry, LangGraph workflows, OpenAI Agents SDK integration
+  agent-core/          # agent registry, LangGraph workflows, OpenAI Agents SDK + CodingHarness/opencode integration
   workflow/            # requirement and development graph definitions
   workspace/           # project workspace, git, shell, sandbox, file operations
   shared/              # shared types and schemas
@@ -592,6 +612,37 @@ Recommended SQLite tables:
 - `deployments`
 - `change_requests`
 - `commits`
+
+### 10.4 Development-Group Coding Engine (opencode via CodingHarness)
+
+Single-agent execution inside a node (§10.1) is provided through a swappable `CodingHarness` boundary. The Requirement group and non-coding agents use the OpenAI Agents SDK; the Development group runs on opencode (an open-source AI coding agent) wrapped as `OpencodeHarness`. LangGraph's responsibilities are unchanged — it still owns macro workflow, budgets, status transitions, and gates.
+
+CodingHarness boundary:
+
+- `CodingHarness` exposes `runSlice(slice, ctx)` returning a stream that is mapped to `EventEnvelope`/`AgentEvent`, plus an `authorize(op)` hook the harness must call before any shell/edit.
+- MVP ships one real implementation (`OpencodeHarness`) plus a test stub. The interface keeps the engine swappable and unit-testable; budgets, retries, status, and gates never move into the harness.
+
+Local opencode server (one per project):
+
+- Each project runs its own local opencode server (`opencode serve` / SDK `createOpencodeServer()`), bound to loopback (`127.0.0.1`) on a per-project port, optionally protected by a server password. It is fully local-first.
+- The server is lifecycle-managed: started when the development group begins, pointed at that project's `generated-projects/{projectSlug}/repo` workspace, and closed on completion or pause. Sessions and permissions are isolated per project.
+- opencode is pinned to a known version behind the adapter to contain upstream API churn.
+
+Three governance bridges:
+
+- Event bridge — subscribe to the opencode SSE event stream and translate its bus events into `EventEnvelope`/`AgentEvent` (Plan/Act/Observe/Reflect, tool calls, command output, diffs). The information stream and swimlane render these normalized events unchanged (§14.3.1).
+- Permission bridge — opencode is configured to ask before shell/edit/tool actions; each `permission.asked` is routed through risk grading and the sandbox policy (§12) and either auto-allowed (low risk) or raised as a `dangerous_operation` human gate, then answered through opencode's permission API. No action bypasses governance.
+- Log bridge — opencode tool and command output passes through secret redaction and large-output chunking (§8.2, R5) before it is persisted or shown.
+
+State and TDD boundary:
+
+- `DevState` remains the durable control source; loop budgets, retries, and status transitions live in LangGraph (L5), never inside opencode's loop.
+- opencode runs the intra-slice TDD loop (write failing test, implement, run, fix). However, the authoritative pass/fail used to drive state transitions and shown in the Tests tab and information stream is produced by OneCompany's own scoped test run at the slice boundary, using structured reporter output (for example `vitest --reporter=json`, Playwright JSON reporter). opencode's intermediate test runs are surfaced as informational events only.
+- LangGraph commits each completed slice via the workspace git service (§11).
+
+Model and credentials:
+
+- Model selection follows §13 routing, applied to opencode by passing the chosen provider and model into each development session, using OneCompany-managed API keys. opencode's own login and hosted "Zen" provider paths are disabled so routing and credentials have a single path.
 
 ## 11. Workspace, Git, And Project Management
 
@@ -639,6 +690,8 @@ Sandbox policy:
 - Low and medium operations run in the local project workspace by default.
 - This policy is not user-configurable in MVP.
 
+Engine permission bridge (O3). When the development group runs on opencode (§10.4), opencode is configured to ask for permission on shell/edit/tool actions; each request is routed through this same risk grading and sandbox policy, and high-risk actions raise the same human gate. opencode never executes an action that bypasses this policy.
+
 Secrets policy:
 
 - Do not persist API keys in logs.
@@ -657,11 +710,21 @@ Default routing strategy:
 
 Users cannot configure model routing in MVP. Project-level override can exist internally for future use.
 
+Engine model routing (O5). When the development group runs on opencode (§10.4), this routing policy still applies: OneCompany selects each development agent's provider and model per this strategy and passes it into the opencode session using OneCompany-managed API keys. opencode's own login and hosted "Zen" provider paths are disabled so there is a single routing and credential path.
+
 ## 14. Frontend Product Design
 
 The UI uses a top navigation bar plus lower left-right split layout.
 
 The selected direction combines visual option 1 and visual option 2. Visual option 3 is excluded because it is too crowded.
+
+The MVP visual baseline is captured in the Figma file:
+
+- File: `OneCompany Console - Claude Style Draft`
+- URL: https://www.figma.com/design/r1RF1q4KzBEQHLBWVhGD0X
+- Reference frames: `OneCompany Console / Stream Mode`, `OneCompany Console / Swimlane Mode`, `OneCompany Console / Settings Modal`, `OneCompany Console / Project Hub Modal`, and `Claude-inspired Style Tokens`.
+
+The implementation should follow the Figma baseline for layout, information hierarchy, density, and visual tone, while treating this written spec as the source of truth for behavior and data rules.
 
 ### 14.1 Global Layout
 
@@ -674,10 +737,12 @@ Lower Main Area
 
 Recommended layout:
 
-- Top nav height: 56-64px.
+- Top nav height: 64px in the desktop baseline.
 - Lower area: full remaining viewport height.
 - Left and right panels: resizable split.
-- Default ratio: left 42-46%, right 54-58%.
+- Default ratio: left 42-46%, right 54-58% (the Figma desktop baseline uses roughly 43% / 57%).
+- Right panel tabs and content should remain visible without requiring horizontal scrolling at the baseline desktop width.
+- The left panel may scroll vertically, but the user composer in Stream Mode should remain available at the bottom of the left panel.
 
 ### 14.2 Top Navigation
 
@@ -693,7 +758,11 @@ Required elements:
 - Deployment entry.
 - User avatar dropdown.
 
-Settings should be accessed through the avatar dropdown. Settings may include local workspace path, API key status, Cloudflare Tunnel configuration, and environment checks. It should not expose model routing configuration in MVP.
+The project switcher is also the entry point for Project Hub (§14.7). The compact dropdown may show recent projects and a New Project action, while the full Project Hub modal handles project search, filtering, inspection, and project-level actions.
+
+Settings should be accessed through the avatar dropdown. Settings may include local workspace path, API key status, Cloudflare Tunnel configuration, and environment checks. It should not expose model routing configuration, sandbox policy configuration, shell risk grading configuration, or multi-project management in MVP.
+
+Top-nav state pills must describe one coherent lifecycle state. For example, when the project is in `Developing`, the active group pill should show `Development Group`, and the progress pill should show function-slice progress such as `Slice 2 / 3` rather than an in-progress requirement completeness score. Requirement completeness can still appear as historical or project-card metadata, but not as the active phase indicator after development has started.
 
 ### 14.3 Left Panel: Information Stream
 
@@ -702,6 +771,7 @@ The default left panel is an Opencode/Codex-like information stream.
 It displays:
 
 - User requirement and follow-up answers.
+- User-authored gate responses, custom instructions, and requirement changes.
 - Requirement completeness score.
 - Agent events in chronological order.
 - Plan, Act, Observe, Reflect summaries.
@@ -712,7 +782,57 @@ It displays:
 - Human confirmation cards.
 - Risk warnings.
 
+The stream must clearly distinguish user-originated items from agent-originated items. The Figma baseline shows a user message card immediately after the current requirement summary so the user can see what was submitted and what can still be edited in the requirement loop.
+
+Stream Mode must include a persistent user composer near the bottom of the left panel. The composer supports:
+
+- Answering current gap questions.
+- Adding supplementary requirements.
+- Providing custom text for a human gate.
+- Sending final acceptance or rejection notes where the active gate permits it.
+- Opening option tabs for gate-specific choices.
+
+The composer must not bypass gate policies. If a workflow is blocked on a gate, free text is attached to an allowed gate decision rather than treated as an implicit approval.
+
 Verbose details are collapsed by default.
+
+### 14.3.1 Information Stream Interaction Contract (Opencode/Claude-Code style)
+
+This is a rendering and interaction contract over the normalized event stream (§8). It is engine-agnostic: it must work whether a step is produced by the in-house OpenAI Agents SDK loop or by an external coding harness (see §10.1).
+
+Streaming and ordering:
+
+- Events append in real time over SSE, newest at the bottom.
+- The view stays pinned to the latest item while the user is at the bottom; scrolling up pauses auto-scroll and shows a "jump to latest" affordance.
+- In-flight items stream incrementally (partial agent output, streamed command lines) and finalize in place.
+
+Item taxonomy and origin distinction:
+
+- Every item maps to one `AgentEvent` type (§8.1) and is tagged with its origin: user, agent, system, or gate.
+- User-originated items (requirement, answers, custom gate input, change requests) use the warm user style and an avatar marker; agent and system items use the neutral style. The two must never be visually ambiguous.
+- The original user input is preserved verbatim as a raw item; the system's normalized requirement is a separate summary item. Do not render the two identically.
+
+Agent step structure (Plan / Act / Observe / Reflect):
+
+- Each agent run renders as a grouped thread keyed by `runId` / `agentId` / `correlationId`.
+- Steps are labeled Plan, Act, Observe, Reflect. The active segment is expanded; completed segments collapse to a one-line summary.
+- Tool calls render as a compact row (tool name + status + duration), expandable to arguments and result. Large results are folded behind an artifact link (§8.2, R5), never inlined in full.
+- Command output streams as lines, collapsed by default, with "open in Terminal tab" for the full log. Output is secret-redacted before display and persistence (R5).
+- Diffs render as an inline mini-diff with expand and a link to the Files tab; test results render as pass/fail chips with a link to the Tests tab.
+
+Human gates inline:
+
+- An open gate renders as an inline actionable card showing only the options allowed for that gate type (§6). Custom text attaches to an allowed decision and never counts as implicit approval.
+- At most one gate is open/blocking at a time and is visually emphasized. Previously decided gates collapse to a resolved historical chip (decision + actor + time) with a "view decision log" link.
+
+Composer and density:
+
+- The composer is sticky and context-aware. With no blocking gate it accepts answers, supplementary requirements, and change requests; when a gate blocks, its options mirror that gate's allowed decisions and free text binds to one of them.
+- Verbose details are collapsed by default; provide expand-all / collapse-all and per-item expand. Completed runs compact automatically; the current run stays expanded.
+
+Single projection:
+
+- The stream and the swimlane (§14.4) are two renderers over the same event projection plus the current durable-state snapshot (§8). The stream holds no separate state.
 
 ### 14.4 Left Panel: Swimlane Mode
 
@@ -741,6 +861,8 @@ Swimlane view structure:
 
 The information stream and swimlane must not maintain separate state. They are two renderers over the same event stream.
 
+Swimlane Mode should be available from the same left-panel switcher as Stream Mode. It should preserve the top requirement summary and project context while changing only the event renderer. It should not remove the ability to inspect gate state or user-originated messages; those items are shown as cells or compact markers derived from the same projection.
+
 ### 14.5 Right Panel Tabs
 
 The right panel has exactly five MVP tabs:
@@ -756,6 +878,76 @@ The right panel has exactly five MVP tabs:
 Free terminal policy (L3). The free terminal is not a bypass of governance: its command output is captured into the event log and command-output retention (§8.2), and commands entered there are subject to the same risk grading (§12) as agent-issued commands, including confirmation for high-risk operations.
 
 The tab design should avoid overcrowding. The right side should combine the useful structure of visual option 1 and visual option 2.
+
+The Figma baseline fixes the following tab-level UX expectations:
+
+- Files: source and artifact tree, read-only file content, and diff display.
+- Preview: browser-like preview surface with local preview URL or deployment URL.
+- Terminal: free terminal surface connected to the governed shell executor.
+- Tests: normalized suite status with pass/fail summaries and artifact links.
+- Report: PRD, acceptance cases, run instructions, risk summary, deployment/preview URL, and delivery report sections.
+
+### 14.6 Settings Modal
+
+Settings is a global environment modal opened from the avatar dropdown.
+
+It should include:
+
+- Local workspace paths, including generated-project root and artifact/log locations.
+- API key and secret readiness status, without revealing secret values.
+- Cloudflare Tunnel configuration status, including user-provided URL or command/token readiness.
+- Environment checks for Node, pnpm, Git, Docker, SQLite/database path, and Playwright/browser availability.
+- Read-only policy chips for automatic model routing, fixed sandbox policy, governed shell risk grading, and secret redaction.
+
+Settings must not include:
+
+- Multi-project management. That belongs in Project Hub (§14.7).
+- User-configurable model routing.
+- User-configurable sandbox policy.
+- User-configurable shell risk grading policy.
+- Raw secret values.
+
+### 14.7 Project Hub Modal
+
+Project Hub is a multi-project management modal opened from the project switcher, not from Settings.
+
+It should include:
+
+- Search and filters for project status, risk, and delivery state.
+- Project list with name, generated-project path, status, completeness, open gates, risk count, and recent update time.
+- Selected project summary with status, active group, completeness, open gates, risk items, commit count, and created time.
+- Lifecycle/status flow timeline from Draft Requirement through Testing/Delivery state.
+- Open human gate summary and actions such as Resolve Gate and View Log.
+- Preview and deployment summary, including local preview URL, deployment URL/tunnel state, Open Preview, and Deploy actions.
+- Project artifact cards for PRD, acceptance cases, delivery report, project folder, logs, screenshots/traces, and generated source.
+- Project-level actions: Open, Pause/Resume, Archive, and New Project.
+
+Project Hub is the primary UI for multi-project management in MVP. The top-nav dropdown may show a compact recent-project list, but the modal is the canonical management surface.
+
+The compact project-switcher dropdown and the full Project Hub modal are mutually exclusive. Opening Project Hub should close or hide the compact dropdown so the Hub search/filter area is not visually overlapped.
+
+### 14.8 Visual Style Tokens
+
+The MVP should use a Claude-inspired warm console style: warm paper surfaces, dark ink text, copper/orange primary actions, muted warm borders, green success states, amber warnings, and red danger states.
+
+Suggested token intent:
+
+| Token | Intent |
+| --- | --- |
+| `app.bg` | warm off-white page background |
+| `surface.base` | paper-like panel surface |
+| `surface.raised` | cards, modals, tabs |
+| `surface.warm` | user messages, selected project, and active warm emphasis |
+| `border.muted` | warm neutral borders and dividers |
+| `text.primary` | dark ink text |
+| `text.muted` | warm gray supporting text |
+| `accent.primary` | copper/orange primary buttons, active tabs, progress |
+| `accent.soft` | low-emphasis active surface |
+| `status.success` | green success and delivered state |
+| `status.warning` | amber warning and gate-needed state |
+| `status.danger` | red high-risk and failed state |
+
+The visual style should stay compact and operational. Avoid marketing-page hero treatment, decorative gradient orbs, oversized cards, or a crowded third-panel layout.
 
 ## 15. Testing And Playwright
 
@@ -828,6 +1020,7 @@ The MVP is accepted when:
 - Requirement group completes analysis, scoring, gap questioning, and PRD generation.
 - The requirement loop terminates on its own via the round budget or stuck detection and surfaces the Requirement Stuck gate instead of looping forever.
 - Human can confirm requirement and technical plan through option cards plus custom input.
+- The console implements the Figma baseline: top nav, Stream Mode with user messages and sticky composer, Swimlane switcher, right-side five tabs, avatar Settings modal, and project-switcher Project Hub.
 - Development group creates a project, implements function slices, and records agent events.
 - The per-slice retry budget is enforced and surfaces the Slice Failure gate when exhausted.
 - Tests are generated and run, with per-slice checks and a final full acceptance suite.
@@ -835,6 +1028,7 @@ The MVP is accepted when:
 - Dockerfile or Docker Compose and run instructions are generated.
 - Delivery report is complete.
 - High-risk operations require confirmation and are logged.
+- The development group runs on the opencode engine under full governance: the permission bridge routes opencode shell/edit actions through risk grading, sandbox, and gates; logs are secret-redacted; and authoritative per-slice and final test status is surfaced to the frontend.
 - Command logs are retained with secret redaction and large-output artifact chunking.
 - The project can reach `Failed` and `Paused` states through their defined transitions.
 - Final user acceptance is captured.
@@ -851,10 +1045,12 @@ Recommended MVP build order:
 5. Human gate UI, including stuck/failure/change-review gates.
 6. Development workflow skeleton, including per-slice retry budget.
 7. Workspace, shell, git, sandbox service, and local preview service.
-8. Right panel tabs: Files, Preview, Terminal, Tests, Report.
-9. Information stream renderer.
-10. Swimlane renderer using the same event data.
-11. Delivery report and Cloudflare Tunnel handoff.
+8. Claude-inspired visual tokens and console layout shell.
+9. Right panel tabs: Files, Preview, Terminal, Tests, Report.
+10. Information stream renderer with user cards, inline gates, and sticky composer.
+11. Settings modal and Project Hub modal.
+12. Swimlane renderer using the same event data.
+13. Delivery report and Cloudflare Tunnel handoff.
 
 ## 20. Confirmed UI Direction
 
@@ -865,6 +1061,10 @@ Final aligned UI direction:
 - User settings live in avatar dropdown.
 - Right panel uses visual option 1 plus visual option 2 and includes five tabs: Files, Preview, Terminal, Tests, Report.
 - Left panel defaults to an Opencode/Codex-like information stream.
+- The information stream includes both user-originated messages and agent-originated events, plus a sticky user composer for answers, custom gate input, and requirement changes.
 - Keep a switch button that changes left panel rendering to the multi-agent swimlane.
 - Swimlane and information stream are based on the same event source.
+- Settings opens from the avatar dropdown and manages only global environment/secrets/readiness.
+- Project Hub opens from the project switcher and manages multiple projects.
+- The visual baseline is the Figma file `OneCompany Console - Claude Style Draft`, using a Claude-inspired warm console palette.
 - Do not use visual option 3 for MVP because it is too crowded.

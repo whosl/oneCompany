@@ -4,6 +4,8 @@
 
 Prove the orchestration design with a fake (no-op) agent. After this phase: a LangGraph workflow can run one node, that node runs one agent via the OpenAI Agents SDK, and the agent emits the full Plan/Act/Observe/Reflect event sequence. Forcing a failure produces failure events.
 
+> Engine note (spec v0.3, §10.4): the Development group's coding agent runs on **opencode** behind a swappable `CodingHarness`. In this phase you only define the `CodingHarness` interface (`runSlice` + `authorize`) and a **test stub** — the real `OpencodeHarness` lands in M6. The orchestration boundary below is unchanged: budgets/status/gates stay in LangGraph, never in the harness.
+
 ## Prerequisites
 
 - M1 done. You have `emit()`, `setStatus`, the status machine, SSE, and the gate primitive.
@@ -16,10 +18,11 @@ Prove the orchestration design with a fake (no-op) agent. After this phase: a La
   - Budgets and status changes NEVER live inside an agent. The agent reports an outcome; LangGraph decides the next move.
 - Agent registry: agents are looked up by `agentId@version`, not imported as classes. This lets us swap agents later.
 - Model routing (spec §13): pick a model tier (`cheap` / `standard` / `strong`) per agent. Not user-configurable.
+- Coding engine adapter (spec §10.4): the Development group will run on opencode behind a `CodingHarness`. M2 only defines the interface + a stub; M6 implements `OpencodeHarness`.
 
 ## Spec References
 
-`spec_0.2.md` §7, §10.1, §13, §8.1, §14.4.
+`spec_0.2.md` §7, §10.1, §10.4, §13, §8.1, §14.4.
 
 ## Tasks
 

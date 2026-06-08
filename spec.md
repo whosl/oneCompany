@@ -1,5 +1,9 @@
 # OneCompany MVP Product And Architecture Spec
 
+> Active spec: use `spec_0.2.md` version 0.3 as the current source of truth.
+> This file is the earlier alignment draft and is retained for historical context.
+> The Figma UI baseline is fixed in `spec_0.2.md` §14 and `dev-plan.md`.
+
 Status: draft locked from alignment rounds
 Date: 2026-06-08
 Language: TypeScript full stack

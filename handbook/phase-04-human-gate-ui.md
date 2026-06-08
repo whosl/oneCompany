@@ -16,6 +16,7 @@ Give people real cards to make decisions. Each gate type shows the right options
   - It must NOT appear for: deployment confirmation, high-risk/destructive operation confirmation, requirement confirmation, technical plan confirmation, final acceptance.
   - The stuck / slice-failure / change gates use their own scoped options instead of the generic set.
 - Blocking + logged: a gate stops the workflow; resolving it records `human_gate.resolved` and resumes the workflow.
+- Final placement: in the Figma UI baseline, gates render inline inside Stream Mode. The sticky Stream composer can provide custom text for the active gate, but it must still submit one of the gate's allowed decisions. UI placement never changes the server-side policy.
 
 ## Spec References
 
@@ -52,6 +53,7 @@ In `apps/web`, build a `GateCard` component:
 - Renders one option tab per allowed option (spec §6 says use option tabs).
 - Supports a custom free-text input when `custom` is an option.
 - On click, calls the resolve API with the chosen option (and custom text if any).
+- Is layout-agnostic: it can render in a temporary gate page now and inline in the Stream Mode feed when M9 lands.
 
 Verify: a gate appears as a card with exactly its allowed options; resolving it calls the API and the card clears.
 
@@ -81,6 +83,7 @@ pnpm -w typecheck && pnpm -w test
 - [ ] Server rejects options not allowed for that gate type.
 - [ ] "Skip risk and continue" never appears for deployment, requirement confirm, tech plan confirm, final acceptance, or destructive operations.
 - [ ] `GateCard` renders option tabs + optional custom input and resolves via API.
+- [ ] `GateCard` is reusable inside the Stream Mode feed and compatible with the future sticky composer custom-input path.
 - [ ] Resolving a gate resumes the blocked workflow.
 - [ ] Every decision emits `human_gate.resolved` and is stored.
 

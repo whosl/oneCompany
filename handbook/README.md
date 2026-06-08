@@ -162,6 +162,28 @@ Allowed transitions (only these are legal):
 - Max slice attempts: 4.
 - Dependency install default: `npm ci --ignore-scripts` with a committed lockfile and pinned registry (Medium-constrained). Anything else is High.
 
+## UI Baseline (M8/M9)
+
+Figma file: `OneCompany Console - Claude Style Draft` — https://www.figma.com/design/r1RF1q4KzBEQHLBWVhGD0X
+
+Reference frames:
+
+- `OneCompany Console / Stream Mode`
+- `OneCompany Console / Swimlane Mode`
+- `OneCompany Console / Settings Modal`
+- `OneCompany Console / Project Hub Modal`
+- `Claude-inspired Style Tokens`
+
+Rules to preserve while implementing:
+
+- Use the Claude-inspired warm console palette from spec §14.8.
+- The main layout is top nav plus lower left/right split.
+- The left panel defaults to Stream Mode and must show user messages, agent events, inline gates, and a sticky user composer.
+- Swimlane Mode is only another renderer over the same projection, not another state store.
+- The right panel has exactly five tabs: Files, Preview, Terminal, Tests, Report.
+- Settings opens from the avatar and manages only global environment/secrets/readiness.
+- Project Hub opens from the project switcher and manages multiple projects.
+
 ## How Each Phase Doc Is Structured
 
 Every phase doc has the same sections, in this order:
