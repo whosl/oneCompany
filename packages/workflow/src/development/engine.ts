@@ -42,6 +42,7 @@ import {
   TECH_PLAN_CONFIRM_GATE,
   buildSliceSpec,
 } from "./types.js";
+import { buildHarnessContext } from "./harness-context.js";
 import type { DevFixtureProfile } from "@oc/agent-core";
 
 function toResult(
@@ -78,11 +79,7 @@ export async function runSliceIteration(
     const attempt = state.currentSliceAttempts + 1;
     const sliceSpec = buildSliceSpec(slice, state);
 
-    await deps.harness.runSlice(sliceSpec, {
-      repoPath: deps.repoPath,
-      emit: () => undefined,
-      authorize: deps.authorize,
-    });
+    await deps.harness.runSlice(sliceSpec, buildHarnessContext(deps, state));
 
     const check = await deps.runAuthoritativeCheck(slice, attempt);
     const envelope = emit(deps.db, {

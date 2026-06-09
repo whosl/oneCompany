@@ -44,6 +44,7 @@ export function createDevelopmentDeps(
     db: ctx.db,
     onEvent: ctx.onEvent,
     repoPath: paths.repo,
+    logsPath: paths.logs,
     harness: resolveCodingHarness(mode),
     authorize:
       mode === "stub"

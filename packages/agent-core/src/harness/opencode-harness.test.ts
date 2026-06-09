@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../engine-mode.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../engine-mode.js")>();
-  return {
-    ...actual,
-    isOpencodeAvailable: () => false,
-  };
-});
+vi.mock("../engine-mode.js", () => ({
+  isOpencodeAvailable: () => false,
+}));
+
+vi.mock("./opencode-server.js", () => ({
+  startProjectServer: vi.fn(),
+  releaseProjectServer: vi.fn(),
+}));
 
 import { createOpencodeHarness } from "./opencode-harness.js";
 
@@ -24,7 +25,12 @@ describe("OpencodeHarness — M9.5", () => {
           testCommand: "pnpm vitest run --reporter=json",
           modelTier: "cheap",
         },
-        { repoPath: "/tmp", emit: () => undefined, authorize },
+        {
+          repoPath: "/tmp",
+          projectId: "p1",
+          emit: () => undefined,
+          authorize,
+        },
       ),
     ).rejects.toThrow(/opencode CLI is not installed/);
   });

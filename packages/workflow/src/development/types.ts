@@ -62,6 +62,7 @@ export type DevelopmentWorkflowDeps = {
     attempt: number,
   ) => Promise<AuthoritativeCheckResult>;
   repoPath: string;
+  logsPath?: string;
 };
 
 export type DevelopmentRunResult = {
@@ -87,7 +88,7 @@ export const SLICE_RETRY_BUDGET_EXTENSION = 4;
 export type HarnessContextFactory = (
   deps: DevelopmentWorkflowDeps,
   state: DevState,
-) => Pick<DevContext, "repoPath" | "emit" | "authorize">;
+) => DevContext;
 
 export function buildSliceSpec(slice: FunctionSliceTask, state: DevState): SliceSpec {
   return {

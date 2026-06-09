@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external drizzle-orm --external @langchain/langgraph --external @langchain/core",
+    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external @opencode-ai/sdk --external drizzle-orm --external @langchain/langgraph --external @langchain/core",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run"
@@ -28,6 +28,7 @@
     "@langchain/core": "^0.3.42",
     "@langchain/langgraph": "^0.2.74",
     "@oc/shared": "workspace:^",
+    "@opencode-ai/sdk": "1.0.157",
     "drizzle-orm": "^0.39.3"
   }
 }

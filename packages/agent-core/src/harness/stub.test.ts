@@ -17,6 +17,7 @@ describe("StubHarness — M2", () => {
       },
       {
         repoPath: "/tmp/repo",
+        projectId: "p1",
         emit: (event) => emitted.push(event),
         authorize,
       },
@@ -43,6 +44,7 @@ describe("StubHarness — M2", () => {
       },
       {
         repoPath: "/tmp/repo",
+        projectId: "p1",
         emit: () => {},
         authorize: async () => ({ allow: false, reason: "blocked" }),
       },

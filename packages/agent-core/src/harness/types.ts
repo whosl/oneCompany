@@ -17,8 +17,11 @@ export type AuthDecision = { allow: true } | { allow: false; reason: string };
 
 export interface DevContext {
   repoPath: string;
+  projectId: string;
   emit: (event: unknown) => void;
   authorize: (op: ToolOp) => Promise<AuthDecision>;
+  logsPath?: string;
+  formatToolOutput?: (toolCallId: string, raw: string) => string;
 }
 
 export interface SliceResult {
