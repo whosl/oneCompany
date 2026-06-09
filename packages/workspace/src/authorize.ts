@@ -1,7 +1,25 @@
+import path from "node:path";
 import type { AuthDecision, ToolOp } from "@oc/agent-core";
 import { classifyToolOp } from "./risk.js";
 import type { GateRecord, ShellDeps } from "./shell.js";
 import { CommandRejectedError } from "./shell.js";
+
+function normalizeToolPath(repoPath: string, rawPath?: string): string | undefined {
+  if (!rawPath) {
+    return undefined;
+  }
+
+  const repoRoot = path.resolve(repoPath);
+  const candidate = path.isAbsolute(rawPath)
+    ? path.relative(repoRoot, path.resolve(rawPath))
+    : rawPath;
+
+  if (!candidate || candidate.startsWith("..") || path.isAbsolute(candidate)) {
+    return undefined;
+  }
+
+  return candidate;
+}
 
 export type AuthorizeDeps = {
   repoPath: string;
@@ -28,12 +46,13 @@ export function createAuthorize(
   deps: AuthorizeDeps,
 ): (op: ToolOp) => Promise<AuthDecision> {
   return async (op: ToolOp): Promise<AuthDecision> => {
-    if (op.path && (op.path.startsWith("/") || op.path.split(/[/\\]/).includes(".."))) {
+    const normalizedPath = normalizeToolPath(deps.repoPath, op.path);
+    if (op.path && !normalizedPath) {
       return { allow: false, reason: "Path escapes project root" };
     }
 
     const risk = classifyToolOp(
-      { kind: op.kind, command: op.command, path: op.path },
+      { kind: op.kind, command: op.command, path: normalizedPath },
       { repoPath: deps.repoPath },
     );
 

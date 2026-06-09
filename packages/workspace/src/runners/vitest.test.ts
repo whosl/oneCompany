@@ -16,4 +16,18 @@ describe("parseVitestJson", () => {
     );
     expect(result.passed).toBe(false);
   });
+
+  it("returns failed when no tests were executed", () => {
+    const result = parseVitestJson(
+      JSON.stringify({
+        numTotalTests: 0,
+        numFailedTests: 0,
+        numPassedTests: 0,
+        success: false,
+        testResults: [],
+      }),
+    );
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain("no tests executed");
+  });
 });

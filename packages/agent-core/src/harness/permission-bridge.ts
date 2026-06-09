@@ -46,6 +46,15 @@ export function toToolOp(permission: unknown): ToolOp {
           : undefined;
     return { kind: "read", path };
   }
+  if (kind === "patch" || kind === "multiedit") {
+    const path =
+      typeof metadata.path === "string"
+        ? metadata.path
+        : typeof record.path === "string"
+          ? record.path
+          : undefined;
+    return { kind: "edit", path };
+  }
   return { kind: "other" };
 }
 

@@ -33,6 +33,7 @@ export function createRequirementDeps(
         {
           db: ctx.db,
           onEvent: ctx.onEvent,
+          authorize: async () => ({ allow: true as const }),
           runner: createRequirementRunner(ctx.db, {
             mode,
             requirementProfile: options.profile,

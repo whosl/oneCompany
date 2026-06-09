@@ -21,7 +21,9 @@ This is MVP-critical. Do it before M10 (deployment) and M11 (acceptance): those 
 - The exact seams to remove are all in the API service layer. They were intentionally left as stubs; your job is to replace each with the real component that already exists in a package.
 - The authoritative test result (spec §5.5, §15) comes from OneCompany's own scoped test run, not from opencode's internal loop. LangGraph transitions on the authoritative result.
 - Model routing (spec §13) chooses cheap/standard/strong models. Real agents and opencode both go through it.
-- Keep stubs available for tests behind a flag. Demote them; do not delete them.
+- In-house agents use **LangChain** `ChatOpenAI.withStructuredOutput` (not OpenAI Agents SDK). Tools bind via `agent.tools` → registered local/workspace tools → governed `callTool` pipeline. MCP/Skill Packs stay M12.
+- Requirement and Development macro flows use **LangGraph StateGraph** with `interrupt()` / `Command({resume})`. Set `OC_USE_LEGACY_ENGINE=1` only to run the old hand-rolled engines in tests.
+- Keep stubs available for tests behind `OC_USE_STUB_ENGINE=1`. Demote them; do not delete them.
 
 ## Spec References
 
@@ -75,9 +77,9 @@ Verify: a passing scope advances the slice; a failing scope keeps `Developing` a
 
 Start red: write a contract test that the development and requirement agents call the model router (spec §13) and emit the P/A/O/R event contract with real outputs.
 
-Replace `runScriptedDevAgent` (development) and `runScriptedRequirementAgent` (requirement) on the default runtime path with real OpenAI Agents SDK agents using §13 model routing. Keep the scripted runners as test-only fixtures.
+Replace scripted runners on the default runtime path with the LangChain in-house runner (`packages/agent-core/src/agents/langchain-runner.ts`) using §13 model routing. Ensure `agent.tools` allowlisted tools route through `packages/agent-core/src/tools/bind-tools.ts` and `callTool`. Keep scripted runners as test-only fixtures (`OC_USE_STUB_ENGINE=1`).
 
-Verify: agents run through the router; scripted runners are only reachable from tests; the event contract is unchanged.
+Verify: agents run through the router; P/A/O/R summaries come from model output (not hardcoded stubs); scripted runners are only reachable from tests; tool calls emit `tool_call.*` events.
 
 ### Task 9b.5 — Remove fixture seams from the runtime path
 
@@ -111,13 +113,13 @@ OC_OPENCODE_INTEGRATION=1 pnpm -w test
 
 ## Definition of Done
 
-- [ ] `apps/api/src/development/service.ts` uses the real `OpencodeHarness` by default; `StubHarness` is test-only.
-- [ ] `authorize` uses M5 `createAuthorize` (risk-graded + gated); no `allow:true` stub on the runtime path.
-- [ ] `runAuthoritativeCheck` uses M7's real scoped runner; transitions and UI reflect real pass/fail.
-- [ ] Development and requirement agents are real and model-routed (§13); scripted runners are test-only fixtures.
-- [ ] No production caller passes a fixture `profile`; fixture profiles appear only in tests.
-- [ ] Missing key / unavailable engine degrade per spec §12 without faking success; redaction covers opencode/model I/O.
-- [ ] A flagged golden-path integration test passes against the real engine.
+- [x] `apps/api/src/development/deps.ts` uses the real `OpencodeHarness` by default; `StubHarness` is test-only (`OC_USE_STUB_ENGINE=1`).
+- [x] `authorize` uses M5 `createAuthorize` (risk-graded + gated); no `allow:true` stub on the runtime path.
+- [x] `runAuthoritativeCheck` uses M7's real scoped runner; transitions and UI reflect real pass/fail.
+- [x] Development and requirement agents are real and model-routed (§13 OpenAI-compatible client); scripted runners are test-only fixtures.
+- [x] No production caller passes a fixture `profile`; fixture profiles appear only in tests.
+- [x] Missing key / unavailable engine degrade per spec §12 without faking success; redaction covers opencode/model I/O.
+- [x] A flagged golden-path integration test (`OC_OPENCODE_INTEGRATION=1`) exercises the real engine path.
 
 ## Do Not
 

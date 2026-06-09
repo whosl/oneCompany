@@ -64,11 +64,16 @@ describe("gate resume — development", () => {
       });
       expect(resolved.status).toBe(200);
 
-      const status = await app.request(`/projects/${projectId}/development/status`);
-      const statusBody = (await status.json()) as {
-        projectStatus: string;
-        state: { taskQueue: Array<{ testCommand: string }> };
+      let statusBody = {
+        projectStatus: "",
+        state: { taskQueue: [] as Array<{ testCommand: string }> },
       };
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const status = await app.request(`/projects/${projectId}/development/status`);
+        statusBody = (await status.json()) as typeof statusBody;
+        if (statusBody.state.taskQueue.length > 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
       expect(statusBody.state.taskQueue.length).toBeGreaterThan(0);
       expect(statusBody.state.taskQueue[0]?.testCommand).toBeTruthy();
       expect(["Developing", "Testing"]).toContain(statusBody.projectStatus);

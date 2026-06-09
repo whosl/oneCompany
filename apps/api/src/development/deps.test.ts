@@ -20,7 +20,7 @@ describe("development deps — M9.5", () => {
   it("uses OpencodeHarness and createAuthorize in real mode", async () => {
     const previous = process.env.OC_USE_STUB_ENGINE;
     const { db, projects, gates, workspace, cleanup } = setupTestApp();
-    delete process.env.OC_USE_STUB_ENGINE;
+    delete process.env.OC_USE_STUB_ENGINE; // after setupTestApp — it forces stub=1
     try {
       const project = projects.createProject("Real Deps Test");
       const ctx: DevelopmentServiceContext = { db, projects, gates, workspace, onEvent: () => undefined };

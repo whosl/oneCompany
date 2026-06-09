@@ -4,7 +4,7 @@ import {
   resolveEngineMode,
   type EngineMode,
 } from "./engine-mode.js";
-import { runOpenAiDevAgent, runOpenAiRequirementAgent } from "./agents/openai-runner.js";
+import { runLangChainDevAgent, runLangChainRequirementAgent } from "./agents/langchain-runner.js";
 import { runScriptedDevAgent } from "./agents/development/scripted-runner.js";
 import type { DevAgentTask, DevFixtureProfile } from "./agents/development/types.js";
 import { runScriptedRequirementAgent } from "./agents/requirement/scripted-runner.js";
@@ -28,7 +28,7 @@ export function createRequirementRunner(
   const profile = options.requirementProfile ?? "vague";
 
   if (mode === "stub") {
-    return async (agentIdAtVersion, task) => ({
+    return async (_runCtx, agentIdAtVersion, task) => ({
       output: runScriptedRequirementAgent(agentIdAtVersion, {
         ...(task as RequirementAgentTask),
         profile,
@@ -37,13 +37,22 @@ export function createRequirementRunner(
   }
 
   assertOpenAiConfigured();
-  return async (agentIdAtVersion, task) => ({
-    output: await runOpenAiRequirementAgent(
-      db,
+  return async (runCtx, agentIdAtVersion, task) => {
+    const result = await runLangChainRequirementAgent(
+      runCtx,
       agentIdAtVersion,
       task as RequirementAgentTask,
-    ),
-  });
+    );
+    return {
+      output: result.output,
+      summaries: {
+        plan: result.reasoning.plan,
+        act: `Structured output via ${result.modelId}`,
+        observe: result.reasoning.observation,
+        reflect: result.reasoning.reflection,
+      },
+    };
+  };
 }
 
 export function createDevelopmentRunner(
@@ -54,7 +63,7 @@ export function createDevelopmentRunner(
   const profile = options.devProfile ?? "minimal";
 
   if (mode === "stub") {
-    return async (agentIdAtVersion, task) => ({
+    return async (_runCtx, agentIdAtVersion, task) => ({
       output: runScriptedDevAgent(agentIdAtVersion, {
         ...(task as DevAgentTask),
         profile,
@@ -63,7 +72,16 @@ export function createDevelopmentRunner(
   }
 
   assertOpenAiConfigured();
-  return async (agentIdAtVersion, task) => ({
-    output: await runOpenAiDevAgent(db, agentIdAtVersion, task as DevAgentTask),
-  });
+  return async (runCtx, agentIdAtVersion, task) => {
+    const result = await runLangChainDevAgent(runCtx, agentIdAtVersion, task as DevAgentTask);
+    return {
+      output: result.output,
+      summaries: {
+        plan: result.reasoning.plan,
+        act: `Structured output via ${result.modelId}`,
+        observe: result.reasoning.observation,
+        reflect: result.reasoning.reflection,
+      },
+    };
+  };
 }

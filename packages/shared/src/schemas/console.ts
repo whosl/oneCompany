@@ -65,6 +65,13 @@ export const EnvironmentReadinessSchema = z.object({
   generatedProjectsRoot: z.string(),
   databasePath: z.string(),
   apiKeyReady: z.boolean(),
+  engine: z
+    .object({
+      workflowLlmReady: z.boolean(),
+      opencodeCliReady: z.boolean(),
+      opencodeModelReady: z.boolean(),
+    })
+    .optional(),
   tunnelConfigured: z.boolean(),
   checks: z.object({
     node: z.boolean(),

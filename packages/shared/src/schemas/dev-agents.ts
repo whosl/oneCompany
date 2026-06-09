@@ -1,10 +1,23 @@
 import { z } from "zod";
 
+function stringArrayField() {
+  return z.preprocess((value) => {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed ? [trimmed] : [];
+    }
+    if (Array.isArray(value)) {
+      return value;
+    }
+    return [];
+  }, z.array(z.string()));
+}
+
 export const ArchitectOutputSchema = z.object({
   techPlan: z.string(),
-  stack: z.array(z.string()),
-  architectureNotes: z.array(z.string()),
-  risks: z.array(z.string()),
+  stack: stringArrayField(),
+  architectureNotes: stringArrayField(),
+  risks: stringArrayField(),
 });
 
 export const TestDesignerOutputSchema = z.object({

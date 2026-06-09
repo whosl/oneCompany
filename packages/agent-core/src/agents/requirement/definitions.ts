@@ -34,7 +34,7 @@ export const REQUIREMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     description: "Extracts structured requirements",
     inputSchema: { type: "object" },
     outputSchema: { type: "object" },
-    tools: [],
+    tools: ["requirement-context@1.0.0"],
     modelPolicy: { tier: "standard" },
     riskLevel: "low",
     permissions: ["read"],

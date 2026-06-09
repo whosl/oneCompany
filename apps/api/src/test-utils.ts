@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createDb, type Db } from "@oc/shared";
+import { resetGraphCheckpointerForTests } from "@oc/workflow";
 import { createApp } from "./app.js";
 import { resetBroadcasts } from "./events/broadcast.js";
 import type { GateService } from "./gates/service.js";
@@ -32,6 +33,7 @@ export function setupTestApp(): {
   });
 
   resetBroadcasts();
+  resetGraphCheckpointerForTests();
   const db = createDb(dbPath);
   const { app, projects, gates, workspace } = createApp({
     db,
@@ -46,6 +48,7 @@ export function setupTestApp(): {
     workspace,
     generatedProjectsRoot,
     cleanup: () => {
+      resetGraphCheckpointerForTests();
       delete process.env.OC_TEST_DB_PATH;
       delete process.env.OC_GENERATED_PROJECTS_ROOT;
       delete process.env.OC_USE_STUB_ENGINE;

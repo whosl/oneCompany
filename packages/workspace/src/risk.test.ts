@@ -5,6 +5,7 @@ describe("risk classifier — M5", () => {
   it("classifies read-only commands as low", () => {
     expect(classifyCommand("git status")).toBe("low");
     expect(classifyCommand("npm test")).toBe("low");
+    expect(classifyCommand("pnpm vitest run src/slice.test.ts --reporter=json")).toBe("medium");
   });
 
   it("classifies file generation as medium", () => {

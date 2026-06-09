@@ -2,7 +2,11 @@ import { execSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
 import { createDb, type Db } from "@oc/shared";
+
+loadEnv({ path: path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)), ".env") });
 import { createApp } from "../app.js";
 import { resetBroadcasts } from "../events/broadcast.js";
 import type { GateService } from "../gates/service.js";
@@ -24,7 +28,7 @@ export function setupIntegrationApp(): {
   process.env.OC_TEST_DB_PATH = dbPath;
   process.env.OC_GENERATED_PROJECTS_ROOT = generatedProjectsRoot;
   delete process.env.OC_USE_STUB_ENGINE;
-  process.env.OC_OPENCODE_SLICE_TIMEOUT_MS ??= "30000";
+  process.env.OC_OPENCODE_SLICE_TIMEOUT_MS ??= "180000";
 
   execSync("pnpm exec drizzle-kit push", {
     cwd: path.resolve(process.cwd(), "../../packages/shared"),

@@ -7,18 +7,42 @@ import {
   type Db,
   type EventEnvelope,
 } from "@oc/shared";
+import type { AuthorizeFn } from "./harness/permission-bridge.js";
 import { getAgent } from "./registry.js";
 import { pickModel } from "./router.js";
 
+export type AgentRunnerSummaries = {
+  plan: string;
+  act: string;
+  observe: string;
+  reflect: string;
+};
+
+export type AgentRunnerResult = {
+  output: unknown;
+  summaries?: Partial<AgentRunnerSummaries>;
+};
+
+export type AgentRunContext = {
+  projectId: string;
+  db: Db;
+  onEvent?: (envelope: EventEnvelope) => void;
+  authorize?: AuthorizeFn;
+  repoPath?: string;
+};
+
 export type AgentRunner = (
+  runCtx: AgentRunContext,
   agentIdAtVersion: string,
   task: unknown,
-) => Promise<{ output: unknown }> | { output: unknown };
+) => Promise<AgentRunnerResult> | AgentRunnerResult;
 
 export type ExecutorContext = {
   db: Db;
   onEvent?: (envelope: EventEnvelope) => void;
   runner?: AgentRunner;
+  authorize?: AuthorizeFn;
+  repoPath?: string;
 };
 
 export type RunAgentInput = {
@@ -76,9 +100,29 @@ export async function runAgent(
 
   let output: unknown = { summary: "stub", modelId };
 
+  let runnerSummaries: AgentRunnerSummaries | undefined;
+
   if (ctx.runner) {
-    const runnerResult = await ctx.runner(input.agentIdAtVersion, input.task);
+    const runnerResult = await ctx.runner(
+      {
+        projectId: input.projectId,
+        db: ctx.db,
+        onEvent: ctx.onEvent,
+        authorize: ctx.authorize,
+        repoPath: ctx.repoPath,
+      },
+      input.agentIdAtVersion,
+      input.task,
+    );
     output = runnerResult.output;
+    if (runnerResult.summaries) {
+      runnerSummaries = {
+        plan: runnerResult.summaries.plan ?? `Plan for ${agent.role}`,
+        act: runnerResult.summaries.act ?? `Acting with ${modelId}`,
+        observe: runnerResult.summaries.observe ?? "Observed structured output",
+        reflect: runnerResult.summaries.reflect ?? "Reflected on run",
+      };
+    }
   } else if (input.forceFail) {
     return failRun(ctx, {
       projectId: input.projectId,
@@ -94,19 +138,14 @@ export async function runAgent(
     output = { summary: "stub", modelId };
   }
 
-  const summaries = {
+  const summaries: AgentRunnerSummaries = runnerSummaries ?? {
     plan: `Plan for ${agent.role}`,
     act: `Acting with ${modelId}`,
     observe: ctx.runner ? "Observed structured output" : "Observed stub outcome",
     reflect: "Reflected on run",
   };
 
-  for (const [phase, summary] of Object.entries({
-    plan: summaries.plan,
-    act: summaries.act,
-    observe: summaries.observe,
-    reflect: summaries.reflect,
-  })) {
+  for (const [phase, summary] of Object.entries(summaries)) {
     const envelope = emit(ctx.db, {
       projectId: input.projectId,
       runId,

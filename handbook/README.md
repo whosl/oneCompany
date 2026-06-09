@@ -107,7 +107,7 @@ apps/
   web/                 # Next.js control console (Tailwind, shadcn/ui)
   api/                 # Hono backend API + SSE endpoints
 packages/
-  agent-core/          # agent registry, LangGraph workflows, OpenAI Agents SDK + CodingHarness/opencode, model routing
+  agent-core/          # agent registry, LangChain in-house runner, tool registry, CodingHarness/opencode, model routing
   workflow/            # requirement + development graph definitions
   workspace/           # project workspace, git, shell, sandbox, file ops, risk grading
   integrations/        # post-MVP Integration Gateway: MCP/native connectors + offline skill packs

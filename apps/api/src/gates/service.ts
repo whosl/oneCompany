@@ -122,10 +122,6 @@ export function createGateService(
     const decision = normalizeDecision(input);
     assertAllowedDecision(gate.gateType, decision, gate.metadata);
 
-    if (options.onGateResolved) {
-      await options.onGateResolved(gate, decision);
-    }
-
     const now = new Date().toISOString();
     db.update(humanGates)
       .set({
@@ -147,12 +143,22 @@ export function createGateService(
     });
     onEvent(envelope);
 
-    return {
+    const resolvedGate: GateRecord = {
       ...gate,
       status: "resolved",
       decision,
       resolvedAt: now,
     };
+
+    if (options.onGateResolved) {
+      try {
+        await options.onGateResolved(resolvedGate, decision);
+      } catch (error) {
+        console.error(`gate resume failed for ${gateId}:`, error);
+      }
+    }
+
+    return resolvedGate;
   };
 
   const waitForGate = async (
@@ -160,10 +166,13 @@ export function createGateService(
     waitOptions: { pollMs?: number; timeoutMs?: number } = {},
   ): Promise<string> => {
     const pollMs = waitOptions.pollMs ?? 100;
-    const timeoutMs = waitOptions.timeoutMs ?? 10_000;
+    const timeoutMs =
+      waitOptions.timeoutMs ??
+      Number(process.env.OC_GATE_WAIT_TIMEOUT_MS ?? 10_000);
+    const waitForever = timeoutMs <= 0;
     const started = Date.now();
 
-    while (Date.now() - started < timeoutMs) {
+    while (waitForever || Date.now() - started < timeoutMs) {
       const gate = getGate(gateId);
       if (!gate) {
         throw new Error(`Gate not found: ${gateId}`);

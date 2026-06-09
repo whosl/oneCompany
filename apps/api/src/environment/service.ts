@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { getEngineReadiness } from "@oc/agent-core";
 import { getDbPath } from "@oc/shared";
 import { getGeneratedProjectsRoot } from "@oc/workspace";
 import type { EnvironmentReadiness } from "@oc/shared";
@@ -20,7 +21,8 @@ export function createEnvironmentService() {
       const workspaceRoot = process.cwd();
       const generatedProjectsRoot = getGeneratedProjectsRoot();
       const databasePath = getDbPath();
-      const apiKeyReady = Boolean(process.env.OPENAI_API_KEY?.trim());
+      const engine = getEngineReadiness();
+      const apiKeyReady = engine.workflowLlmReady;
       const tunnelConfigured = Boolean(
         process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim() ||
           process.env.CLOUDFLARE_TUNNEL_URL?.trim(),
@@ -31,6 +33,7 @@ export function createEnvironmentService() {
         generatedProjectsRoot,
         databasePath,
         apiKeyReady,
+        engine,
         tunnelConfigured,
         checks: {
           node: commandExists("node"),

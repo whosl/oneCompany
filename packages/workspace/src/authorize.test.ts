@@ -28,6 +28,18 @@ describe("authorize hook — M5", () => {
     });
   });
 
+  it("allows edits with absolute paths inside the repo", async () => {
+    const authorize = createAuthorize("proj-1", {
+      repoPath: "/tmp/repo",
+      createGate: vi.fn(),
+      waitForGate: vi.fn(),
+    });
+
+    await expect(
+      authorize({ kind: "edit", path: "/tmp/repo/src/add.ts" }),
+    ).resolves.toEqual({ allow: true });
+  });
+
   it("denies edits that escape the repo path", async () => {
     const authorize = createAuthorize("proj-1", {
       repoPath: "/tmp/repo",

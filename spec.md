@@ -1,6 +1,6 @@
 # OneCompany MVP Product And Architecture Spec
 
-Version: 0.3.2
+Version: 0.3.3
 Status: draft, revised after business-logic, implementation-plan, Figma UI baseline, development-engine review, Figma console fixes, and external-integration planning
 Date: 2026-06-08
 Language: TypeScript full stack
@@ -23,7 +23,13 @@ Changes are traceable by ID. H/M/L items landed in 0.2 (business-logic review); 
 - L2 — `completenessScore` defined on a 0–100 scale (§4.2, §4.3).
 - L3 — Free terminal output is captured into logs and subject to risk grading (§8.2, §14.5).
 - L4 — "Skip risk and continue" restricted to low/medium operation gates only (§6).
-- L5 — LangGraph vs OpenAI Agents SDK orchestration boundary defined (§10.1).
+- L5 — LangGraph vs in-house agent runner orchestration boundary defined (§10.1).
+
+### 0.3.3 — engine alignment (LangGraph + LangChain)
+
+- E1 — Replaced the §10.1 "OpenAI Agents SDK" node runner with **LangChain multi-provider model runner** (`ChatOpenAI.withStructuredOutput`) for Requirement and non-coding Development agents; supports OpenAI-compatible endpoints via `OC_LLM_BASE_URL` (§10.1, §13).
+- E2 — Requirement and Development macro workflows now run as **LangGraph StateGraph** with `interrupt()` / `Command({resume})` and a process-wide checkpointer; durable session tables remain the control source (§8 R1, §10.1).
+- E3 — In-house agents bind **registered local/workspace tools** only (`agent.tools` allowlist → governed `tool_call.*` pipeline); MCP and Skill Pack connectors remain post-MVP via Integration Gateway (§7, §10.5, §10.6).
 
 ### 0.2.1 — implementation-plan review
 
@@ -565,8 +571,9 @@ The system is local-first and full-stack TypeScript.
 | --- | --- |
 | Frontend | Next.js, React, Tailwind CSS, shadcn/ui |
 | Backend API | Hono, TypeScript |
-| Agent orchestration | LangGraph.js |
-| Agent SDK | OpenAI Agents SDK TS |
+| Agent orchestration | LangGraph.js (Requirement + Development StateGraph, interrupt/resume) |
+| In-house agent runner | LangChain `@langchain/openai` (`ChatOpenAI.withStructuredOutput`, multi-provider via `OC_LLM_BASE_URL`) |
+| Tool binding | Registered local/workspace tools (`agent.tools` → governed `callTool` pipeline); MCP/Skill Pack via post-MVP Integration Gateway |
 | Development coding engine | opencode (headless, local, via CodingHarness adapter) |
 | Database | SQLite |
 | ORM | Drizzle ORM |
@@ -577,13 +584,13 @@ The system is local-first and full-stack TypeScript.
 
 During the requirement phase, the system should recommend the generated app's tech stack to the user as selectable options. The default recommendation is the stack above.
 
-Orchestration boundary (L5). LangGraph.js and the OpenAI Agents SDK have non-overlapping responsibilities:
+Orchestration boundary (L5). LangGraph.js and the in-house agent runner have non-overlapping responsibilities:
 
-- LangGraph.js owns the macro workflow: group and phase transitions, the requirement and development graphs, durable workflow state, loop budgets (question rounds, slice retries), status transitions, and human-gate nodes.
-- OpenAI Agents SDK owns single-agent execution inside a node: one agent's internal ReAct reasoning, its tool calls, and tool/agent handoffs scoped to that step.
-- Loop termination, status changes, and gates live in LangGraph, never inside an individual agent's ReAct loop. An agent reports outcomes; LangGraph decides transitions.
+- LangGraph.js owns the macro workflow: group and phase transitions, the requirement and development StateGraphs, durable workflow state, loop budgets (question rounds, slice retries), status transitions, and human-gate nodes (`interrupt()` / `Command({resume})` with a graph checkpointer; session tables remain the control source per §8 R1).
+- The in-house agent runner (LangChain `ChatOpenAI.withStructuredOutput` + optional governed tool loop) owns single-agent execution inside a LangGraph node: structured JSON output, plan/observation/reflection summaries for the UI, and registered local/workspace tool calls scoped to that step.
+- Loop termination, status changes, and gates live in LangGraph, never inside an agent's tool loop. An agent reports outcomes; LangGraph decides transitions.
 
-Coding engine boundary. Single-agent execution inside a node is further abstracted behind a `CodingHarness` adapter so the Development group can run on the opencode engine while the rest of the system stays unchanged. The Requirement group and non-coding agents use the OpenAI Agents SDK; the Development group uses `OpencodeHarness`. See §10.4.
+Coding engine boundary. Coding slices are further abstracted behind a `CodingHarness` adapter so the Development group can run on the opencode engine while the rest of the system stays unchanged. The Requirement group and non-coding Development agents use the LangChain runner; coding slices use `OpencodeHarness`. See §10.4.
 
 ### 10.2 Suggested Monorepo Structure
 
@@ -592,7 +599,7 @@ apps/
   web/                 # Next.js control console
   api/                 # Hono backend API and SSE endpoints
 packages/
-  agent-core/          # agent registry, LangGraph workflows, OpenAI Agents SDK + CodingHarness/opencode integration
+  agent-core/          # agent registry, LangChain in-house runner, tool registry, CodingHarness/opencode integration
   workflow/            # requirement and development graph definitions
   workspace/           # project workspace, git, shell, sandbox, file operations
   integrations/        # post-MVP Integration Gateway: MCP/native connectors and offline skill packs
@@ -641,7 +648,7 @@ Post-MVP (Integration Gateway, §10.5/§10.6; created in M12, not in MVP M0):
 
 ### 10.4 Development-Group Coding Engine (opencode via CodingHarness)
 
-Single-agent execution inside a node (§10.1) is provided through a swappable `CodingHarness` boundary. The Requirement group and non-coding agents use the OpenAI Agents SDK; the Development group runs on opencode (an open-source AI coding agent) wrapped as `OpencodeHarness`. LangGraph's responsibilities are unchanged — it still owns macro workflow, budgets, status transitions, and gates.
+Single-agent execution inside a node (§10.1) is provided through the LangChain in-house runner for Requirement and non-coding Development agents, and through a swappable `CodingHarness` boundary for coding slices. The Development group runs coding slices on opencode (an open-source AI coding agent) wrapped as `OpencodeHarness`. LangGraph owns macro workflow, budgets, status transitions, and gates.
 
 CodingHarness boundary:
 
@@ -960,7 +967,7 @@ Verbose details are collapsed by default.
 
 ### 14.3.1 Information Stream Interaction Contract (Opencode/Claude-Code style)
 
-This is a rendering and interaction contract over the normalized event stream (§8). It is engine-agnostic: it must work whether a step is produced by the in-house OpenAI Agents SDK loop or by an external coding harness (see §10.1).
+This is a rendering and interaction contract over the normalized event stream (§8). It is engine-agnostic: it must work whether a step is produced by the in-house LangChain agent runner or by an external coding harness (see §10.1).
 
 Streaming and ordering:
 

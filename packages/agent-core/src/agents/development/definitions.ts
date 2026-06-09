@@ -22,7 +22,7 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     description: "Produces the technical plan",
     inputSchema: { type: "object" },
     outputSchema: { type: "object" },
-    tools: [],
+    tools: ["read-artifact@1.0.0", "workspace-read@1.0.0"],
     modelPolicy: { tier: "strong" },
     riskLevel: "low",
     permissions: ["read"],

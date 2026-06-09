@@ -119,6 +119,13 @@ export function classifyCommand(cmd: string, ctx: RiskClassifierContext = {}): R
     return "medium";
   }
 
+  if (
+    /\b(pnpm|npm|npx)\s+(exec\s+)?(vitest|test)\b/i.test(normalized) ||
+    /\bvitest\s+run\b/i.test(normalized)
+  ) {
+    return "medium";
+  }
+
   return "high";
 }
 

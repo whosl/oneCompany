@@ -40,6 +40,7 @@ import {
 } from "./development/state.js";
 import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./development/types.js";
 import type { RequirementWorkflowDeps } from "./requirement/types.js";
+import { resetGraphCheckpointerForTests } from "./graph/checkpointer.js";
 import type { TestingWorkflowDeps } from "./testing/types.js";
 
 export function setupTestDb(): { db: Db; cleanup: () => void } {
@@ -152,7 +153,7 @@ export function createWorkflowDeps(db: Db): RequirementWorkflowDeps {
       runAgent(
         {
           db,
-          runner: async (agentIdAtVersion, task) => ({
+          runner: async (_runCtx, agentIdAtVersion, task) => ({
             output: runScriptedRequirementAgent(
               agentIdAtVersion,
               task as RequirementAgentTask,
@@ -173,6 +174,7 @@ export function setupWorkflowTest(): {
   projectId: string;
   cleanup: () => void;
 } {
+  resetGraphCheckpointerForTests();
   const { db, cleanup } = setupTestDb();
   registerRequirementAgents(db);
   const projectId = seedProject(db);
@@ -180,7 +182,10 @@ export function setupWorkflowTest(): {
     db,
     deps: createWorkflowDeps(db),
     projectId,
-    cleanup,
+    cleanup: () => {
+      resetGraphCheckpointerForTests();
+      cleanup();
+    },
   };
 }
 
@@ -256,7 +261,7 @@ export function createDevelopmentDeps(
       runAgent(
         {
           db,
-          runner: async (agentIdAtVersion, task) => ({
+          runner: async (_runCtx, agentIdAtVersion, task) => ({
             output: runScriptedDevAgent(agentIdAtVersion, task as DevAgentTask),
           }),
         },
@@ -341,7 +346,7 @@ export function createTestingDeps(
       runAgent(
         {
           db,
-          runner: async (agentIdAtVersion, task) => ({
+          runner: async (_runCtx, agentIdAtVersion, task) => ({
             output: runScriptedDevAgent(agentIdAtVersion, task as DevAgentTask),
           }),
         },
@@ -382,6 +387,7 @@ export function setupDevelopmentTest(
   repoPath: string;
   cleanup: () => void;
 } {
+  resetGraphCheckpointerForTests();
   const { db, cleanup } = setupTestDb();
   registerDevelopmentAgents(db);
   const { projectId, repoPath } = seedPrdReadyProject(db);
@@ -390,6 +396,9 @@ export function setupDevelopmentTest(
     deps: createDevelopmentDeps(db, repoPath, options),
     projectId,
     repoPath,
-    cleanup,
+    cleanup: () => {
+      resetGraphCheckpointerForTests();
+      cleanup();
+    },
   };
 }

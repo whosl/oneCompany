@@ -27,10 +27,24 @@ export function parseVitestJson(stdout: string): {
   }
 
   const failed = report.numFailedTests ?? 0;
+  const passedCount = report.numPassedTests ?? 0;
+  const totalTests =
+    (report as VitestJsonReport & { numTotalTests?: number }).numTotalTests ??
+    passedCount + failed;
+
+  if (totalTests === 0 && passedCount === 0 && failed === 0) {
+    return {
+      passed: false,
+      details: "vitest: no tests executed (missing test files or wrong cwd)",
+      passedCount: 0,
+      failedCount: 0,
+    };
+  }
+
   const passed = report.success ?? failed === 0;
   return {
     passed,
-    details: `vitest: failed=${failed}, passed=${report.numPassedTests ?? 0}`,
+    details: `vitest: failed=${failed}, passed=${passedCount}`,
     passedCount: report.numPassedTests,
     failedCount: failed,
   };

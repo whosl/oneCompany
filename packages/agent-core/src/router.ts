@@ -1,19 +1,46 @@
-import { getDefaultOpencodeModelRef } from "./harness/opencode-auth.js";
-
 export type ModelTier = "cheap" | "standard" | "strong";
 
-// For opencode, set OC_MODEL_* as `provider/model`, e.g. `zhipuai-coding-plan/glm-5.1`.
-// When unset, picks up ~/.local/share/opencode/auth.json (zhipuai-coding-plan preferred).
-const LOCAL_DEFAULT = getDefaultOpencodeModelRef();
-
-const DEFAULT_MODELS: Record<ModelTier, string> = {
-  cheap: process.env.OC_MODEL_CHEAP ?? LOCAL_DEFAULT ?? "gpt-4.1-mini",
-  standard: process.env.OC_MODEL_STANDARD ?? LOCAL_DEFAULT ?? "gpt-4.1",
-  strong: process.env.OC_MODEL_STRONG ?? LOCAL_DEFAULT ?? "o4-mini",
+const WORKFLOW_TIER_ENV: Record<ModelTier, string> = {
+  cheap: "OC_WORKFLOW_MODEL_CHEAP",
+  standard: "OC_WORKFLOW_MODEL_STANDARD",
+  strong: "OC_WORKFLOW_MODEL_STRONG",
 };
 
+const LEGACY_TIER_ENV: Record<ModelTier, string> = {
+  cheap: "OC_MODEL_CHEAP",
+  standard: "OC_MODEL_STANDARD",
+  strong: "OC_MODEL_STRONG",
+};
+
+function resolveWorkflowDefaults(): Record<ModelTier, string> {
+  const base = process.env.OC_LLM_BASE_URL ?? "";
+  if (base.includes("deepseek")) {
+    return {
+      cheap: "deepseek-v4-flash",
+      standard: "deepseek-v4-flash",
+      strong: "deepseek-v4-pro",
+    };
+  }
+  return {
+    cheap: "gpt-4.1-mini",
+    standard: "gpt-4.1",
+    strong: "o4-mini",
+  };
+}
+
+function legacyWorkflowModel(tier: ModelTier): string | undefined {
+  const value = process.env[LEGACY_TIER_ENV[tier]];
+  if (value && !value.includes("/")) {
+    return value;
+  }
+  return undefined;
+}
+
+/** Plain model id for workflow agents (`callOpenAiChatJson`). Opencode uses `pickOpencodeModel`. */
 export function pickModel(tier: ModelTier): string {
-  const model = DEFAULT_MODELS[tier];
+  const defaults = resolveWorkflowDefaults();
+  const model =
+    process.env[WORKFLOW_TIER_ENV[tier]] ?? legacyWorkflowModel(tier) ?? defaults[tier];
   if (!model) {
     throw new Error(`Unknown model tier: ${tier}`);
   }

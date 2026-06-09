@@ -32,9 +32,22 @@ export function createEventBridge(
 ): EventBridgeHandle {
   const changedFiles = new Set<string>();
   const seenToolCalls = new Set<string>();
+  const runningTools = new Set<string>();
   let sessionIdle = false;
   let assistantReply = false;
+  let pendingPermissions = 0;
   let aborted = false;
+
+  const markSessionActive = () => {
+    sessionIdle = false;
+  };
+
+  const markSessionIdle = () => {
+    sessionIdle = true;
+  };
+
+  const isEffectivelyIdle = () =>
+    sessionIdle && runningTools.size === 0 && pendingPermissions === 0;
 
   void (async () => {
     try {
@@ -49,11 +62,14 @@ export function createEventBridge(
         handleOpencodeEvent(event, ctx, {
           changedFiles,
           seenToolCalls,
-          markSessionIdle: () => {
-            sessionIdle = true;
-          },
+          runningTools,
+          markSessionActive,
+          markSessionIdle,
           markAssistantReply: () => {
             assistantReply = true;
+          },
+          onPermissionPending: (delta) => {
+            pendingPermissions += delta;
           },
         });
       }
@@ -65,7 +81,7 @@ export function createEventBridge(
   return {
     changedFiles,
     isIdle() {
-      return sessionIdle;
+      return isEffectivelyIdle();
     },
     hasAssistantReply() {
       return assistantReply;
@@ -82,8 +98,11 @@ function handleOpencodeEvent(
   hooks: {
     changedFiles: Set<string>;
     seenToolCalls: Set<string>;
+    runningTools: Set<string>;
+    markSessionActive: () => void;
     markSessionIdle: () => void;
     markAssistantReply: () => void;
+    onPermissionPending: (delta: number) => void;
   },
 ): void {
   switch (event.type) {
@@ -101,7 +120,15 @@ function handleOpencodeEvent(
       if (event.properties.sessionID !== ctx.sessionId) {
         return;
       }
-      void ctx.onPermission(event.properties);
+      hooks.markSessionActive();
+      hooks.onPermissionPending(1);
+      void (async () => {
+        try {
+          await ctx.onPermission(event.properties);
+        } finally {
+          hooks.onPermissionPending(-1);
+        }
+      })();
       return;
     }
     case "message.part.updated": {
@@ -109,6 +136,7 @@ function handleOpencodeEvent(
       if (part.sessionID !== ctx.sessionId) {
         return;
       }
+      hooks.markSessionActive();
       if (
         part.type === "text" &&
         (Boolean(part.text?.trim()) || Boolean(event.properties.delta?.trim()))
@@ -122,6 +150,7 @@ function handleOpencodeEvent(
       if (event.properties.sessionID !== ctx.sessionId) {
         return;
       }
+      hooks.markSessionActive();
       ctx.emit({
         type: "agent.act",
         summary: `command: ${event.properties.name}`,
@@ -132,12 +161,14 @@ function handleOpencodeEvent(
       if (event.properties.sessionID !== ctx.sessionId) {
         return;
       }
+      hooks.markSessionActive();
       for (const file of event.properties.diff) {
         hooks.changedFiles.add(file.file);
       }
       return;
     }
     case "file.edited": {
+      hooks.markSessionActive();
       hooks.changedFiles.add(event.properties.file);
       return;
     }
@@ -160,7 +191,11 @@ function handleOpencodeEvent(
 function handleToolPart(
   part: Part,
   ctx: EventBridgeContext,
-  hooks: { seenToolCalls: Set<string> },
+  hooks: {
+    seenToolCalls: Set<string>;
+    runningTools: Set<string>;
+    markSessionActive: () => void;
+  },
 ): void {
   if (part.type !== "tool") {
     return;
@@ -169,17 +204,22 @@ function handleToolPart(
   const toolCallId = part.callID;
   const state = part.state;
 
-  if (state.status === "running" && !hooks.seenToolCalls.has(toolCallId)) {
-    hooks.seenToolCalls.add(toolCallId);
-    ctx.emit({
-      type: "tool_call.started",
-      toolCallId,
-      toolName: part.tool,
-    });
+  if (state.status === "running") {
+    hooks.markSessionActive();
+    if (!hooks.seenToolCalls.has(toolCallId)) {
+      hooks.seenToolCalls.add(toolCallId);
+      ctx.emit({
+        type: "tool_call.started",
+        toolCallId,
+        toolName: part.tool,
+      });
+    }
+    hooks.runningTools.add(toolCallId);
     return;
   }
 
   if (state.status === "completed") {
+    hooks.runningTools.delete(toolCallId);
     ctx.emit({
       type: "tool_call.output",
       toolCallId,
@@ -189,6 +229,7 @@ function handleToolPart(
   }
 
   if (state.status === "error") {
+    hooks.runningTools.delete(toolCallId);
     ctx.emit({
       type: "tool_call.failed",
       toolCallId,

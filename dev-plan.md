@@ -16,7 +16,7 @@ Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 
 - Durable state plus event log. Durable workflow state and task state are the control source for transitions and recovery; the append-only event log (§8) is the audit and UI streaming source. Build both boundaries early.
 - Vertical slices over horizontal layers. Prefer thin end-to-end paths (one agent, one event, one panel) before breadth.
-- Orchestration boundary (§10.1, L5). LangGraph owns macro workflow, budgets, status transitions, and gates; OpenAI Agents SDK owns single-agent ReAct. Never put status/budget logic inside an agent loop.
+- Orchestration boundary (§10.1, L5). LangGraph StateGraph owns macro workflow, budgets, status transitions, and gates (`interrupt`/`Command` resume); LangChain in-house runner owns single-agent structured output + governed tools inside a node. Never put status/budget logic inside an agent tool loop.
 - Coding engine behind an adapter (§10.4). The Development group runs on opencode through a swappable `CodingHarness`; opencode actions are governed by the same risk/sandbox/gate/redaction policies and §13 model routing, and the engine never owns budgets, status, or gates.
 - External integrations behind a gateway (§10.5). GitHub/Supabase/Vercel/Cloudflare-style connectors are post-MVP and must be registered, allowlisted, risk-graded, logged, and backed by offline Skill Packs (§10.6).
 - Test-first platform development. OneCompany itself is built with TDD: every behavior-changing task starts from a failing unit, integration, contract, or E2E test that describes the expected behavior before implementation.
@@ -59,8 +59,8 @@ Minimum test shape by milestone:
 ```text
 apps/web        Next.js control console (Tailwind, shadcn/ui)
 apps/api        Hono API + SSE endpoints
-packages/agent-core   agent registry, LangGraph workflows, Agents SDK + CodingHarness/opencode, model routing
-packages/workflow     requirement + development graph definitions
+packages/agent-core   agent registry, LangChain in-house runner, tool registry, CodingHarness/opencode, model routing
+packages/workflow     LangGraph Requirement + Development StateGraphs, checkpointer, graph definitions
 packages/workspace    project workspace, git, shell, sandbox, file ops, risk grading
 packages/integrations Integration Gateway: MCP/native connectors + offline skill packs (post-MVP)
 packages/shared       shared types + zod schemas (events, states, status machine)
@@ -155,13 +155,13 @@ DoD: creating a project emits enveloped events over SSE; status transitions are 
 
 ## M2 — Agent Registry + Orchestration Skeleton
 
-Goal: prove the LangGraph + Agents SDK boundary with a no-op agent.
+Goal: prove the LangGraph + in-house agent runner boundary with a no-op agent.
 
 Tasks:
 - Start with failing tests for agent registration/version resolution, dummy-agent event contracts, forced failure events, and `CodingHarness` authorization behavior. [S]
 - Agent registry: register/resolve `agentId@version`, store in `agents` table; workflow refs by id+version (§7). [M]
 - LangGraph macro-workflow harness: nodes, durable state, budget hooks, gate-node placeholder. [M]
-- OpenAI Agents SDK single-agent executor invoked inside a node; emits `agent.started`, `agent.plan/act/observe/reflect`, `agent.error`, `run.failed`; writes `agent_runs`. [M]
+- LangChain / scripted single-agent executor invoked inside a node; emits `agent.started`, `agent.plan/act/observe/reflect`, `agent.error`, `run.failed`; writes `agent_runs`. [M]
 - Internal model routing policy (cheap/standard/strong) per §13, not user-configurable. [S]
 - Tool-call plumbing: `tool_call.started/output/failed` events. [S]
 - `CodingHarness` interface (`runSlice` + `authorize`) plus a test stub; the Development group binds to `OpencodeHarness` in M6. Budgets/status/gates stay out of the harness (§10.4). [S]
@@ -291,13 +291,14 @@ DoD: switching stream ↔ swimlane shows the same underlying events and current 
 
 Goal: make the end-to-end pipeline run on the real engine. M2–M9 deliberately shipped the structure (graphs, gates, events, projections, UI) on top of scripted fixtures and stubbed boundaries so each milestone stayed demoable. The real components were built in M5/M6/M7 but are not wired into the API service path. This milestone connects them and removes the fixtures from the runtime path.
 
-Why this exists: a code review after M9 found that the API wiring fakes the entire development pipeline. In `apps/api/src/development/service.ts` the deps are `harness: StubHarness`, `authorize: async () => ({ allow: true })`, `runAuthoritativeCheck: async () => ({ passed: true })`, and the agent `runner` calls `runScriptedDevAgent`; `apps/api/src/requirement/service.ts` calls `runScriptedRequirementAgent`. As a result, M6's "opencode under the permission bridge" and M7's "real test execution" hold only inside their own package unit tests, not in the running product. Without this milestone, M10 and M11 would "pass" against faked execution.
+Why this exists: a code review after M9 found that the API wiring faked the entire development pipeline (stub harness, auto-approve authorize, always-pass authoritative checks, scripted agents). M9.5 replaces those seams in `apps/api/src/*/deps.ts` with real `OpencodeHarness`, `createAuthorize`, scoped test runners, and OpenAI-compatible model-routed agents (DeepSeek/智谱 via env), keeping stubs behind `OC_USE_STUB_ENGINE=1` only.
 
 Tasks:
 - Wire the real coding harness: replace `StubHarness` with `OpencodeHarness` in the development service; make `OpencodeHarness` actually drive opencode (it currently throws unless `OC_OPENCODE_INTEGRATION=1`), managed per project per the M6 lifecycle (§10.4). Keep `StubHarness` available for tests behind a flag. [M]
 - Wire governed authorization: replace `authorize: () => ({ allow: true })` with M5's `createAuthorize` (`packages/workspace/src/authorize.ts`) so opencode shell/edit actions are risk-graded and gated, not auto-approved (§12, §10.4). [M]
 - Wire authoritative tests: replace `runAuthoritativeCheck: () => ({ passed: true })` with M7's real scoped test runner so each slice's pass/fail is real and surfaced to the frontend; LangGraph transitions on the real result (§15, §5.5). [M]
-- Wire real agents: replace `runScriptedDevAgent` / `runScriptedRequirementAgent` with real OpenAI Agents SDK agents using §13 model routing; keep scripted runners as test fixtures only, never on the default runtime path (§10.1, §13). [L]
+- Wire real agents: replace scripted runners with LangChain `ChatOpenAI.withStructuredOutput` agents using §13 model routing (multi-provider via `OC_LLM_BASE_URL`); bind registered local/workspace tools per `agent.tools` through the governed `callTool` pipeline; keep scripted runners as test fixtures only (`OC_USE_STUB_ENGINE=1`). [L]
+- LangGraph engine: Requirement and Development workflows run as StateGraph with `interrupt()` gates and `Command({resume})`; legacy hand-rolled engines remain behind `OC_USE_LEGACY_ENGINE=1` for regression only. [M]
 - Remove fixture seams from the runtime UI/API: the production requirement entry must not pass a `RequirementFixtureProfile` (the web composer now omits it; the server default handles undefined). Confirm no `profile` fixture leaks from any non-test caller. [S]
 - Config + fallback: define how a missing `OPENAI_API_KEY` degrades (mock data + prompt per §12) versus how opencode/model unavailability surfaces; ensure secret redaction (§8.2) covers opencode and model I/O. [S]
 - Golden-path integration test: one project from requirement → PRD → tech plan → at least one real opencode slice (governed) → real scoped tests → preview, asserting events/status come from real execution, gated behind an integration flag in CI. [M]
@@ -305,6 +306,8 @@ Tasks:
 Spec refs: §10.1, §10.4, §12, §13, §15, §5.5, §8.2.
 
 DoD: starting a project through the API exercises the real opencode harness under `createAuthorize` risk grading, runs real authoritative scoped tests at each slice boundary, and uses real model-routed agents — with scripted fixtures and `allow:true`/`passed:true` stubs confined to tests. The golden-path integration test passes against the real engine, and no fixture profile reaches the workflow from a production caller.
+
+> Status note (M9.5 as shipped on `feat/m9.5-real-engine`): API deps factories wire real engine by default; workflow agents use OpenAI-compatible LLM (`OC_LLM_*`); opencode slices use SDK bridge with per-project server; slice `test.result` persists to `test_results` for Tests tab; gate resolve marks gates before async workflow resume; `getEngineReadiness()` + Settings §12 degraded notice when keys missing; golden-path integration (incl. preview URL) + authorize/authoritative API tests ship behind `OC_OPENCODE_INTEGRATION=1` optional CI. Optional follow-up: golden-path through full `testing/start` final suite in CI.
 
 ## M10 — Deployment, Delivery, Change Requests
 
@@ -410,7 +413,7 @@ DoD: each connector can run in online mode with allowlisted audited tool calls, 
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| LangGraph / Agents SDK boundary blurs (budgets leak into agents) | Non-deterministic loops | Enforce in M2; budgets/transitions only in graph nodes; lint/review rule |
+| LangGraph / agent-runner boundary blurs (budgets leak into agents) | Non-deterministic loops | Enforce in M2/M9.5; budgets/transitions only in graph nodes; lint/review rule |
 | Event schema churn after renderers exist | Rework in M9 | Freeze `EventEnvelope` + `AgentEvent` shapes in M0/shared; version events if needed |
 | TDD becomes slow ceremony | Slower milestones without quality gain | Keep tests behavior-focused; prefer unit/contract tests for pure logic and reserve E2E for milestone acceptance paths |
 | Command logs leak secrets or overload SQLite | Security and stability issue | Redact before persistence; chunk large output into artifacts; DB stores metadata and hashes |

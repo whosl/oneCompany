@@ -17,6 +17,7 @@
     "@oc/shared": "workspace:*",
     "@oc/workflow": "workspace:^",
     "@oc/workspace": "workspace:^",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.39.3",
     "hono": "^4.7.2"
   },

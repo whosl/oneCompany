@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   StubHarness,
+  getOpenAiApiKey,
   isOpencodeAvailable,
 } from "@oc/agent-core";
 import {
@@ -10,16 +11,19 @@ import {
   events,
   prdVersions,
   projects,
+  testResults,
 } from "@oc/shared";
 import { createDevelopmentDeps } from "../development/deps.js";
 import { setupIntegrationApp } from "./test-utils.js";
 
 const COMPLETE_REQUIREMENT = [
-  "Build a TypeScript CLI todo application for developers.",
-  "Users can add a todo, list todos, mark a todo complete, and delete a todo.",
-  "Persist todos in a local JSON file under the project workspace.",
-  "Use vitest for unit tests covering add/list/complete/delete flows.",
-  "Ship as an npm package with a bin entry.",
+  "Build a TypeScript calendar application for tracking compensatory time off (调休).",
+  "Users can log overtime work days and earn 调休 balance (e.g. 1 day overtime → 1 day 调休).",
+  "Show a monthly calendar view marking workdays, overtime, and scheduled 调休 days.",
+  "Track remaining 调休 balance and a consumption history with dates and reasons.",
+  "Persist calendar and balance data in local JSON under the project workspace.",
+  "Use vitest for unit tests covering balance accrual, consume 调休, and calendar helpers.",
+  "Ship as an npm package with a simple preview/dev server entry.",
   "Acceptance: all vitest tests pass under strict TypeScript.",
 ].join(" ");
 
@@ -40,7 +44,7 @@ function seedPrdReady(db: ReturnType<typeof setupIntegrationApp>["db"], projectI
       id: randomUUID(),
       project_id: projectId,
       version: "prd-1",
-      content: "# PRD\n\nCLI todo app with vitest coverage.",
+      content: "# PRD\n\n调休 tracking calendar with monthly view, balance accrual, and vitest coverage.",
       created_at: now,
     })
     .run();
@@ -49,7 +53,8 @@ function seedPrdReady(db: ReturnType<typeof setupIntegrationApp>["db"], projectI
       id: randomUUID(),
       project_id: projectId,
       version: "ac-1",
-      content: "- Users can add, list, complete, and delete todos\n- vitest suite passes",
+      content:
+        "- Users can accrue and consume 调休 with balance tracking\n- Monthly calendar shows overtime and 调休 days\n- vitest suite passes",
       created_at: now,
     })
     .run();
@@ -78,7 +83,7 @@ async function runRequirementToPrdReady(
     const questions = result.questions ?? ["Provide more detail"];
     const answers = questions.map(
       (question, index) =>
-        `Round ${round + 1} answer ${index + 1} for "${question}": TypeScript CLI todo with vitest and JSON persistence.`,
+        `Round ${round + 1} answer ${index + 1} for "${question}": TypeScript 调休 calendar app with monthly view, JSON persistence, balance accrual/consume APIs, and vitest coverage.`,
     );
     const response = await app.request(`/projects/${projectId}/requirement/answers`, {
       method: "POST",
@@ -96,10 +101,82 @@ async function runRequirementToPrdReady(
       body: JSON.stringify({ decision: "force_continue" }),
     });
     expect(resolved.status).toBe(200);
-    result = (await resolved.json()) as RequirementResult;
+    await waitForProjectStatus(app, projectId, "PRD Ready", 120_000);
+    result = { phase: "completed", projectStatus: "PRD Ready" };
   }
 
   return result;
+}
+
+async function listOpenGates(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  projectId: string,
+): Promise<Array<{ id: string; gateType: string; status: string }>> {
+  const response = await app.request(`/projects/${projectId}/gates`);
+  const body = (await response.json()) as { gates?: Array<{ id: string; gateType: string; status: string }> };
+  return (body.gates ?? []).filter((gate) => gate.status === "open");
+}
+
+async function resolveNestedGates(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  projectId: string,
+  primaryGateId: string,
+): Promise<void> {
+  for (const gate of await listOpenGates(app, projectId)) {
+    if (gate.id === primaryGateId) continue;
+    const decision =
+      gate.gateType === "dangerous_operation" || gate.gateType === "deployment"
+        ? "approve"
+        : gate.gateType === "slice_failure"
+          ? "retry"
+          : "force_continue";
+    await app.request(`/gates/${gate.id}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+  }
+}
+
+async function resolveGateWithNested(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  projectId: string,
+  gateId: string,
+  decision: string,
+): Promise<void> {
+  const poller = setInterval(() => {
+    void resolveNestedGates(app, projectId, gateId);
+  }, 400);
+  try {
+    const resolved = await app.request(`/gates/${gateId}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    expect(resolved.status).toBe(200);
+  } finally {
+    clearInterval(poller);
+  }
+}
+
+async function waitForProjectStatus(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  projectId: string,
+  status: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const response = await app.request(`/projects/${projectId}`);
+    if (response.status === 200) {
+      const body = (await response.json()) as { status?: string };
+      if (body.status === status) {
+        return;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Timed out waiting for project status ${status}`);
 }
 
 function eventTypesForProject(db: ReturnType<typeof setupIntegrationApp>["db"], projectId: string) {
@@ -111,8 +188,8 @@ function eventTypesForProject(db: ReturnType<typeof setupIntegrationApp>["db"], 
 }
 
 describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", () => {
-  it("requires OpenAI key and opencode CLI", () => {
-    expect(process.env.OPENAI_API_KEY ?? process.env.OC_OPENAI_API_KEY).toBeTruthy();
+  it("requires workflow LLM key and opencode CLI", () => {
+    expect(getOpenAiApiKey()).toBeTruthy();
     expect(isOpencodeAvailable()).toBe(true);
   });
 
@@ -152,6 +229,15 @@ describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", ()
         .where(eq(projects.id, project.id))
         .all()[0];
       expect(stored?.status).toBe("PRD Ready");
+
+      const prd = db
+        .select({ content: prdVersions.content })
+        .from(prdVersions)
+        .where(eq(prdVersions.project_id, project.id))
+        .all()[0];
+      console.log("\n=== Requirement → PRD Ready ===");
+      console.log("project:", project.id);
+      console.log("PRD preview:\n", prd?.content?.slice(0, 800) ?? "(none)");
     } finally {
       cleanup();
     }
@@ -173,12 +259,8 @@ describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", ()
       expect(startBody.gateId).toBeTruthy();
       expect(startBody.gateType).toBe("tech_plan_confirm");
 
-      const resolved = await app.request(`/gates/${startBody.gateId}/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision: "approve" }),
-      });
-      expect(resolved.status).toBe(200);
+      await resolveGateWithNested(app, projectId, startBody.gateId!, "approve");
+      await waitForSliceAttempt(app, db, projectId, 1_800_000);
 
       const status = await app.request(`/projects/${projectId}/development/status`);
       const statusBody = (await status.json()) as {
@@ -202,8 +284,94 @@ describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", ()
       expect(["slicing", "awaiting_gate", "completed", "change_review"]).toContain(
         statusBody.phase,
       );
+
+      const tests = await app.request(`/projects/${projectId}/tests/results`);
+      const testsBody = (await tests.json()) as { slice: Array<{ suite: string }> };
+      expect(testsBody.slice.length).toBeGreaterThan(0);
+      expect(testsBody.slice[0]?.suite.startsWith("slice:")).toBe(true);
+
+      const previewStart = await app.request(`/projects/${projectId}/preview/start`, {
+        method: "POST",
+      });
+      expect(previewStart.status).toBe(200);
+      const previewBody = (await previewStart.json()) as {
+        url: string;
+        health: { reachable: boolean };
+      };
+      expect(previewBody.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(previewBody.health.reachable).toBe(true);
+
+      const previewStatus = await app.request(`/projects/${projectId}/preview/status`);
+      const previewStatusBody = (await previewStatus.json()) as { previewUrl?: string };
+      expect(previewStatusBody.previewUrl).toBe(previewBody.url);
+
+      const testRows = db
+        .select()
+        .from(testResults)
+        .all()
+        .filter((row) => row.project_id === projectId);
+      console.log("\n=== Development + Opencode ===");
+      console.log("project:", projectId);
+      console.log("phase:", statusBody.phase, "| status:", statusBody.projectStatus);
+      console.log(
+        "slices:",
+        statusBody.state.taskQueue.map((s) => `${s.testCommand?.slice(0, 60)}…`),
+      );
+      console.log(
+        "test results:",
+        testRows.map((r) => `${r.suite}: ${r.status}`),
+      );
+      console.log("preview:", previewBody.url);
+      console.log(
+        "agent events:",
+        types.filter((t) => t.startsWith("agent.")).slice(0, 8),
+      );
     } finally {
       cleanup();
     }
-  }, 600_000);
+  }, 1_800_000);
 });
+
+async function waitForSliceAttempt(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  db: ReturnType<typeof setupIntegrationApp>["db"],
+  projectId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await resolveNestedGates(app, projectId, "");
+
+    const projectEvents = eventTypesForProject(db, projectId);
+    if (projectEvents.some((row) => row.type === "test.result")) {
+      return;
+    }
+
+    const open = await listOpenGates(app, projectId);
+    if (open.some((gate) => gate.gateType === "slice_failure")) {
+      return;
+    }
+
+    const status = await app.request(`/projects/${projectId}/development/status`);
+    if (status.status === 200) {
+      const body = (await status.json()) as {
+        phase?: string;
+        state?: { taskQueue: Array<{ id: string }> };
+      };
+      if (body.phase === "completed" || body.phase === "change_review") {
+        return;
+      }
+      if (
+        body.state?.taskQueue.length === 0 &&
+        body.phase !== "tech_plan" &&
+        body.phase !== "awaiting_gate" &&
+        body.phase !== "planning"
+      ) {
+        throw new Error(`Planner produced no slices while phase=${body.phase ?? "unknown"}`);
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw new Error("Timed out waiting for slice attempt (test.result or slice_failure gate)");
+}

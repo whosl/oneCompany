@@ -20,6 +20,18 @@ describe("dev agent output schemas", () => {
     expect(parsed.stack).toHaveLength(2);
   });
 
+  it("coerces architect string fields to string arrays", () => {
+    const parsed = ArchitectOutputSchema.parse({
+      techPlan: "# Stack",
+      stack: "typescript",
+      architectureNotes: "monorepo layout",
+      risks: "scope creep from optional features",
+    });
+    expect(parsed.stack).toEqual(["typescript"]);
+    expect(parsed.architectureNotes).toEqual(["monorepo layout"]);
+    expect(parsed.risks).toEqual(["scope creep from optional features"]);
+  });
+
   it("parses test designer output", () => {
     const parsed = TestDesignerOutputSchema.parse({
       testSpecs: [

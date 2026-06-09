@@ -39,6 +39,11 @@ export function createDevelopmentDeps(
   const paths = ctx.workspace.ensureForProject(project);
   const shell = ctx.workspace.createShellDeps(project);
   const mode = resolveEngineMode();
+  // 0 = block until the user resolves the gate (no timeout). Set OC_GATE_WAIT_TIMEOUT_MS for a cap.
+  const devGateTimeoutMs =
+    process.env.OC_GATE_WAIT_TIMEOUT_MS !== undefined
+      ? Number(process.env.OC_GATE_WAIT_TIMEOUT_MS)
+      : 0;
 
   return {
     db: ctx.db,
@@ -53,7 +58,8 @@ export function createDevelopmentDeps(
             repoPath: paths.repo,
             createGate: (_pid, gateType, metadata) =>
               ctx.gates.createGate(projectId, gateType, metadata),
-            waitForGate: (gateId) => ctx.gates.waitForGate(gateId),
+            waitForGate: (gateId) =>
+              ctx.gates.waitForGate(gateId, { timeoutMs: devGateTimeoutMs }),
           }),
     runAuthoritativeCheck:
       mode === "stub"
@@ -64,6 +70,17 @@ export function createDevelopmentDeps(
         {
           db: ctx.db,
           onEvent: ctx.onEvent,
+          authorize:
+            mode === "stub"
+              ? async () => ({ allow: true as const })
+              : createAuthorize(projectId, {
+                  repoPath: paths.repo,
+                  createGate: (_pid, gateType, metadata) =>
+                    ctx.gates.createGate(projectId, gateType, metadata),
+                  waitForGate: (gateId) =>
+                    ctx.gates.waitForGate(gateId, { timeoutMs: devGateTimeoutMs }),
+                }),
+          repoPath: paths.repo,
           runner: createDevelopmentRunner(ctx.db, {
             mode,
             devProfile: options.profile,

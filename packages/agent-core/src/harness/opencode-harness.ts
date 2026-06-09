@@ -1,6 +1,8 @@
+import path from "node:path";
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk";
 import { isOpencodeAvailable } from "../engine-mode.js";
-import { pickModel } from "../router.js";
+import type { ModelTier } from "../router.js";
+import { pickOpencodeModel } from "./opencode-model.js";
 import { injectOpencodeAuth } from "./opencode-auth.js";
 import { createEventBridge } from "./event-bridge.js";
 import { handlePermission } from "./permission-bridge.js";
@@ -35,8 +37,11 @@ function buildTddPrompt(slice: SliceSpec): string {
     `Goal: ${slice.goal}`,
     checks ? `Acceptance checks:\n${checks}` : "",
     `Scoped test command (OneCompany runs this authoritatively after you finish): ${slice.testCommand}`,
-    "Write failing tests first, then implement until the scoped tests would pass, then stop.",
-    "Do not claim success without running the scoped test command via tools.",
+    "The repo already contains package.json, tsconfig.json, vitest.config.ts, and src/.",
+    "Do not run npm/pnpm install; vitest is already available from the workspace toolchain.",
+    "You MUST create and edit files under src/ using tools. Do not reply with text-only plans.",
+    "Write failing tests first, implement code, run the scoped test command via shell tools, then stop.",
+    "Do not claim success without producing file changes and running the scoped test command.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -70,21 +75,35 @@ async function waitForSessionCompletion(
   timeoutMs: number,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  const idleGraceMs = Number(process.env.OC_OPENCODE_IDLE_GRACE_MS ?? 15_000);
+  const idleStreakRequired = Number(process.env.OC_OPENCODE_IDLE_STREAK ?? 2);
+  let idleStreak = 0;
 
   while (Date.now() < deadline) {
-    if (bridge.hasAssistantReply()) {
+    const hasFiles = bridge.changedFiles.size > 0;
+    const idle = bridge.isIdle();
+    const elapsed = Date.now() - startedAt;
+
+    if (idle) {
+      idleStreak += 1;
+    } else {
+      idleStreak = 0;
+    }
+
+    if (hasFiles && idleStreak >= 1) {
       return;
     }
 
-    if (await hasAssistantMessage(client, sessionId, directory)) {
-      return;
-    }
-
-    if (bridge.isIdle()) {
+    if (idleStreak >= idleStreakRequired && elapsed >= idleGraceMs) {
       return;
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+
+  if (await hasAssistantMessage(client, sessionId, directory)) {
+    return;
   }
 
   throw new Error(`opencode session completion timeout after ${timeoutMs}ms`);
@@ -111,9 +130,9 @@ export function createOpencodeHarness(): CodingHarness {
 
       emitPhase(ctx, "plan", `opencode slice ${slice.sliceId}: ${slice.goal}`);
 
-      const server = await startProjectServer(ctx.repoPath);
-      const directory = ctx.repoPath;
-      const model = parseModelRef(pickModel(slice.modelTier));
+      const directory = path.resolve(ctx.repoPath);
+      const server = await startProjectServer(directory);
+      const model = parseModelRef(pickOpencodeModel(slice.modelTier as ModelTier));
       let bridge: ReturnType<typeof createEventBridge> | undefined;
 
       try {
@@ -129,7 +148,14 @@ export function createOpencodeHarness(): CodingHarness {
         });
         const session = sessionResponse.data;
         if (!session) {
-          throw new Error("opencode session.create returned no session");
+          const err = sessionResponse.error as
+            | { name?: string; data?: { message?: string } }
+            | undefined;
+          const detail =
+            err?.data?.message ??
+            err?.name ??
+            `HTTP ${sessionResponse.response?.status ?? "unknown"}`;
+          throw new Error(`opencode session.create failed: ${detail}`);
         }
 
         bridge = createEventBridge(client, {
@@ -161,6 +187,14 @@ export function createOpencodeHarness(): CodingHarness {
         const changedFiles = await collectChangedFiles(client, directory, bridge.changedFiles);
         emitPhase(ctx, "observe", `opencode idle; ${changedFiles.length} changed file(s)`);
 
+        if (changedFiles.length === 0) {
+          return {
+            passed: false,
+            summary: "opencode completed without file changes",
+            changedFiles,
+          };
+        }
+
         return {
           passed: true,
           summary: `opencode slice ${slice.sliceId}`,
@@ -176,7 +210,7 @@ export function createOpencodeHarness(): CodingHarness {
         };
       } finally {
         bridge?.stop();
-        await releaseProjectServer(ctx.repoPath);
+        await releaseProjectServer(directory);
       }
     },
   };

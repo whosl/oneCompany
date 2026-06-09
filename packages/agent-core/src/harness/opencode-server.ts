@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 import { createOpencodeServer } from "@opencode-ai/sdk";
 
 export type ProjectServer = {
@@ -15,16 +16,13 @@ function portForRepo(repoPath: string): number {
 }
 
 function governedConfig() {
-  const model = process.env.OC_MODEL_STRONG ?? process.env.OC_MODEL_STANDARD;
-  const modelSmall = process.env.OC_MODEL_CHEAP;
-
+  // Model is selected per prompt in OpencodeHarness; server-level model config can
+  // break session.create on some opencode builds when auth is injected later.
   return {
     permission: {
       edit: "ask" as const,
       bash: "ask" as const,
     },
-    ...(model ? { model } : {}),
-    ...(modelSmall ? { model_small: modelSmall } : {}),
   };
 }
 
@@ -44,13 +42,18 @@ async function startServerOnPort(port: number): Promise<ProjectServer> {
   };
 }
 
+function normalizeRepoPath(repoPath: string): string {
+  return path.resolve(repoPath);
+}
+
 export async function startProjectServer(repoPath: string): Promise<ProjectServer> {
-  const existing = activeServers.get(repoPath);
+  const resolved = normalizeRepoPath(repoPath);
+  const existing = activeServers.get(resolved);
   if (existing) {
     return existing;
   }
 
-  const basePort = portForRepo(repoPath);
+  const basePort = portForRepo(resolved);
   let lastError: unknown;
   let started: ProjectServer | undefined;
 
@@ -79,20 +82,20 @@ export async function startProjectServer(repoPath: string): Promise<ProjectServe
   const handle: ProjectServer = {
     url: server.url,
     async close() {
-      if (activeServers.get(repoPath) !== handle) {
+      if (activeServers.get(resolved) !== handle) {
         return;
       }
-      activeServers.delete(repoPath);
+      activeServers.delete(resolved);
       await server.close();
     },
   };
 
-  activeServers.set(repoPath, handle);
+  activeServers.set(resolved, handle);
   return handle;
 }
 
 export async function releaseProjectServer(repoPath: string): Promise<void> {
-  const server = activeServers.get(repoPath);
+  const server = activeServers.get(normalizeRepoPath(repoPath));
   if (!server) {
     return;
   }

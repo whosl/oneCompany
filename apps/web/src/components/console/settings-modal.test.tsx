@@ -12,6 +12,11 @@ vi.mock("@/lib/api", () => ({
       generatedProjectsRoot: "/tmp/generated",
       databasePath: "/tmp/app.sqlite",
       apiKeyReady: false,
+      engine: {
+        workflowLlmReady: false,
+        opencodeCliReady: true,
+        opencodeModelReady: false,
+      },
       tunnelConfigured: false,
       checks: { node: true, pnpm: true, git: true, docker: false, playwright: false, sqlite: true },
       policies: ["Governed shell risk grading (read-only)"],
@@ -29,5 +34,15 @@ describe("SettingsModal — M9", () => {
       expect(screen.getByText(/node: ok/)).toBeTruthy();
     });
     expect(screen.queryByText("Model routing")).toBeNull();
+  });
+
+  it("shows §12 degraded notice when engine keys are missing", async () => {
+    render(<SettingsModal open onClose={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByTestId("engine-degraded-notice")).toBeTruthy();
+    });
+    expect(screen.getByText(/mock data/i)).toBeTruthy();
+    expect(screen.getByText(/Workflow LLM: Missing/)).toBeTruthy();
+    expect(screen.getByText(/Opencode model: Missing/)).toBeTruthy();
   });
 });

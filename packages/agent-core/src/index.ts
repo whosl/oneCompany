@@ -8,7 +8,10 @@ export {
 export { pickModel, type ModelTier } from "./router.js";
 export {
   runAgent,
+  type AgentRunContext,
   type AgentRunner,
+  type AgentRunnerResult,
+  type AgentRunnerSummaries,
   type ExecutorContext,
   type RunAgentInput,
   type RunAgentResult,
@@ -24,6 +27,16 @@ export type {
   RequirementFixtureProfile,
 } from "./agents/requirement/types.js";
 export { callTool, type CallToolInput, type CallToolResult, type ToolContext } from "./tools.js";
+export {
+  registerTool,
+  getTool,
+  resolveToolsForAgent,
+  listRegisteredTools,
+  type RegisteredTool,
+  type ToolProtocol,
+  type ToolExecutionContext,
+} from "./tools/registry.js";
+export { registerLocalTools, ensureLocalToolsRegistered, LOCAL_TOOL_IDS } from "./tools/local-tools.js";
 export { DUMMY_AGENT } from "./fixtures.js";
 export { runDemoGraph, buildDemoGraph } from "./graph/demo-graph.js";
 export type {
@@ -49,6 +62,7 @@ export {
   type EngineMode,
   type ManagedApiKeys,
 } from "./engine-mode.js";
+export { getEngineReadiness, type EngineReadinessSnapshot } from "./engine-readiness.js";
 export {
   createDevelopmentRunner,
   createRequirementRunner,

@@ -31,7 +31,11 @@ describe("runner factory — M9.5", () => {
     };
 
     const runner = createRequirementRunner({} as never, { mode: "stub", requirementProfile: "complete" });
-    const result = await runner(REQUIREMENT_AGENT_IDS.scorer, task);
+    const result = await runner(
+      { projectId: "p1", db: {} as never },
+      REQUIREMENT_AGENT_IDS.scorer,
+      task,
+    );
     const expected = runScriptedRequirementAgent(REQUIREMENT_AGENT_IDS.scorer, task);
     expect(result.output).toEqual(expected);
   });
