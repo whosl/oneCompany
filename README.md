@@ -418,7 +418,7 @@ OneCompany supports two engine modes:
 | **Real** | Default (with API keys + OpenCode CLI) | Full OpenCode harness, governed authorize, real test runners, LLM agents |
 | **Stub** | `OC_USE_STUB_ENGINE=1` | StubHarness, auto-approve, always-pass checks, scripted agents |
 
-Integration tests run behind `OC_OPENCODE_INTEGRATION=1` to exercise the real engine in CI.
+Integration tests run behind `OC_OPENCODE_INTEGRATION=1` to exercise the real engine. The weekly `opencode-integration` GitHub workflow runs the full golden path to `Delivered` (see `handbook/acceptance/evidence/golden-path-run.md`).
 
 ### Environment Variables
 

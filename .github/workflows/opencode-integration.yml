@@ -1,3 +1,6 @@
+# M11 acceptance: real-engine golden path (weekly gate).
+# Runs on schedule + manual dispatch. continue-on-error until flake rate is low enough
+# to promote to a required PR check. See handbook/acceptance/evidence/golden-path-run.md.
 name: opencode-integration
 
 on:
@@ -21,7 +24,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm migrate
       - run: pnpm -w build
-      - name: Golden path to Delivered (optional real engine)
+      - name: Golden path to Delivered (real engine — weekly acceptance gate)
         env:
           OC_OPENCODE_INTEGRATION: "1"
           OC_LLM_API_KEY: ${{ secrets.OC_LLM_API_KEY }}

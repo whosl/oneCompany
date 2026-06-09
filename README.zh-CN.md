@@ -418,7 +418,7 @@ OneCompany 支持两种引擎模式：
 | **真实引擎** | 默认（需 API Key + OpenCode CLI） | 完整 OpenCode Harness、受治理授权、真实测试运行器、LLM Agent |
 | **Stub 模式** | `OC_USE_STUB_ENGINE=1` | Stub Harness、自动批准、始终通过、脚本化 Agent |
 
-集成测试通过 `OC_OPENCODE_INTEGRATION=1` 在 CI 中运行真实引擎。
+集成测试通过 `OC_OPENCODE_INTEGRATION=1` 运行真实引擎。每周 `opencode-integration` GitHub workflow 会跑完整 golden path 至 `Delivered`（见 `handbook/acceptance/evidence/golden-path-run.md`）。
 
 ### 环境变量
 

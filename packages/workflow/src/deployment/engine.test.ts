@@ -39,7 +39,7 @@ describe("deployment engine", () => {
     }
   });
 
-  it("stores deployment URL and moves to Awaiting Acceptance after approval", () => {
+  it("stores deployment URL and moves to Awaiting Acceptance after approval", async () => {
     const { db, cleanup } = setupTestDb();
     const repoPath = mkdtempSync(path.join(tmpdir(), "oc-deploy-repo-"));
     initRepo(repoPath);
@@ -53,13 +53,74 @@ describe("deployment engine", () => {
         projectId,
         url: "https://demo.trycloudflare.com",
       });
-      const result = handleDeploymentGateDecision(deps, {
+      const result = await handleDeploymentGateDecision(deps, {
         projectId,
         decision: "approve",
       });
       expect(result.deploymentUrl).toBe("https://demo.trycloudflare.com");
       expect(deps.getProjectStatus(projectId)).toBe("Awaiting Acceptance");
       expect(db.select().from(deployments).all()[0]?.url).toBe("https://demo.trycloudflare.com");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("reject resets deployment phase so start can reopen the gate", async () => {
+    const { db, cleanup } = setupTestDb();
+    const repoPath = mkdtempSync(path.join(tmpdir(), "oc-deploy-reject-"));
+    initRepo(repoPath);
+    const { projectId } = seedTestingProject(db, repoPath);
+    db.update(projects).set({ status: "Deploying" }).where(eq(projects.id, projectId)).run();
+
+    const deps = createDeploymentDeps(db, repoPath);
+    try {
+      startDeploymentPhase(deps, { projectId });
+      submitDeploymentUrl(deps, {
+        projectId,
+        url: "https://demo.trycloudflare.com",
+      });
+      const rejected = await handleDeploymentGateDecision(deps, {
+        projectId,
+        decision: "reject",
+      });
+      expect(rejected.phase).toBe("idle");
+      expect(rejected.deploymentUrl).toBeUndefined();
+      expect(deps.getProjectStatus(projectId)).toBe("Deploying");
+      expect(db.select().from(deployments).all()).toHaveLength(0);
+
+      const restarted = startDeploymentPhase(deps, { projectId });
+      expect(restarted.phase).toBe("awaiting_gate");
+      expect(restarted.gateId).toBeTruthy();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("propagates onDeploymentCompleted failures", async () => {
+    const { db, cleanup } = setupTestDb();
+    const repoPath = mkdtempSync(path.join(tmpdir(), "oc-deploy-fail-"));
+    initRepo(repoPath);
+    const { projectId } = seedTestingProject(db, repoPath);
+    db.update(projects).set({ status: "Deploying" }).where(eq(projects.id, projectId)).run();
+
+    const deps = {
+      ...createDeploymentDeps(db, repoPath),
+      onDeploymentCompleted: async () => {
+        throw new Error("delivery handoff failed");
+      },
+    };
+    try {
+      startDeploymentPhase(deps, { projectId });
+      submitDeploymentUrl(deps, {
+        projectId,
+        url: "https://demo.trycloudflare.com",
+      });
+      await expect(
+        handleDeploymentGateDecision(deps, {
+          projectId,
+          decision: "approve",
+        }),
+      ).rejects.toThrow("delivery handoff failed");
     } finally {
       cleanup();
     }

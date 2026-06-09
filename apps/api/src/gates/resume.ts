@@ -34,7 +34,7 @@ export function createGateResumeHandler(services: {
 
     if (gate.gateType === "deployment" && services.deployment) {
       try {
-        services.deployment.resumeAfterGate(gate.projectId, decision);
+        await services.deployment.resumeAfterGate(gate.projectId, decision);
       } catch (error) {
         if (isBenignResumeError(error, "Deployment session not found")) {
           return;

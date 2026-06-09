@@ -63,10 +63,10 @@ export function submitDeploymentUrl(
   return toResult(deps, next);
 }
 
-export function handleDeploymentGateDecision(
+export async function handleDeploymentGateDecision(
   deps: DeploymentWorkflowDeps,
   input: { projectId: string; decision: string },
-): DeploymentRunResult {
+): Promise<DeploymentRunResult> {
   const payload = deps.loadSession(input.projectId);
   if (payload.deployment?.phase !== "awaiting_gate") {
     throw new Error("No deployment gate awaiting decision");
@@ -75,6 +75,10 @@ export function handleDeploymentGateDecision(
   if (input.decision === "reject") {
     const next = {
       ...payload,
+      state: {
+        ...payload.state,
+        risks: [...payload.state.risks, "Deployment rejected by user"],
+      },
       deployment: { phase: "idle" as const },
     };
     deps.saveSession(input.projectId, next);
@@ -137,7 +141,7 @@ export function handleDeploymentGateDecision(
   deps.onEvent?.(completedEnvelope);
 
   if (deps.onDeploymentCompleted) {
-    void Promise.resolve(deps.onDeploymentCompleted(input.projectId));
+    await deps.onDeploymentCompleted(input.projectId);
   }
 
   return toResult(deps, next);

@@ -90,6 +90,7 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     ...base,
     gateId: z.string(),
     decision: z.string(),
+    gateType: z.string().optional(),
   }),
   z.object({
     type: z.literal("change_request.created"),

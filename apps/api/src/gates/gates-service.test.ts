@@ -33,6 +33,10 @@ describe("gate service — resume ordering", () => {
         .where(eq(events.project_id, project.id))
         .all();
       expect(projectEvents.filter((event) => event.type === "human_gate.resolved")).toHaveLength(1);
+      const resolvedPayload = JSON.parse(
+        projectEvents.find((event) => event.type === "human_gate.resolved")!.payload,
+      ) as { gateType?: string };
+      expect(resolvedPayload.gateType).toBe("requirement_stuck");
       expect(projectEvents.filter((event) => event.type === "run.failed")).toHaveLength(1);
 
       await new Promise((resolve) => setTimeout(resolve, 50));

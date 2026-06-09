@@ -86,13 +86,21 @@ export function createRequirementChangeRequest(
   onEvent?: (envelope: EventEnvelope) => void,
 ): { changeRequestId: string; impact: ReturnType<typeof analyzeChangeImpact> } {
   const impact = analyzeChangeImpact(db, projectId, summary, details);
+  const impactSummary = [
+    impact.summary,
+    impact.rollbackHints.length > 0
+      ? `Rollback hints:\n${impact.rollbackHints.map((hint) => `- ${hint}`).join("\n")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const changeRequestId = insertChangeRequest(
     db,
     {
       projectId,
       summary,
       kind: "requirement_change",
-      impactSummary: impact.summary,
+      impactSummary,
       affectedCommits: impact.affectedCommits,
     },
     onEvent,
@@ -322,13 +330,23 @@ export function handleChangeReviewDecision(
       return next;
     }
     case "reject": {
+      deps.setStatus(payload.state.projectId, "Developing", "change_review_rejected");
       const next: DevelopmentSessionPayload = {
         ...payload,
+        state: {
+          ...payload.state,
+          risks: [
+            ...payload.state.risks,
+            "Change request rejected via Change Review",
+          ],
+        },
         meta: {
           ...payload.meta,
-          phase: "change_review",
+          phase: "slicing",
           gateId: undefined,
           gateType: undefined,
+          pendingChangeRequestId: undefined,
+          pendingChangeRequestKind: undefined,
         },
       };
       saveDevSession(deps.db, payload.state.projectId, next);

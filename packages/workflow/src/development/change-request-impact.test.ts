@@ -63,4 +63,20 @@ describe("change request impact", () => {
       cleanup();
     }
   });
+
+  it("persists rollback hints in impact_summary", () => {
+    const { db, projectId, cleanup } = setupDevelopmentTest();
+    try {
+      createRequirementChangeRequest(
+        db,
+        projectId,
+        "Replace SQLite with Postgres and redesign auth schema",
+      );
+      const row = db.select().from(changeRequests).all()[0];
+      expect(row?.impact_summary).toContain("Rollback hints:");
+      expect(row?.impact_summary).toMatch(/rollback may be limited|Consider reverting commit/);
+    } finally {
+      cleanup();
+    }
+  });
 });

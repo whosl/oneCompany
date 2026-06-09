@@ -5,8 +5,8 @@ import type {
   StreamItem,
   SwimlaneCell,
 } from "@oc/shared";
-import { attachParorSegments } from "./stream-paror.js";
-import { groupStreamItems } from "./stream-grouping.js";
+import { attachParorSegments } from "./stream-paror";
+import { groupStreamItems } from "./stream-grouping";
 import type { AgentProjection, ConsoleProjection } from "./types";
 
 const LARGE_OUTPUT_THRESHOLD = 500;

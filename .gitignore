@@ -12,3 +12,4 @@ generated-projects/*
 .DS_Store
 .env
 .env.local
+apps/web/test-results/

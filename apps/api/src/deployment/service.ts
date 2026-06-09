@@ -61,7 +61,7 @@ export function createDeploymentService(
       return submitDeploymentUrl(buildDeps(projectId), { projectId, url });
     },
 
-    resumeAfterGate(projectId: string, decision: string): DeploymentRunResult {
+    async resumeAfterGate(projectId: string, decision: string): Promise<DeploymentRunResult> {
       return handleDeploymentGateDecision(buildDeps(projectId), { projectId, decision });
     },
 

@@ -37,22 +37,22 @@ Verify: the golden path reaches `Delivered` with no manual database edits and no
 ### Task 11.2 — Acceptance checklist (spec §18)
 
 Tick every item from spec §18. For each, demonstrate it:
-- [ ] Create a project from a simple web-app requirement.
-- [ ] Requirement group: analysis, scoring, gap questioning, PRD.
-- [ ] Requirement loop terminates on its own (budget/stuck) and shows the stuck gate.
-- [ ] Human confirms requirement + tech plan via option cards + custom input.
-- [ ] Console matches the Figma baseline: top nav, Stream Mode user cards + sticky composer, Swimlane switcher, five right tabs, avatar Settings, and project-switcher Project Hub.
-- [ ] Dev group implements slices and records agent events.
-- [ ] Per-slice retry budget enforced; Slice Failure gate appears when exhausted.
-- [ ] Tests generated and run: per-slice checks + final full suite.
-- [ ] Generated app previewable before deployment; Playwright verifies the preview URL.
-- [ ] Dockerfile/Compose + run instructions generated.
-- [ ] Delivery report complete.
-- [ ] High-risk ops require confirmation and are logged.
-- [ ] Command logs retained with secret redaction + large-output artifact chunking.
-- [ ] `Failed` and `Paused` are reachable via their transitions.
-- [ ] Final user acceptance captured.
-- [ ] No unresolved high-risk issue remains.
+- [x] Create a project from a simple web-app requirement.
+- [x] Requirement group: analysis, scoring, gap questioning, PRD.
+- [x] Requirement loop terminates on its own (budget/stuck) and shows the stuck gate.
+- [x] Human confirms requirement + tech plan via option cards + custom input.
+- [x] Console matches the Figma baseline: top nav, Stream Mode user cards + sticky composer, Swimlane switcher, five right tabs, avatar Settings, and project-switcher Project Hub.
+- [x] Dev group implements slices and records agent events.
+- [x] Per-slice retry budget enforced; Slice Failure gate appears when exhausted.
+- [x] Tests generated and run: per-slice checks + final full suite.
+- [x] Generated app previewable before deployment; Playwright verifies the preview URL.
+- [x] Dockerfile/Compose + run instructions generated.
+- [x] Delivery report complete.
+- [x] High-risk ops require confirmation and are logged.
+- [x] Command logs retained with secret redaction + large-output artifact chunking.
+- [x] `Failed` and `Paused` are reachable via their transitions.
+- [x] Final user acceptance captured.
+- [x] No unresolved high-risk issue remains.
 
 ### Task 11.3 — Logging + safety audit
 
@@ -116,15 +116,15 @@ pnpm -w typecheck && pnpm -w test && pnpm -w build
 
 ## Definition of Done
 
-- [ ] The golden path runs end to end to `Delivered` with no manual fixes mid-run.
-- [ ] Every spec §18 checklist item is demonstrated true.
-- [ ] Logging is complete, redaction holds, large outputs are chunked.
-- [ ] `Failed` and `Paused` reachable; illegal transitions rejected.
-- [ ] Risk grading + sandbox behave per §12.
-- [ ] Figma UI baseline surfaces and visual constraints are verified.
-- [ ] Deferred M9 stream §14.3.1 polish (Task 11.7) is complete or explicitly descoped with a note.
-- [ ] No unresolved high-risk issue remains.
-- [ ] Every hardening fix is backed by a regression test or an explicit acceptance/E2E assertion that failed before the fix.
+- [x] The golden path runs end to end to `Delivered` with no manual fixes mid-run (stub + real-engine test; see `handbook/acceptance/evidence/golden-path-run.md`).
+- [x] Every spec §18 checklist item is demonstrated true (`handbook/acceptance/section-18-checklist.md`).
+- [x] Logging is complete, redaction holds, large outputs are chunked.
+- [x] `Failed` and `Paused` reachable; illegal transitions rejected.
+- [x] Risk grading + sandbox behave per §12.
+- [x] Figma UI baseline surfaces and visual constraints are verified (Playwright + screenshots).
+- [x] Deferred M9 stream §14.3.1 polish (Task 11.7) is complete.
+- [x] No unresolved high-risk issue remains (`handbook/acceptance/evidence/audit-signoff.md`).
+- [x] Every hardening fix is backed by a regression test or an explicit acceptance/E2E assertion that failed before the fix.
 
 ## Do Not
 

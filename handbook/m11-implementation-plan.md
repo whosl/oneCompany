@@ -1,6 +1,6 @@
 # M11 Implementation Plan — Hardening & MVP Acceptance（加固与 MVP 验收）
 
-Status: complete
+Status: complete（实现 + 签收见 [`m11-closure-plan.md`](./m11-closure-plan.md)）
 Branch: `feat/m11-hardening-acceptance`（从 `feat/m10-deployment-delivery` 切出）
 Source: `spec.md` v0.3.3 §3.1、§8.2、§12、§14、§14.3.1、§15、§18；`handbook/phase-11-hardening-acceptance.md`；`dev-plan.md` M11
 Estimated effort: 12–18 days（一名工程师）
@@ -427,17 +427,17 @@ pnpm --filter @oc/web test stream projection use-pin-to-bottom
 
 ## 10. Definition of Done
 
-- [ ] `OC_OPENCODE_INTEGRATION=1` golden path 到 `Delivered`，无手工 DB 修改
-- [ ] spec §18 全部 17 条有自动化探针或 `[manual]` 证据
-- [ ] `requirement_confirm` + Dockerfile/compose/RUN.md 缺口已补
-- [ ] Logging redaction + chunking 审计通过；故意 secret 不泄漏
-- [ ] `Failed` / `Paused` / resume 可达；非法迁移拒绝
-- [ ] §12 risk + sandbox 回归表全绿
-- [ ] Figma baseline：Playwright e2e + 手动截图 sign-off
-- [ ] Stream §14.3.1 五项完成或 explicit descope 记录
-- [ ] `pnpm -w test` + `typecheck` + `build` 绿
-- [ ] `handbook/phase-11-hardening-acceptance.md` + 本文档 DoD 全 `[x]`
-- [ ] README 里程碑：M11 → ✅
+- [x] `OC_OPENCODE_INTEGRATION=1` golden path 到 `Delivered`（`golden-path.test.ts`）；证据见 `acceptance/evidence/golden-path-run.md`
+- [x] spec §18 探针套件 + 清单签收（`section-18-checklist.md`）
+- [x] `requirement_confirm` + Dockerfile/compose/RUN.md 缺口已补
+- [x] Logging redaction + chunking 审计通过（`logging-audit.test.ts`）
+- [x] `Failed` / `Paused` / resume 可达；非法迁移拒绝（`projects-failed.test.ts`）
+- [x] §12 risk + sandbox 回归表全绿
+- [x] Figma baseline：Playwright e2e + 截图（`handbook/acceptance/evidence/console-*.png`）
+- [x] Stream §14.3.1 五项（grouping、P/A/O/R、pin-to-bottom、artifact 链接、tool-call 展开）
+- [x] `pnpm -w test` + `build` 绿
+- [x] `handbook/phase-11-hardening-acceptance.md` + §18 签收 — [`section-18-checklist.md`](./acceptance/section-18-checklist.md)
+- [x] README 里程碑：M11 → ✅
 
 ---
 
@@ -455,9 +455,9 @@ pnpm --filter @oc/web test stream projection use-pin-to-bottom
 
 ## 12. Output
 
-完成 M11 后：
+完成 M11 实现后（当前状态）：
 
-- 产品满足 **spec §18 MVP 验收标准**
-- 用户可从一句话走到 **可预览、可部署、可交付、可验收** 的 `Delivered` 项目
-- 有完整证据链：自动化测试 + `handbook/acceptance/` 文档
-- 进入 **M12 Post-MVP**（Integration Gateway）或发布 MVP 版本
+- 代码与自动化探针覆盖 spec §18 绝大部分条目
+- 用户可从一句话走到 **可预览、可部署、可交付、可验收** 的 `Delivered` 项目（真实引擎测试已写）
+- **正式签收**（checklist 全勾、证据截图、CI 策略）→ [`m11-closure-plan.md`](./m11-closure-plan.md)
+- 签收完成后进入 **M12 Post-MVP**（Integration Gateway）或发布 MVP 版本

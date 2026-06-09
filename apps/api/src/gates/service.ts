@@ -139,6 +139,7 @@ export function createGateService(
         projectId: gate.projectId,
         gateId,
         decision,
+        gateType: gate.gateType,
       },
     });
     onEvent(envelope);

@@ -41,7 +41,7 @@ describe("change review", () => {
     }
   });
 
-  it("reject keeps change review phase blocked", async () => {
+  it("reject returns to Developing and clears pending change request", async () => {
     const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
       await reachChangeReview(projectId, deps);
@@ -49,8 +49,10 @@ describe("change review", () => {
         projectId,
         decision: "reject",
       });
-      expect(result.phase).toBe("change_review");
-      expect(result.state.taskQueue[0]?.status).not.toBe("passed");
+      expect(result.phase).toBe("slicing");
+      expect(result.projectStatus).toBe("Developing");
+      expect(result.gateId).toBeUndefined();
+      expect(result.state.risks.some((risk) => risk.includes("rejected"))).toBe(true);
     } finally {
       cleanup();
     }

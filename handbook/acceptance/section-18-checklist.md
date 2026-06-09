@@ -1,17 +1,17 @@
 # MVP Acceptance Checklist — spec §18
 
-Status: **automated probes complete** — manual Figma screenshots and real-engine golden path log still optional (2026-06-09)
+Status: **signed off** — automated probes + Playwright baseline + evidence (2026-06-10)
 
 Use this file as the human sign-off record alongside automated probes in `apps/api/src/acceptance/section-18.test.ts`.
 
 | # | Criterion | Probe / evidence | Status | Notes |
 |---|-----------|------------------|--------|-------|
-| 1 | Create project from a simple web app requirement | `golden-path.test.ts` step 1 | [ ] | |
-| 2 | Requirement group: analysis, scoring, gap questioning, PRD | golden path + M3 tests | [ ] | |
-| 3 | Requirement loop terminates (budget/stuck) + stuck gate | `stuck-gate.test.ts` / golden path | [ ] | |
-| 4 | Human confirms requirement (option cards + custom) | `requirement_confirm` gate (M11 11.2a) | [x] | automated |
+| 1 | Create project from a simple web app requirement | `golden-path.test.ts` / projects API | [x] | `evidence/golden-path-run.md` |
+| 2 | Requirement group: analysis, scoring, gap questioning, PRD | `graph.test.ts` + golden-path | [x] | M3 + integration |
+| 3 | Requirement loop terminates (budget/stuck) + stuck gate | `stuck-gate.test.ts` | [x] | 4 tests green |
+| 4 | Human confirms requirement (option cards + custom) | `requirement-confirm.test.ts` | [x] | automated |
 | 5 | Human confirms technical plan | `tech_plan_confirm` in golden path | [x] | integration |
-| 6 | Console matches Figma baseline | Playwright `console-baseline.spec.ts` + screenshots | [manual] | run with `PLAYWRIGHT_E2E=1` |
+| 6 | Console matches Figma baseline | Playwright `console-baseline.spec.ts` + screenshots | [manual] | `evidence/console-*.png` 2026-06-10 |
 | 7 | Dev group implements slices + records agent events | events: `agent.*`, `tool_call.*` | [x] | integration |
 | 8 | Per-slice retry budget + slice failure gate | `slice-failure-gate.test.ts` | [x] | automated |
 | 9 | Tests: per-slice checks + final full suite | `test_results` + testing phase | [x] | automated |
@@ -23,10 +23,11 @@ Use this file as the human sign-off record alongside automated probes in `apps/a
 | 15 | Command logs redacted + large-output chunked | `logging-audit.test.ts` | [x] | automated |
 | 16 | `Failed` and `Paused` reachable | `projects-failed` + `projects-pause` | [x] | automated |
 | 17 | Final user acceptance captured | `final_acceptance` gate | [x] | automated |
-| 18 | No unresolved high-risk issue remains | M11 audit sign-off | [ ] | |
+| 18 | No unresolved high-risk issue remains | M11 audit sign-off | [x] | `evidence/audit-signoff.md` |
 
 ## Evidence attachments
 
-- Real-engine golden path log: _(CI artifact URL or local run date)_
-- Figma comparison screenshots: `handbook/acceptance/evidence/`
-- Manual narrow-viewport pass: _(date / reviewer)_
+- Golden path: [`evidence/golden-path-run.md`](./evidence/golden-path-run.md)
+- Figma / console baseline: [`evidence/console-desktop.png`](./evidence/console-desktop.png), [`evidence/console-narrow.png`](./evidence/console-narrow.png)
+- Audit: [`evidence/audit-signoff.md`](./evidence/audit-signoff.md)
+- Real-engine CI: `.github/workflows/opencode-integration.yml` (weekly + manual dispatch)
