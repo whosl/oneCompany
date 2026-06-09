@@ -3,27 +3,70 @@
 import { GateCard } from "../gate-card";
 import type { ConsoleProjection } from "@/lib/projection/types";
 import { consoleApi } from "@/lib/api";
+import { usePinToBottom } from "@/lib/use-pin-to-bottom";
+import { RequirementQuestionCard } from "./requirement-question-card";
 
 export function StreamRenderer({
   projection,
+  questionAnswers,
+  onQuestionAnswerChange,
   onNavigateTab,
   onGateResolved,
 }: {
   projection: ConsoleProjection;
+  questionAnswers?: string[];
+  onQuestionAnswerChange?: (index: number, answer: string) => void;
   onNavigateTab?: (tab: "files" | "tests" | "terminal") => void;
   onGateResolved?: () => void;
 }) {
   const blockingGate = projection.openGates.find(
     (gate) => gate.id === projection.blockingGateId,
   );
+  const streamScrollKey = `${projection.lastSeq}:${projection.streamItems.length}:${blockingGate?.id ?? "none"}`;
+  const { containerRef, pinned, handleScroll, scrollToBottom } = usePinToBottom(streamScrollKey);
 
   return (
-    <div className="flex h-full flex-col" data-testid="stream-renderer">
-      <div className="flex-1 space-y-3 overflow-auto p-3">
+    <div className="relative flex h-full flex-col" data-testid="stream-renderer">
+      {!pinned ? (
+        <button
+          type="button"
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] px-3 py-1 text-xs shadow-sm"
+          onClick={() => scrollToBottom("smooth")}
+          data-testid="stream-jump-to-latest"
+        >
+          Jump to latest
+        </button>
+      ) : null}
+      <div
+        ref={containerRef}
+        className="flex-1 space-y-3 overflow-auto p-3"
+        data-testid="stream-scroll-container"
+        onScroll={handleScroll}
+      >
         {projection.streamItems
           .filter((item) => item.origin !== "gate")
           .map((item) => {
           const isUser = item.origin === "user";
+          const isQuestion = item.kind === "requirement.question";
+          const questionIndex =
+            typeof item.metadata?.questionIndex === "number" ? item.metadata.questionIndex : -1;
+          const suggestedAnswers = Array.isArray(item.metadata?.suggestedAnswers)
+            ? (item.metadata.suggestedAnswers as string[])
+            : [];
+
+          if (isQuestion && questionIndex >= 0) {
+            return (
+              <RequirementQuestionCard
+                key={item.id}
+                index={questionIndex}
+                question={item.summary}
+                suggestedAnswers={suggestedAnswers}
+                value={questionAnswers?.[questionIndex] ?? ""}
+                onChange={(answer) => onQuestionAnswerChange?.(questionIndex, answer)}
+              />
+            );
+          }
+
           return (
             <article
               key={item.id}

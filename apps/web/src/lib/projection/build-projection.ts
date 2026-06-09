@@ -172,6 +172,9 @@ export function deriveStreamItems(projection: ConsoleProjection): StreamItem[] {
     }
 
     if (payload.type.startsWith("agent.")) {
+      if (payload.type === "agent.reflect" || payload.type === "agent.started") {
+        continue;
+      }
       items.push({
         id: event.eventId,
         origin: "agent",
@@ -222,6 +225,24 @@ export function deriveStreamItems(projection: ConsoleProjection): StreamItem[] {
         summary: payload.status,
         timestamp: event.timestamp,
         metadata: { suite: payload.suite, navigateTab: "tests" },
+      });
+    }
+  }
+
+  if (snapshot.requirement?.pendingQuestions?.length) {
+    for (const [index, item] of snapshot.requirement.pendingQuestions.entries()) {
+      items.push({
+        id: `pending-question-${index}`,
+        origin: "system",
+        kind: "requirement.question",
+        title: `Question ${index + 1}`,
+        summary: item.question,
+        timestamp: snapshot.project.updatedAt,
+        metadata: {
+          questionIndex: index,
+          suggestedAnswers: item.suggestedAnswers,
+        },
+        expanded: true,
       });
     }
   }

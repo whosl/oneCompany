@@ -51,9 +51,24 @@ describe("requirement agent output schemas — M3", () => {
   it("parses QuestionPlannerOutput with at most 10 questions", () => {
     const parsed = QuestionPlannerOutputSchema.parse({
       topic: "Users",
-      questions: ["Who is the primary user?"],
+      questions: [
+        {
+          question: "Who is the primary user?",
+          suggestedAnswers: ["Developers", "Managers", "Everyone"],
+        },
+      ],
     });
     expect(parsed.questions).toHaveLength(1);
+    expect(parsed.questions[0]?.suggestedAnswers).toHaveLength(3);
+  });
+
+  it("coerces legacy string questions into structured items with defaults", () => {
+    const parsed = QuestionPlannerOutputSchema.parse({
+      topic: "Users",
+      questions: ["Who is the primary user?"],
+    });
+    expect(parsed.questions[0]?.question).toBe("Who is the primary user?");
+    expect(parsed.questions[0]?.suggestedAnswers.length).toBeGreaterThan(0);
   });
 
   it("rejects QuestionPlannerOutput with more than 10 questions", () => {

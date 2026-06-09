@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { DEVELOPMENT_AGENT_IDS } from "./development/definitions.js";
+import { registerDevelopmentAgents } from "./development/definitions.js";
 import { REQUIREMENT_AGENT_IDS } from "./requirement/definitions.js";
+import type { DevAgentTask } from "./development/types.js";
 import type { RequirementAgentTask } from "./requirement/types.js";
 import { registerRequirementAgents } from "./requirement/definitions.js";
 import { setupTestDb } from "../test-utils.js";
@@ -68,6 +71,55 @@ describe("langchain runner — M9.5", () => {
       });
       expect(result.reasoning.plan).toBe("Score requirement completeness");
       expect(result.modelId).toBeTruthy();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("retries structured output when the first invoke returns null", async () => {
+    const { db, cleanup } = setupTestDb();
+    try {
+      registerDevelopmentAgents(db);
+      invokeMock
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          techPlan: "# Stack",
+          stack: ["typescript"],
+          architectureNotes: ["json storage"],
+          risks: ["scope creep"],
+          plan: "Draft tech plan",
+          observation: "Read PRD inputs",
+          reflection: "Ready to plan",
+        });
+
+      const { runLangChainDevAgent } = await import("./langchain-runner.js");
+      const task = {
+        profile: "minimal",
+        state: {
+          projectId: "p1",
+          repoPath: "/tmp/repo",
+          worktreePath: "/tmp/repo",
+          techPlanVersion: null,
+          taskQueue: [],
+          currentTask: undefined,
+          currentSliceAttempts: 0,
+          maxSliceAttempts: 3,
+          testResults: [],
+          commits: [],
+          risks: [],
+        },
+        prd: "# PRD",
+        acceptance: "- criterion",
+      } satisfies DevAgentTask;
+
+      const result = await runLangChainDevAgent(
+        { projectId: "p1", db },
+        DEVELOPMENT_AGENT_IDS.architect,
+        task,
+      );
+
+      expect(invokeMock).toHaveBeenCalledTimes(2);
+      expect(result.output).toMatchObject({ techPlan: "# Stack" });
     } finally {
       cleanup();
     }

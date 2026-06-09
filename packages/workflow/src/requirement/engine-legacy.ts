@@ -160,7 +160,9 @@ function toResult(
     phase: payload.meta.phase,
     projectStatus: deps.getProjectStatus(payload.state.projectId),
     questions:
-      payload.meta.phase === "awaiting_answers" ? lastRound?.questions : undefined,
+      payload.meta.phase === "awaiting_answers"
+        ? lastRound?.questions.map((item) => item.question)
+        : undefined,
     gateId: payload.meta.gateId,
     gateOptions:
       payload.meta.phase === "awaiting_gate"

@@ -150,6 +150,14 @@ export const consoleApi = {
     });
   },
 
+  startDevelopment(projectId: string) {
+    return requestJson(`/projects/${projectId}/development/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+  },
+
   resolveGate: panelApi.resolveGate,
   listOpenGates: panelApi.listOpenGates,
 };

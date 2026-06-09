@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RightPanel } from "../right-panel/right-panel";
 import { useConsoleProjection } from "@/lib/projection/use-console-projection";
 import { consoleApi } from "@/lib/api";
@@ -12,12 +12,23 @@ import { SwimlaneRenderer } from "./swimlane-renderer";
 import { Composer } from "./composer";
 
 export function ConsoleLayout({ projectId }: { projectId: string }) {
-  const { projection, status, refresh } = useConsoleProjection(projectId);
+  const [workflowPending, setWorkflowPending] = useState(false);
+  const { projection, status, refresh } = useConsoleProjection(projectId, { workflowPending });
   const [leftMode, setLeftMode] = useState<"stream" | "swimlane">("stream");
   const [leftWidth, setLeftWidth] = useState(44);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const pendingQuestions = projection?.snapshot.requirement?.pendingQuestions ?? [];
+  const pendingQuestionKey = useMemo(
+    () => pendingQuestions.map((item) => item.question).join("\u0000"),
+    [pendingQuestions],
+  );
+  const [questionAnswers, setQuestionAnswers] = useState<string[]>([]);
+
+  useEffect(() => {
+    setQuestionAnswers(Array.from({ length: pendingQuestions.length }, () => ""));
+  }, [pendingQuestionKey, pendingQuestions.length]);
 
   if (status === "loading" || !projection) {
     return <main className="p-6">Loading console…</main>;
@@ -76,6 +87,14 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
             {leftMode === "stream" ? (
               <StreamRenderer
                 projection={projection}
+                questionAnswers={questionAnswers}
+                onQuestionAnswerChange={(index, answer) => {
+                  setQuestionAnswers((current) => {
+                    const next = [...current];
+                    next[index] = answer;
+                    return next;
+                  });
+                }}
                 onNavigateTab={() => undefined}
                 onGateResolved={() => void refresh()}
               />
@@ -85,7 +104,13 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
           </div>
 
           {leftMode === "stream" ? (
-            <Composer projectId={projectId} projection={projection} onSubmitted={() => void refresh()} />
+            <Composer
+              projectId={projectId}
+              projection={projection}
+              questionAnswers={questionAnswers}
+              onPendingChange={setWorkflowPending}
+              onSubmitted={() => void refresh()}
+            />
           ) : null}
         </section>
 

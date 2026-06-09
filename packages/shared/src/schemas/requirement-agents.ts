@@ -41,9 +41,59 @@ export const ScorerOutputSchema = z.object({
   gaps: z.array(GapOutputSchema),
 });
 
+export const RequirementQuestionItemSchema = z.object({
+  question: z.string(),
+  suggestedAnswers: z.array(z.string()).min(1).max(3),
+});
+
+function coerceRequirementQuestionItem(value: unknown) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return {
+      question: trimmed,
+      suggestedAnswers: [
+        "Proceed as described in the current requirement",
+        "Use a narrower MVP scope",
+        "Expand scope with additional features",
+      ],
+    };
+  }
+  if (value && typeof value === "object" && "question" in value) {
+    const record = value as { question?: string; suggestedAnswers?: string[] };
+    const question = record.question?.trim() ?? "";
+    const suggestedAnswers = (record.suggestedAnswers ?? [])
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    return {
+      question,
+      suggestedAnswers:
+        suggestedAnswers.length > 0
+          ? suggestedAnswers
+          : [
+              "Proceed as described in the current requirement",
+              "Use a narrower MVP scope",
+              "Expand scope with additional features",
+            ],
+    };
+  }
+  return {
+    question: String(value),
+    suggestedAnswers: [
+      "Proceed as described in the current requirement",
+      "Use a narrower MVP scope",
+      "Expand scope with additional features",
+    ],
+  };
+}
+
 export const QuestionPlannerOutputSchema = z.object({
   topic: z.string(),
-  questions: z.array(z.string()).max(10),
+  questions: z
+    .preprocess(
+      (value) => (Array.isArray(value) ? value.map(coerceRequirementQuestionItem) : []),
+      z.array(RequirementQuestionItemSchema).max(10),
+    ),
 });
 
 export const PrdAcceptanceOutputSchema = z.object({
@@ -56,5 +106,6 @@ export const PrdAcceptanceOutputSchema = z.object({
 export type IntakeOutput = z.infer<typeof IntakeOutputSchema>;
 export type AnalystOutput = z.infer<typeof AnalystOutputSchema>;
 export type ScorerOutput = z.infer<typeof ScorerOutputSchema>;
+export type RequirementQuestionItem = z.infer<typeof RequirementQuestionItemSchema>;
 export type QuestionPlannerOutput = z.infer<typeof QuestionPlannerOutputSchema>;
 export type PrdAcceptanceOutput = z.infer<typeof PrdAcceptanceOutputSchema>;

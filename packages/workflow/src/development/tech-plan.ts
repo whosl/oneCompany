@@ -20,6 +20,10 @@ export async function runArchitect(
     },
   });
 
+  if (result.failed || result.output == null) {
+    throw new Error("Architect agent failed to produce structured output");
+  }
+
   const parsed = ArchitectOutputSchema.parse(result.output);
   const version = payload.state.techPlanVersion
     ? bumpTechPlanVersion(payload.state.techPlanVersion)

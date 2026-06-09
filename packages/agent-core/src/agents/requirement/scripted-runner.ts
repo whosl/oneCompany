@@ -80,8 +80,22 @@ export function runScriptedRequirementAgent(
       return QuestionPlannerOutputSchema.parse({
         topic: "Target users",
         questions: [
-          "Who is the primary user?",
-          "What is the main workflow they need?",
+          {
+            question: "Who is the primary user?",
+            suggestedAnswers: [
+              "Individual developers on a single machine",
+              "Small teams sharing one workspace",
+              "Enterprise admins managing many users",
+            ],
+          },
+          {
+            question: "What is the main workflow they need?",
+            suggestedAnswers: [
+              "Add, list, and complete items quickly",
+              "Track long-running multi-step projects",
+              "Review history and audit changes",
+            ],
+          },
         ],
       });
 

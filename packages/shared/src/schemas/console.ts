@@ -8,6 +8,11 @@ export const ConsolePhaseSchema = z.object({
   progressLabel: z.string().optional(),
 });
 
+export const PendingRequirementQuestionSchema = z.object({
+  question: z.string(),
+  suggestedAnswers: z.array(z.string()).max(3),
+});
+
 export const ConsoleRequirementSnapshotSchema = z.object({
   rawRequirement: z.string(),
   normalizedSummary: z.string(),
@@ -15,6 +20,8 @@ export const ConsoleRequirementSnapshotSchema = z.object({
   completenessLocked: z.boolean(),
   settledChips: z.array(z.string()),
   upcomingChips: z.array(z.string()),
+  /** Active question-planner prompts when status is Asking Questions. */
+  pendingQuestions: z.array(PendingRequirementQuestionSchema).optional(),
 });
 
 export const ConsoleDevSnapshotSchema = z.object({

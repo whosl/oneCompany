@@ -24,7 +24,10 @@ const REQUIREMENT_SCHEMA_HINTS: Record<string, string> = {
 }`,
   [REQUIREMENT_AGENT_IDS.questionPlanner]: `{
   "topic": "string",
-  "questions": ["string — at most 10 focused questions"]
+  "questions": [{
+    "question": "string — one focused question",
+    "suggestedAnswers": ["string — answer option A", "string — answer option B", "string — answer option C"]
+  }]
 }`,
   [REQUIREMENT_AGENT_IDS.prdAcceptance]: `{
   "prd": "string — markdown PRD body",

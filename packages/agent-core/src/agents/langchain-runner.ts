@@ -77,17 +77,33 @@ async function invokeStructuredAgent<T extends z.ZodRawShape>(
     task,
   });
 
-  const messagesAfterTools = await runOptionalToolLoop(model, baseMessages, tools);
-  const raw = await structured.invoke(messagesAfterTools);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const messages =
+        attempt === 0 && tools.length > 0
+          ? await runOptionalToolLoop(model, baseMessages, tools)
+          : baseMessages;
+      const raw = await structured.invoke(messages);
+      const record =
+        typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
+      if (!record || Object.keys(record).length === 0) {
+        throw new Error("Structured agent returned empty output");
+      }
+      const { output, reasoning } = splitReasoningFromOutput(record);
+      return {
+        output: outputSchema.parse(output),
+        reasoning,
+        modelId,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
 
-  const record =
-    typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  const { output, reasoning } = splitReasoningFromOutput(record);
-  return {
-    output: outputSchema.parse(output),
-    reasoning,
-    modelId,
-  };
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Structured agent failed after retries: ${String(lastError)}`);
 }
 
 export async function runLangChainRequirementAgent(

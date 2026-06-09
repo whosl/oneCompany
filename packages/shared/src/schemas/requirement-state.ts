@@ -1,6 +1,20 @@
 import { z } from "zod";
 import { DEFAULT_COMPLETENESS_THRESHOLD, DEFAULT_MAX_QUESTION_ROUNDS } from "./project-status.js";
 
+function coerceStoredQuestionItem(value: unknown) {
+  if (typeof value === "string") {
+    return { question: value, suggestedAnswers: [] as string[] };
+  }
+  if (value && typeof value === "object" && "question" in value) {
+    const record = value as { question?: string; suggestedAnswers?: string[] };
+    return {
+      question: record.question ?? "",
+      suggestedAnswers: record.suggestedAnswers ?? [],
+    };
+  }
+  return { question: String(value), suggestedAnswers: [] as string[] };
+}
+
 const PageAndFlowSchema = z.object({
   name: z.string(),
   purpose: z.string(),
@@ -19,9 +33,14 @@ const GapSchema = z.object({
   question: z.string(),
 });
 
+const StoredQuestionItemSchema = z.object({
+  question: z.string(),
+  suggestedAnswers: z.array(z.string()).max(3).default([]),
+});
+
 const QuestionRoundSchema = z.object({
   topic: z.string(),
-  questions: z.array(z.string()),
+  questions: z.array(z.preprocess(coerceStoredQuestionItem, StoredQuestionItemSchema)),
   answers: z.array(z.string()),
   scoreAfter: z.number(),
 });

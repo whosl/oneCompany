@@ -39,6 +39,25 @@ export function buildConsoleSnapshot(
   try {
     const reqPayload = loadRequirementSession(db, projectId);
     const state = reqPayload.state;
+    const lastRound = state.questionRounds.at(-1);
+    const awaitingAnswers =
+      reqPayload.meta.phase === "awaiting_answers" || status === "Asking Questions";
+    const defaultSuggestions = [
+      "Proceed as described in the current requirement",
+      "Use a narrower MVP scope",
+      "Expand scope with additional features",
+    ];
+    const pendingQuestions =
+      awaitingAnswers &&
+      lastRound &&
+      lastRound.questions.length > 0 &&
+      lastRound.answers.length === 0
+        ? lastRound.questions.map((item) => ({
+            question: item.question,
+            suggestedAnswers:
+              item.suggestedAnswers.length > 0 ? item.suggestedAnswers : defaultSuggestions,
+          }))
+        : undefined;
     requirement = {
       rawRequirement: state.rawRequirement,
       normalizedSummary: state.normalizedSummary || state.rawRequirement,
@@ -50,6 +69,7 @@ export function buildConsoleSnapshot(
       upcomingChips: state.gaps.length
         ? [state.gaps[0]?.question ?? "需要补充信息"]
         : [],
+      pendingQuestions,
     };
     risks = [...state.risks];
   } catch {
