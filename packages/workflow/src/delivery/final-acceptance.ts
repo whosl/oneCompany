@@ -2,6 +2,7 @@ import type { Db, EventEnvelope, ProjectStatus } from "@oc/shared";
 import type { DevelopmentSessionPayload } from "../development/types.js";
 import type { DeliveryReportDeps, GenerateDeliveryReportInput } from "./report-generator.js";
 import { generateDeliveryReport } from "./report-generator.js";
+import { ensureDeliveryDockerArtifacts } from "./docker-artifacts.js";
 
 export type FinalAcceptanceDeps = DeliveryReportDeps & {
   createGate: (projectId: string, gateType: "final_acceptance") => { id: string };
@@ -28,6 +29,10 @@ export function enterAwaitingAcceptance(
 
   const payload = deps.loadSession(input.projectId);
   if (!payload.delivery?.reportGenerated) {
+    ensureDeliveryDockerArtifacts(deps, {
+      projectId: input.projectId,
+      repoPath: input.repoPath,
+    });
     generateDeliveryReport(deps, {
       ...input,
       stateRisks: input.stateRisks ?? payload.state.risks,

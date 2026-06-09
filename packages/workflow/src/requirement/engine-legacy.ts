@@ -31,6 +31,7 @@ import type {
   RequirementWorkflowDeps,
 } from "./types.js";
 import {
+  REQUIREMENT_CONFIRM_GATE_TYPE,
   REQUIREMENT_STUCK_GATE_TYPE,
   STUCK_BUDGET_EXTENSION as BUDGET_EXTENSION,
 } from "./types.js";
@@ -166,7 +167,7 @@ function toResult(
     gateId: payload.meta.gateId,
     gateOptions:
       payload.meta.phase === "awaiting_gate"
-        ? [...getAllowedOptions(REQUIREMENT_STUCK_GATE_TYPE)]
+        ? [...getAllowedOptions(payload.meta.gateType ?? REQUIREMENT_STUCK_GATE_TYPE)]
         : undefined,
     state: payload.state,
   };
@@ -180,11 +181,17 @@ async function decideAndContinue(
 
   if (isReadyForPrd(payload.state)) {
     const completed = await runPrdAcceptance(deps, payload);
-    saveRequirementSession(deps.db, payload.state.projectId, completed);
+    const gate = deps.createGate(payload.state.projectId, REQUIREMENT_CONFIRM_GATE_TYPE);
+    const waiting = updateSessionMeta(completed, {
+      phase: "awaiting_gate",
+      gateId: gate.id,
+      gateType: REQUIREMENT_CONFIRM_GATE_TYPE,
+    });
+    saveRequirementSession(deps.db, payload.state.projectId, waiting);
     if (currentStatus === "Draft Requirement" || currentStatus === "Asking Questions") {
       deps.setStatus(payload.state.projectId, "PRD Ready", "requirement_complete");
     }
-    return toResult(deps, completed);
+    return toResult(deps, waiting);
   }
 
   if (shouldRaiseStuckGate(payload.state)) {
@@ -192,6 +199,7 @@ async function decideAndContinue(
     const waiting = updateSessionMeta(payload, {
       phase: "awaiting_gate",
       gateId: gate.id,
+      gateType: REQUIREMENT_STUCK_GATE_TYPE,
     });
     if (currentStatus === "Draft Requirement") {
       deps.setStatus(payload.state.projectId, "Asking Questions", "requirement_stuck");
@@ -274,6 +282,34 @@ export async function resumeRequirementAfterGateLegacy(
     throw new Error(`Expected awaiting_gate, got ${payload.meta.phase}`);
   }
 
+  if (payload.meta.gateType === REQUIREMENT_CONFIRM_GATE_TYPE) {
+    switch (input.decision) {
+      case "approve": {
+        const completed = updateSessionMeta(payload, {
+          phase: "completed",
+          gateId: undefined,
+          gateType: undefined,
+        });
+        saveRequirementSession(deps.db, input.projectId, completed);
+        return toResult(deps, completed);
+      }
+      case "revise_then_approve":
+      case "reject_and_redo":
+      case "custom": {
+        const revised = updateSessionMeta(payload, {
+          phase: "awaiting_answers",
+          gateId: undefined,
+          gateType: undefined,
+        });
+        deps.setStatus(input.projectId, "Asking Questions", "requirement_confirm_revise");
+        saveRequirementSession(deps.db, input.projectId, revised);
+        return toResult(deps, revised);
+      }
+      default:
+        throw new Error(`Unsupported requirement confirmation decision: ${input.decision}`);
+    }
+  }
+
   switch (input.decision) {
     case "keep_answering": {
       payload.state = {
@@ -293,9 +329,15 @@ export async function resumeRequirementAfterGateLegacy(
         ],
       };
       const completed = await runPrdAcceptance(deps, payload);
-      saveRequirementSession(deps.db, input.projectId, completed);
+      const gate = deps.createGate(input.projectId, REQUIREMENT_CONFIRM_GATE_TYPE);
+      const waiting = updateSessionMeta(completed, {
+        phase: "awaiting_gate",
+        gateId: gate.id,
+        gateType: REQUIREMENT_CONFIRM_GATE_TYPE,
+      });
+      saveRequirementSession(deps.db, input.projectId, waiting);
       deps.setStatus(input.projectId, "PRD Ready", "requirement_force_continue");
-      return toResult(deps, completed);
+      return toResult(deps, waiting);
     }
     case "fail": {
       const failed = updateSessionMeta(payload, { phase: "failed" });

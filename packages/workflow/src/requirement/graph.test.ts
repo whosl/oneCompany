@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { prdVersions, acceptanceCriteriaVersions } from "@oc/shared";
 import { describe, expect, it } from "vitest";
 import {
+  resumeRequirementAfterGate,
   startRequirement,
   submitRequirementAnswers,
 } from "./engine.js";
@@ -26,7 +27,7 @@ describe("requirement workflow engine — M3", () => {
     }
   });
 
-  it("goes straight to PRD Ready for complete input", async () => {
+  it("creates requirement_confirm gate after complete input", async () => {
     const { deps, projectId, db, cleanup } = setupWorkflowTest();
     try {
       const result = await startRequirement(deps, {
@@ -35,8 +36,10 @@ describe("requirement workflow engine — M3", () => {
         profile: "complete",
       });
 
-      expect(result.phase).toBe("completed");
+      expect(result.phase).toBe("awaiting_gate");
       expect(result.projectStatus).toBe("PRD Ready");
+      expect(result.gateId).toBeTruthy();
+      expect(result.gateOptions).toContain("approve");
       expect(result.state.prdVersion).toBeTruthy();
       expect(result.state.acceptanceCriteriaVersion).toBeTruthy();
 
@@ -48,6 +51,27 @@ describe("requirement workflow engine — M3", () => {
         .all();
       expect(prdRows).toHaveLength(1);
       expect(acRows).toHaveLength(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("approves requirement_confirm and completes requirement workflow", async () => {
+    const { deps, projectId, cleanup } = setupWorkflowTest();
+    try {
+      await startRequirement(deps, {
+        projectId,
+        requirement: "完整的 todo 应用需求",
+        profile: "complete",
+      });
+
+      const result = await resumeRequirementAfterGate(deps, {
+        projectId,
+        decision: "approve",
+      });
+
+      expect(result.phase).toBe("completed");
+      expect(result.projectStatus).toBe("PRD Ready");
     } finally {
       cleanup();
     }
@@ -73,8 +97,9 @@ describe("requirement workflow engine — M3", () => {
         });
       }
 
-      expect(result.phase).toBe("completed");
+      expect(result.phase).toBe("awaiting_gate");
       expect(result.projectStatus).toBe("PRD Ready");
+      expect(result.gateOptions).toContain("approve");
     } finally {
       cleanup();
     }

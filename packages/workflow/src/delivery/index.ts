@@ -1,4 +1,5 @@
 export { collectProjectRisks } from "./collect-risks.js";
+export { ensureDeliveryDockerArtifacts } from "./docker-artifacts.js";
 export {
   DELIVERY_REPORT_SECTION_IDS,
   assertReportComplete,

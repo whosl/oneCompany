@@ -30,6 +30,7 @@ import type {
   RequirementWorkflowDeps,
 } from "./types.js";
 import {
+  REQUIREMENT_CONFIRM_GATE_TYPE,
   REQUIREMENT_STUCK_GATE_TYPE,
   STUCK_BUDGET_EXTENSION as BUDGET_EXTENSION,
 } from "./types.js";
@@ -69,7 +70,7 @@ function toResult(
     gateId: payload.meta.gateId,
     gateOptions:
       payload.meta.phase === "awaiting_gate"
-        ? [...getAllowedOptions(REQUIREMENT_STUCK_GATE_TYPE)]
+        ? [...getAllowedOptions(payload.meta.gateType ?? REQUIREMENT_STUCK_GATE_TYPE)]
         : undefined,
     state: payload.state,
   };
@@ -219,11 +220,17 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
     const payload = { ...state.payload };
     const currentStatus = deps.getProjectStatus(payload.state.projectId);
     const completed = await runPrdAcceptance(deps, payload);
-    saveRequirementSession(deps.db, payload.state.projectId, completed);
+    const gate = deps.createGate(payload.state.projectId, REQUIREMENT_CONFIRM_GATE_TYPE);
+    const waiting = updateSessionMeta(completed, {
+      phase: "awaiting_gate",
+      gateId: gate.id,
+      gateType: REQUIREMENT_CONFIRM_GATE_TYPE,
+    });
+    saveRequirementSession(deps.db, payload.state.projectId, waiting);
     if (currentStatus === "Draft Requirement" || currentStatus === "Asking Questions") {
       deps.setStatus(payload.state.projectId, "PRD Ready", "requirement_complete");
     }
-    return { payload: completed, result: toResult(deps, completed) };
+    return { payload: waiting };
   };
 
   const prepareStuckGateNode = async (
@@ -234,6 +241,7 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
     const waiting = updateSessionMeta(payload, {
       phase: "awaiting_gate",
       gateId: gate.id,
+      gateType: REQUIREMENT_STUCK_GATE_TYPE,
     });
     if (deps.getProjectStatus(payload.state.projectId) === "Draft Requirement") {
       deps.setStatus(payload.state.projectId, "Asking Questions", "requirement_stuck");
@@ -270,9 +278,15 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
           ],
         };
         const completed = await runPrdAcceptance(deps, payload);
-        saveRequirementSession(deps.db, payload.state.projectId, completed);
+        const gate = deps.createGate(payload.state.projectId, REQUIREMENT_CONFIRM_GATE_TYPE);
+        const waiting = updateSessionMeta(completed, {
+          phase: "awaiting_gate",
+          gateId: gate.id,
+          gateType: REQUIREMENT_CONFIRM_GATE_TYPE,
+        });
+        saveRequirementSession(deps.db, payload.state.projectId, waiting);
         deps.setStatus(payload.state.projectId, "PRD Ready", "requirement_force_continue");
-        return { payload: completed, result: toResult(deps, completed) };
+        return { payload: waiting, result: toResult(deps, waiting) };
       }
       case "fail": {
         const failed = updateSessionMeta(payload, { phase: "failed" });
@@ -434,6 +448,34 @@ export async function resumeRequirementAfterGateGraph(
   const existing = loadRequirementSession(deps.db, input.projectId);
   if (existing.meta.phase !== "awaiting_gate") {
     throw new Error(`Expected awaiting_gate, got ${existing.meta.phase}`);
+  }
+
+  if (existing.meta.gateType === REQUIREMENT_CONFIRM_GATE_TYPE) {
+    switch (input.decision) {
+      case "approve": {
+        const completed = updateSessionMeta(existing, {
+          phase: "completed",
+          gateId: undefined,
+          gateType: undefined,
+        });
+        saveRequirementSession(deps.db, input.projectId, completed);
+        return toResult(deps, completed);
+      }
+      case "revise_then_approve":
+      case "reject_and_redo":
+      case "custom": {
+        const revised = updateSessionMeta(existing, {
+          phase: "awaiting_answers",
+          gateId: undefined,
+          gateType: undefined,
+        });
+        deps.setStatus(input.projectId, "Asking Questions", "requirement_confirm_revise");
+        saveRequirementSession(deps.db, input.projectId, revised);
+        return toResult(deps, revised);
+      }
+      default:
+        throw new Error(`Unsupported requirement confirmation decision: ${input.decision}`);
+    }
   }
 
   if (!(await hasGraphCheckpoint(input.projectId))) {

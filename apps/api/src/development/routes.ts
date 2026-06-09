@@ -12,8 +12,13 @@ export function createDevelopmentRoutes(development: DevelopmentService) {
     if (body.profile && !isFixtureProfileAllowed()) {
       return c.json({ error: "fixture profile is only allowed in stub engine mode" }, 400);
     }
-    const result = await development.start(projectId, body.profile);
-    return c.json(result);
+    try {
+      const result = await development.start(projectId, body.profile);
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "failed to start development";
+      return c.json({ error: message }, 400);
+    }
   });
 
   app.get("/:id/development/status", (c) => {

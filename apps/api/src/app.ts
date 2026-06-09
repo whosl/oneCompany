@@ -66,7 +66,7 @@ export function createApp(deps: AppDependencies) {
     onEvent,
   );
   const devCtx = { db: deps.db, projects, gates, workspace, onEvent };
-  const requirement = createRequirementService(deps.db, projects, gates, onEvent);
+  const requirement = createRequirementService(deps.db, projects, gates, workspace, onEvent);
   const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
   const changeRequests = createChangeRequestService(deps.db, projects, devCtx);
   const testing = createTestingService(deps.db, projects, workspace, deployment, delivery, onEvent);

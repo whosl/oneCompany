@@ -17,7 +17,10 @@ export function createGateResumeHandler(services: {
   delivery?: DeliveryService;
 }) {
   return async (gate: GateRecord, decision: string): Promise<void> => {
-    if (gate.gateType === "requirement_stuck" && services.requirement) {
+    if (
+      (gate.gateType === "requirement_stuck" || gate.gateType === "requirement_confirm") &&
+      services.requirement
+    ) {
       try {
         await services.requirement.resumeAfterGate(gate.projectId, decision);
       } catch (error) {

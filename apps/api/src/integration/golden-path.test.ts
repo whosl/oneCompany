@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import {
@@ -7,8 +9,11 @@ import {
   isOpencodeAvailable,
 } from "@oc/agent-core";
 import {
+  DELIVERY_REPORT_SECTION_IDS,
   acceptanceCriteriaVersions,
+  deployments,
   events,
+  humanGates,
   prdVersions,
   projects,
   testResults,
@@ -65,7 +70,45 @@ type RequirementResult = {
   projectStatus: string;
   questions?: string[];
   gateId?: string;
+  gateType?: string;
 };
+
+async function findOpenGate(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  projectId: string,
+  gateType: string,
+): Promise<{ id: string; gateType: string } | undefined> {
+  return (await listOpenGates(app, projectId)).find((gate) => gate.gateType === gateType);
+}
+
+async function refreshRequirementResult(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  projectId: string,
+): Promise<RequirementResult> {
+  const confirmGate = await findOpenGate(app, projectId, "requirement_confirm");
+  if (confirmGate) {
+    return {
+      phase: "awaiting_gate",
+      projectStatus: "PRD Ready",
+      gateId: confirmGate.id,
+      gateType: "requirement_confirm",
+    };
+  }
+
+  const stuckGate = await findOpenGate(app, projectId, "requirement_stuck");
+  if (stuckGate) {
+    return {
+      phase: "awaiting_gate",
+      projectStatus: "PRD Ready",
+      gateId: stuckGate.id,
+      gateType: "requirement_stuck",
+    };
+  }
+
+  const project = await app.request(`/projects/${projectId}`);
+  const body = (await project.json()) as { status?: string };
+  return { phase: "completed", projectStatus: body.status ?? "PRD Ready" };
+}
 
 async function runRequirementToPrdReady(
   app: ReturnType<typeof setupIntegrationApp>["app"],
@@ -94,18 +137,32 @@ async function runRequirementToPrdReady(
     result = (await response.json()) as RequirementResult;
   }
 
-  if (result.phase === "awaiting_gate" && result.gateId) {
-    const resolved = await app.request(`/gates/${result.gateId}/resolve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision: "force_continue" }),
-    });
-    expect(resolved.status).toBe(200);
-    await waitForProjectStatus(app, projectId, "PRD Ready", 120_000);
-    result = { phase: "completed", projectStatus: "PRD Ready" };
+  for (let round = 0; round < 3 && result.phase === "awaiting_gate" && result.gateId; round += 1) {
+    const gateType =
+      result.gateType ??
+      (await listOpenGates(app, projectId)).find((gate) => gate.id === result.gateId)?.gateType;
+    if (gateType === "requirement_confirm") {
+      break;
+    }
+    if (gateType === "requirement_stuck") {
+      await resolveGateWithNested(app, projectId, result.gateId, "force_continue");
+      await waitForProjectStatus(app, projectId, "PRD Ready", 120_000);
+      result = await refreshRequirementResult(app, projectId);
+      continue;
+    }
+    break;
   }
 
   return result;
+}
+
+async function approveRequirementConfirm(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  projectId: string,
+  gateId: string,
+): Promise<void> {
+  await resolveGateWithNested(app, projectId, gateId, "approve");
+  await waitForProjectStatus(app, projectId, "PRD Ready", 60_000);
 }
 
 async function listOpenGates(
@@ -117,6 +174,22 @@ async function listOpenGates(
   return (body.gates ?? []).filter((gate) => gate.status === "open");
 }
 
+function nestedGateDecision(gateType: string): string | undefined {
+  if (gateType === "dangerous_operation" || gateType === "deployment") {
+    return "approve";
+  }
+  if (gateType === "slice_failure") {
+    return "retry";
+  }
+  if (gateType === "change_review") {
+    return "update_plan";
+  }
+  if (gateType === "requirement_stuck") {
+    return "force_continue";
+  }
+  return undefined;
+}
+
 async function resolveNestedGates(
   app: ReturnType<typeof setupIntegrationApp>["app"],
   projectId: string,
@@ -124,12 +197,8 @@ async function resolveNestedGates(
 ): Promise<void> {
   for (const gate of await listOpenGates(app, projectId)) {
     if (gate.id === primaryGateId) continue;
-    const decision =
-      gate.gateType === "dangerous_operation" || gate.gateType === "deployment"
-        ? "approve"
-        : gate.gateType === "slice_failure"
-          ? "retry"
-          : "force_continue";
+    const decision = nestedGateDecision(gate.gateType);
+    if (!decision) continue;
     await app.request(`/gates/${gate.id}/resolve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -187,6 +256,94 @@ function eventTypesForProject(db: ReturnType<typeof setupIntegrationApp>["db"], 
     .all();
 }
 
+function resolvedGateTypesForProject(
+  db: ReturnType<typeof setupIntegrationApp>["db"],
+  projectId: string,
+): string[] {
+  return db
+    .select({ gateType: humanGates.gate_type, status: humanGates.status })
+    .from(humanGates)
+    .where(eq(humanGates.project_id, projectId))
+    .all()
+    .filter((row) => row.status === "resolved")
+    .map((row) => row.gateType);
+}
+
+function assertHumanGateResolvedEvents(
+  db: ReturnType<typeof setupIntegrationApp>["db"],
+  projectId: string,
+  gateTypes: string[],
+): void {
+  const resolvedEvents = eventTypesForProject(db, projectId).filter(
+    (row) => row.type === "human_gate.resolved",
+  );
+  expect(resolvedEvents.length).toBeGreaterThanOrEqual(gateTypes.length);
+  for (const gateType of gateTypes) {
+    expect(resolvedGateTypesForProject(db, projectId)).toContain(gateType);
+  }
+}
+
+function assertDeliveredArtifacts(generatedProjectsRoot: string, slug: string): void {
+  const projectRoot = path.join(generatedProjectsRoot, slug);
+  const reportPath = path.join(projectRoot, "artifacts", "delivery-report.md");
+  expect(fs.existsSync(reportPath)).toBe(true);
+
+  const reportMarkdown = fs.readFileSync(reportPath, "utf8");
+  for (const sectionId of DELIVERY_REPORT_SECTION_IDS) {
+    const title = deliveryReportSectionTitle(sectionId);
+    expect(reportMarkdown).toContain(`## ${title}`);
+  }
+
+  const repoPath = path.join(projectRoot, "repo");
+  expect(fs.existsSync(path.join(repoPath, "Dockerfile"))).toBe(true);
+  expect(fs.existsSync(path.join(repoPath, "docker-compose.yml"))).toBe(true);
+  expect(fs.existsSync(path.join(repoPath, "RUN.md"))).toBe(true);
+}
+
+function deliveryReportSectionTitle(sectionId: (typeof DELIVERY_REPORT_SECTION_IDS)[number]): string {
+  switch (sectionId) {
+    case "requirement-summary":
+      return "Requirement Summary";
+    case "confirmed-tech-stack":
+      return "Confirmed Tech Stack";
+    case "feature-list":
+      return "Feature List";
+    case "directory-structure":
+      return "Directory Structure";
+    case "run-instructions":
+      return "Run Instructions";
+    case "test-results":
+      return "Test Results";
+    case "deployment-url":
+      return "Deployment URL";
+    case "risks-and-limitations":
+      return "Risks and Limitations";
+    case "follow-up-recommendations":
+      return "Follow-up Recommendations";
+  }
+}
+
+function dumpGoldenPathSummary(input: {
+  label: string;
+  projectId: string;
+  status: string;
+  eventTypes: string[];
+  resolvedGates: string[];
+  deploymentUrl?: string | null;
+  reportPath?: string;
+}): void {
+  console.log(`\n=== ${input.label} ===`);
+  console.log("project:", input.projectId);
+  console.log("status:", input.status);
+  console.log("deployment:", input.deploymentUrl ?? "(none)");
+  console.log("report:", input.reportPath ?? "(none)");
+  console.log("resolved gates:", input.resolvedGates.join(", ") || "(none)");
+  console.log(
+    "events:",
+    [...new Set(input.eventTypes)].sort().join(", "),
+  );
+}
+
 describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", () => {
   it("requires workflow LLM key and opencode CLI", () => {
     expect(getOpenAiApiKey()).toBeTruthy();
@@ -220,8 +377,11 @@ describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", ()
       const project = (await created.json()) as { id: string };
 
       const result = await runRequirementToPrdReady(app, project.id);
-      expect(result.phase).toBe("completed");
       expect(result.projectStatus).toBe("PRD Ready");
+      expect(result.phase).toBe("awaiting_gate");
+      expect(result.gateType ?? (await findOpenGate(app, project.id, "requirement_confirm"))?.gateType).toBe(
+        "requirement_confirm",
+      );
 
       const stored = db
         .select({ status: projects.status })
@@ -330,7 +490,158 @@ describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", ()
       cleanup();
     }
   }, 1_800_000);
+
+  it("runs one sentence through delivery to Delivered with artifacts and gate events", async () => {
+    const { app, db, generatedProjectsRoot, cleanup } = setupIntegrationApp();
+    try {
+      const created = await app.request("/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Golden Path Delivered" }),
+      });
+      expect(created.status).toBe(201);
+      const project = (await created.json()) as { id: string; slug: string };
+
+      const requirement = await runRequirementToPrdReady(app, project.id);
+      expect(requirement.projectStatus).toBe("PRD Ready");
+      const openGates = await listOpenGates(app, project.id);
+      const requirementGate =
+        openGates.find((gate) => gate.gateType === "requirement_confirm") ??
+        openGates.find((gate) => gate.id === requirement.gateId);
+      expect(requirementGate?.gateType).toBe("requirement_confirm");
+      await approveRequirementConfirm(app, project.id, requirementGate!.id);
+
+      const development = await app.request(`/projects/${project.id}/development/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(development.status).toBe(200);
+      const developmentBody = (await development.json()) as { gateId?: string; gateType?: string };
+      expect(developmentBody.gateType).toBe("tech_plan_confirm");
+      await resolveGateWithNested(app, project.id, developmentBody.gateId!, "approve");
+      await waitForDevelopmentComplete(app, db, project.id, 2_400_000);
+
+      const testing = await app.request(`/projects/${project.id}/testing/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestDeploy: true }),
+      });
+      expect(testing.status).toBe(200);
+      const testingBody = (await testing.json()) as { projectStatus?: string; phase?: string };
+      expect(testingBody.projectStatus).toBe("Deploying");
+
+      const deploymentGate = await findOpenGate(app, project.id, "deployment");
+      expect(deploymentGate).toBeTruthy();
+
+      const deploymentUrl = "https://golden-path.trycloudflare.com";
+      const urlSubmit = await app.request(`/projects/${project.id}/deployment/url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: deploymentUrl }),
+      });
+      expect(urlSubmit.status).toBe(200);
+
+      await resolveGateWithNested(app, project.id, deploymentGate!.id, "approve");
+      await waitForProjectStatus(app, project.id, "Awaiting Acceptance", 120_000);
+
+      const deploymentRow = db
+        .select()
+        .from(deployments)
+        .where(eq(deployments.project_id, project.id))
+        .all()[0];
+      expect(deploymentRow?.url).toBe(deploymentUrl);
+
+      const finalGate = await findOpenGate(app, project.id, "final_acceptance");
+      expect(finalGate).toBeTruthy();
+
+      const report = await app.request(`/projects/${project.id}/report`);
+      expect(report.status).toBe(200);
+      const reportBody = (await report.json()) as {
+        sections: Array<{ id: string; content: string | null }>;
+      };
+      const deliverySection = reportBody.sections.find((section) => section.id === "delivery-report");
+      expect(deliverySection?.content).toBeTruthy();
+
+      await resolveGateWithNested(app, project.id, finalGate!.id, "accept");
+      await waitForProjectStatus(app, project.id, "Delivered", 60_000);
+
+      const stored = db
+        .select({ status: projects.status, slug: projects.slug })
+        .from(projects)
+        .where(eq(projects.id, project.id))
+        .all()[0];
+      expect(stored?.status).toBe("Delivered");
+
+      assertDeliveredArtifacts(generatedProjectsRoot, stored!.slug!);
+      assertHumanGateResolvedEvents(db, project.id, [
+        "requirement_confirm",
+        "tech_plan_confirm",
+        "deployment",
+        "final_acceptance",
+      ]);
+
+      const projectEvents = eventTypesForProject(db, project.id);
+      dumpGoldenPathSummary({
+        label: "Golden Path → Delivered",
+        projectId: project.id,
+        status: stored!.status!,
+        eventTypes: projectEvents.map((row) => row.type),
+        resolvedGates: resolvedGateTypesForProject(db, project.id),
+        deploymentUrl: deploymentRow?.url,
+        reportPath: path.join(generatedProjectsRoot, stored!.slug!, "artifacts", "delivery-report.md"),
+      });
+    } finally {
+      cleanup();
+    }
+  }, 3_600_000);
 });
+
+async function waitForDevelopmentComplete(
+  app: ReturnType<typeof setupIntegrationApp>["app"],
+  db: ReturnType<typeof setupIntegrationApp>["db"],
+  projectId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await resolveNestedGates(app, projectId, "");
+
+    const response = await app.request(`/projects/${projectId}`);
+    if (response.status === 200) {
+      const body = (await response.json()) as { status?: string };
+      if (body.status === "Testing") {
+        return;
+      }
+      if (body.status === "Failed") {
+        throw new Error("Development failed before reaching Testing");
+      }
+    }
+
+    const open = await listOpenGates(app, projectId);
+    for (const gate of open) {
+      const decision = nestedGateDecision(gate.gateType);
+      if (!decision) continue;
+      await app.request(`/gates/${gate.id}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+    }
+
+    const projectEvents = eventTypesForProject(db, projectId);
+    if (projectEvents.some((row) => row.type === "run.failed")) {
+      const failures = projectEvents
+        .filter((row) => row.type === "run.failed")
+        .map((row) => row.payload)
+        .join("\n");
+      throw new Error(`Development run failed:\n${failures}`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw new Error("Timed out waiting for Testing status");
+}
 
 async function waitForSliceAttempt(
   app: ReturnType<typeof setupIntegrationApp>["app"],

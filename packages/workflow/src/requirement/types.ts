@@ -14,6 +14,7 @@ export type RequirementSessionMeta = {
   phase: RequirementWorkflowPhase;
   profile: RequirementFixtureProfile;
   gateId?: string;
+  gateType?: "requirement_stuck" | "requirement_confirm";
 };
 
 export type RequirementSessionPayload = {
@@ -42,6 +43,7 @@ export type RequirementRunResult = {
 };
 
 export const REQUIREMENT_STUCK_GATE_TYPE = "requirement_stuck";
+export const REQUIREMENT_CONFIRM_GATE_TYPE = "requirement_confirm";
 export const REQUIREMENT_STUCK_OPTIONS = [
   "keep_answering",
   "force_continue",

@@ -31,6 +31,12 @@ export function createDevelopmentService(
       if (!project) {
         throw new Error(`Project not found: ${projectId}`);
       }
+      const requirementGate = gates
+        .listOpenGates(projectId)
+        .find((gate) => gate.gateType === "requirement_confirm");
+      if (requirementGate) {
+        throw new Error("Requirement confirmation gate must be approved before development");
+      }
       const paths = workspace.ensureForProject(project);
       const deps = createDevelopmentDeps(ctx, projectId, { profile });
       return startDevelopment(deps, {

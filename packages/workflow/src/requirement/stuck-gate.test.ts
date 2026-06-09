@@ -85,7 +85,7 @@ describe("requirement stuck gate — M3", () => {
     }
   });
 
-  it("force_continue records a risk and reaches PRD Ready", async () => {
+  it("force_continue records a risk and raises requirement_confirm", async () => {
     const { deps, projectId, db, cleanup } = setupWorkflowTest();
     try {
       let result = await startRequirement(deps, {
@@ -104,8 +104,9 @@ describe("requirement stuck gate — M3", () => {
         decision: "force_continue",
       });
 
-      expect(result.phase).toBe("completed");
+      expect(result.phase).toBe("awaiting_gate");
       expect(result.projectStatus).toBe("PRD Ready");
+      expect(result.gateOptions).toContain("approve");
       expect(result.state.risks.some((risk) => risk.includes("force-continue"))).toBe(
         true,
       );

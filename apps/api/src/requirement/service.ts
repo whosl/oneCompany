@@ -8,15 +8,17 @@ import {
 import type { Db, EventEnvelope } from "@oc/shared";
 import type { GateService } from "../gates/service.js";
 import type { ProjectService } from "../projects/service.js";
+import type { WorkspaceService } from "../workspace/service.js";
 import { createRequirementDeps, type RequirementServiceContext } from "./deps.js";
 
 export function createRequirementService(
   db: Db,
   projects: ProjectService,
   gates: GateService,
+  workspace: WorkspaceService,
   onEvent: (envelope: EventEnvelope) => void,
 ) {
-  const ctx: RequirementServiceContext = { db, projects, gates, onEvent };
+  const ctx: RequirementServiceContext = { db, projects, gates, workspace, onEvent };
 
   return {
     async start(
