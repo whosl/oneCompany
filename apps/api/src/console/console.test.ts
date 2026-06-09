@@ -15,7 +15,7 @@ describe("console API — M9", () => {
       await app.request(`/projects/${project.id}/requirement/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requirement: "Build a todo app", profile: "happy_path" }),
+        body: JSON.stringify({ requirement: "Build a todo app" }),
       });
 
       const response = await app.request(`/projects/${project.id}/console/snapshot`);

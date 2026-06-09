@@ -138,7 +138,7 @@ export const consoleApi = {
     return requestJson(`/projects/${projectId}/requirement/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ requirement, profile: "happy_path" }),
+      body: JSON.stringify({ requirement }),
     });
   },
 

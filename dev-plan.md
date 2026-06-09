@@ -6,7 +6,8 @@ Audience: implementation team (assumes 1–2 engineers, local-first TypeScript)
 
 ## How To Read This Plan
 
-- Work is organized into milestones M0–M12 (M0–M11 are the MVP; M12 is post-MVP). Each milestone is independently demoable and leaves the system in a working state.
+- Work is organized into milestones M0–M12 (M0–M11, including M9.5, are the MVP; M12 is post-MVP). Each milestone is independently demoable and leaves the system in a working state.
+- M9.5 is a decimal milestone inserted between M9 and M10 (after M6–M9 shipped on scripted fixtures). The decimal avoids renumbering M10–M12 and their handbook phase files; treat it as a normal, MVP-critical milestone.
 - Each milestone lists: goal, tasks, spec references, and a Definition of Done (DoD).
 - Effort is a rough relative size (S ≈ 1–3 days, M ≈ 3–6 days, L ≈ 1.5–2.5 weeks) for a small team. Treat as planning hints, not commitments.
 - The build order follows `spec.md` §19 but is expanded with dependencies, data, and exit criteria.
@@ -49,7 +50,8 @@ Minimum test shape by milestone:
 | M6 | Tech-plan versioning tests, per-slice retry tests, opencode permission/event/log bridge tests, authoritative test-boundary tests. |
 | M7 | Runner parsing tests, preview lifecycle tests, Playwright artifact tests, final-suite transition tests. |
 | M8-M10 | UI contract tests for tabs/stream/report plus integration/E2E tests for deployment and change requests. |
-| M11 | Full golden-path E2E plus negative-path regression tests. |
+| M9.5 | Real-engine integration tests: opencode harness under `createAuthorize`, authoritative scoped-test transitions, model-routed agent contract; scripted runners demoted to test-only fixtures. |
+| M11 | Full golden-path E2E (on the real engine) plus negative-path regression tests. |
 | M12 | Connector allowlist/risk/audit tests and offline Skill Pack fallback tests. |
 
 ## Architecture Build Targets (recap from §10)
@@ -105,11 +107,13 @@ Implementation must follow this baseline for the MVP console's structure and vis
 | M7 | Testing & QA integration + local preview | M5, M6 | M | Preview reachable; per-slice checks + final acceptance suite surfaced |
 | M8 | Right panel tabs | M1, M5, M7 | M | Files / Preview / Terminal / Tests / Report functional |
 | M9 | Info stream + swimlane renderers | M1, M2 | M | Both renderers over one event stream |
+| M9.5 | Real engine integration & de-stub | M6, M7, M9 | L | Real opencode + governed authorize + authoritative tests + real agents wired into the API path (no fixtures) |
 | M10 | Deployment, delivery, change requests | M4, M6, M7, M8 | L | Deploy gate + tunnel + delivery report + change flow |
 | M11 | Hardening & MVP acceptance | all | M | §18 acceptance checklist passes |
 | M12 | Integration Gateway + offline Skill Packs | M11 | L | GitHub/Supabase/Vercel-style connectors registered with offline fallbacks |
 
-Critical path: M0 → M1 → M2 → M3 → M4 → M6 → M7 → M10 → M11. M5 (L) depends only on M0 but also hard-blocks M6, so it is co-critical: start it as early as M1, and if it slips it lands on the critical path.
+Critical path: M0 → M1 → M2 → M3 → M4 → M6 → M7 → M9.5 → M10 → M11. M5 (L) depends only on M0 but also hard-blocks M6, so it is co-critical: start it as early as M1, and if it slips it lands on the critical path.
+M9.5 (real engine integration & de-stub) was inserted after M6–M9 shipped on scripted fixtures and stubbed harness/authorize/test boundaries (see its section for the exact seams). It is MVP-critical: M10 deployment and M11 acceptance are only meaningful once the pipeline runs the real engine, so M9.5 sits on the critical path before M10.
 Parallelizable once M1 lands: M5 (workspace) alongside M2/M3/M4; M9 (renderers) alongside M4–M8; M8 tabs as their backing services come online.
 M12 (Integration Gateway + offline Skill Packs) is post-MVP: it starts only after M11 and is not on the MVP critical path.
 
@@ -281,6 +285,27 @@ Spec refs: §14.1–§14.8, §8, §20.
 
 DoD: switching stream ↔ swimlane shows the same underlying events and current state snapshot; user messages and gates remain visible in both renderers; pause/run control reflects status; Settings and Project Hub open from the correct nav entries; no duplicated UI state store; the stream follows the §14.3.1 contract (P/A/O/R run grouping, large output folded to artifact links, single emphasized blocking gate, raw user input shown separately from the normalized summary).
 
+> Status note (M9 as shipped): the core single-projection → dual-renderer spine, single emphasized blocking gate, raw-vs-normalized separation, redacted command output, and diff/test chips are done. The following §14.3.1 sub-requirements are intentionally deferred to M11 (Figma UI baseline regression / stream polish): (1) run grouping by `runId`/`agentId`/`correlationId` in the stream; (2) Plan/Act/Observe/Reflect collapsible segments inside the stream (only the swimlane shows P/A/O/R today); (3) newest-at-bottom pin-to-bottom auto-scroll; (4) large output folded to artifact links (currently only "open in Terminal"); (5) tool-call rows expandable to args/result. These are presentation refinements, not blockers for the M9 demo or M9.5 de-stub.
+
+## M9.5 — Real Engine Integration & De-stub
+
+Goal: make the end-to-end pipeline run on the real engine. M2–M9 deliberately shipped the structure (graphs, gates, events, projections, UI) on top of scripted fixtures and stubbed boundaries so each milestone stayed demoable. The real components were built in M5/M6/M7 but are not wired into the API service path. This milestone connects them and removes the fixtures from the runtime path.
+
+Why this exists: a code review after M9 found that the API wiring fakes the entire development pipeline. In `apps/api/src/development/service.ts` the deps are `harness: StubHarness`, `authorize: async () => ({ allow: true })`, `runAuthoritativeCheck: async () => ({ passed: true })`, and the agent `runner` calls `runScriptedDevAgent`; `apps/api/src/requirement/service.ts` calls `runScriptedRequirementAgent`. As a result, M6's "opencode under the permission bridge" and M7's "real test execution" hold only inside their own package unit tests, not in the running product. Without this milestone, M10 and M11 would "pass" against faked execution.
+
+Tasks:
+- Wire the real coding harness: replace `StubHarness` with `OpencodeHarness` in the development service; make `OpencodeHarness` actually drive opencode (it currently throws unless `OC_OPENCODE_INTEGRATION=1`), managed per project per the M6 lifecycle (§10.4). Keep `StubHarness` available for tests behind a flag. [M]
+- Wire governed authorization: replace `authorize: () => ({ allow: true })` with M5's `createAuthorize` (`packages/workspace/src/authorize.ts`) so opencode shell/edit actions are risk-graded and gated, not auto-approved (§12, §10.4). [M]
+- Wire authoritative tests: replace `runAuthoritativeCheck: () => ({ passed: true })` with M7's real scoped test runner so each slice's pass/fail is real and surfaced to the frontend; LangGraph transitions on the real result (§15, §5.5). [M]
+- Wire real agents: replace `runScriptedDevAgent` / `runScriptedRequirementAgent` with real OpenAI Agents SDK agents using §13 model routing; keep scripted runners as test fixtures only, never on the default runtime path (§10.1, §13). [L]
+- Remove fixture seams from the runtime UI/API: the production requirement entry must not pass a `RequirementFixtureProfile` (the web composer now omits it; the server default handles undefined). Confirm no `profile` fixture leaks from any non-test caller. [S]
+- Config + fallback: define how a missing `OPENAI_API_KEY` degrades (mock data + prompt per §12) versus how opencode/model unavailability surfaces; ensure secret redaction (§8.2) covers opencode and model I/O. [S]
+- Golden-path integration test: one project from requirement → PRD → tech plan → at least one real opencode slice (governed) → real scoped tests → preview, asserting events/status come from real execution, gated behind an integration flag in CI. [M]
+
+Spec refs: §10.1, §10.4, §12, §13, §15, §5.5, §8.2.
+
+DoD: starting a project through the API exercises the real opencode harness under `createAuthorize` risk grading, runs real authoritative scoped tests at each slice boundary, and uses real model-routed agents — with scripted fixtures and `allow:true`/`passed:true` stubs confined to tests. The golden-path integration test passes against the real engine, and no fixture profile reaches the workflow from a production caller.
+
 ## M10 — Deployment, Delivery, Change Requests
 
 Goal: expose the app, produce the delivery package, and handle changes.
@@ -300,8 +325,9 @@ DoD: a passing project can deploy behind a confirmation gate, emits a complete d
 Goal: meet every §18 acceptance criterion.
 
 Tasks:
-- Walk the §18 checklist end-to-end on a real sample app; fix gaps. [M]
+- Walk the §18 checklist end-to-end on a real sample app, running on the real engine from M9.5 (real opencode + governed authorize + authoritative tests + model-routed agents); fix gaps. Acceptance must not be validated against scripted fixtures. [M]
 - Verify the Figma UI baseline: Stream user cards/composer, Swimlane same-projection rendering, five right tabs, avatar Settings, project-switcher Project Hub, and Claude-inspired console tokens (§14). [S]
+- Complete deferred M9 stream §14.3.1 polish: run grouping, in-stream P/A/O/R collapsible segments, pin-to-bottom auto-scroll, large-output artifact links, expandable tool-call rows (§14.3.1). [M]
 - Verify logging completeness and safety (§8.2): tool calls, command + terminal output, diffs, test results, deploy logs, gate decisions, failures, change requests, redaction, and large-output artifact chunking. [S]
 - Verify all terminal/`Failed`/`Paused` transitions are reachable (§3.1). [S]
 - Regression pass on risk grading + sandbox boundaries (§12). [S]

@@ -20,7 +20,9 @@ export function StreamRenderer({
   return (
     <div className="flex h-full flex-col" data-testid="stream-renderer">
       <div className="flex-1 space-y-3 overflow-auto p-3">
-        {projection.streamItems.map((item) => {
+        {projection.streamItems
+          .filter((item) => item.origin !== "gate")
+          .map((item) => {
           const isUser = item.origin === "user";
           return (
             <article

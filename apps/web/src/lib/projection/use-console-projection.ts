@@ -43,11 +43,21 @@ export function useConsoleProjection(projectId: string) {
 
     source.onmessage = (message) => {
       const envelope = JSON.parse(message.data) as EventEnvelope;
+      // Gate lifecycle changes the actionable state, and the allowed options
+      // live in the snapshot rather than the event payload. Re-hydrate so the
+      // composer/gate card render real options instead of an empty stub.
+      if (
+        envelope.payload.type === "human_gate.created" ||
+        envelope.payload.type === "human_gate.resolved"
+      ) {
+        void hydrate();
+        return;
+      }
       setProjection((current) => (current ? applyEvent(current, envelope) : current));
     };
 
     return () => source.close();
-  }, [projectId, projection?.lastSeq]);
+  }, [projectId, projection?.lastSeq, hydrate]);
 
   const refresh = useCallback(async () => {
     const snapshot = await consoleApi.getSnapshot(projectId);

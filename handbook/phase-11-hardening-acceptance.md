@@ -88,6 +88,22 @@ Compare the implemented console against the Figma file `OneCompany Console - Cla
 
 Verify: manual visual pass plus browser screenshots for desktop and a narrow viewport show no clipped text, overlapping controls, or missing required surfaces.
 
+### Task 11.7 — Stream §14.3.1 presentation polish (deferred from M9)
+
+Start red: add stream renderer tests for each deferred behavior before implementing.
+
+Complete the M9-deferred §14.3.1 stream refinements (presentation only; same `ConsoleProjection`):
+
+- Run grouping in the stream by `runId` / `agentId` / `correlationId`.
+- Plan/Act/Observe/Reflect collapsible segments inside the stream (active expanded, completed collapsed). Today only the swimlane shows P/A/O/R.
+- Newest-at-bottom feed with pin-to-bottom auto-scroll.
+- Large tool output folded to artifact links (today only "open in Terminal").
+- Tool-call rows expandable to args/result.
+
+Keep the inline `GateCard` (stream) and the gate buttons in the sticky composer as two intentional surfaces; do not remove either.
+
+Verify: stream renderer tests cover grouping, collapse, scroll behavior, artifact links, and expandable tool calls; switching stream ↔ swimlane remains lossless.
+
 ## Verification
 
 ```bash
@@ -106,6 +122,7 @@ pnpm -w typecheck && pnpm -w test && pnpm -w build
 - [ ] `Failed` and `Paused` reachable; illegal transitions rejected.
 - [ ] Risk grading + sandbox behave per §12.
 - [ ] Figma UI baseline surfaces and visual constraints are verified.
+- [ ] Deferred M9 stream §14.3.1 polish (Task 11.7) is complete or explicitly descoped with a note.
 - [ ] No unresolved high-risk issue remains.
 - [ ] Every hardening fix is backed by a regression test or an explicit acceptance/E2E assertion that failed before the fix.
 

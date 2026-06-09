@@ -63,7 +63,8 @@ Minimum test shape by phase:
 | M6 | Tech-plan versioning tests, per-slice retry tests, opencode permission/event/log bridge tests, authoritative test-boundary tests. |
 | M7 | Runner parsing tests, preview lifecycle tests, Playwright artifact tests, final-suite transition tests. |
 | M8-M10 | UI contract tests for tabs/stream/report plus integration/E2E tests for deployment and change requests. |
-| M11 | Full golden-path E2E plus negative-path regression tests. |
+| M9.5 | Real-engine integration tests: opencode harness under `createAuthorize`, authoritative scoped-test transitions, model-routed agent contract; scripted runners demoted to test-only fixtures. |
+| M11 | Full golden-path E2E (on the real engine) plus negative-path regression tests. |
 | M12 | Connector allowlist/risk/audit tests and offline Skill Pack fallback tests. |
 
 ## The Per-Task Loop (do this for every task)
@@ -237,7 +238,7 @@ Every phase doc has the same sections, in this order:
 
 ## Phase Index
 
-Do these in order. M0–M11 are the MVP; M12 is post-MVP (build it only after the MVP is accepted).
+Do these in order. M0–M11 (including M9.5) are the MVP; M12 is post-MVP (build it only after the MVP is accepted). M9.5 is a decimal phase inserted after M9 to wire the real engine in place of the scripted fixtures that M2–M9 shipped on; it is MVP-critical and comes before M10.
 
 | Phase | Doc | Goal | Needs |
 | --- | --- | --- | --- |
@@ -251,6 +252,7 @@ Do these in order. M0–M11 are the MVP; M12 is post-MVP (build it only after th
 | M7 | [phase-07-testing-preview.md](./phase-07-testing-preview.md) | Tests + local preview | M5, M6 |
 | M8 | [phase-08-right-panel-tabs.md](./phase-08-right-panel-tabs.md) | Files/Preview/Terminal/Tests/Report | M1, M5, M7 |
 | M9 | [phase-09-renderers.md](./phase-09-renderers.md) | Info stream + swimlane | M1, M2 |
+| M9.5 | [phase-09b-real-engine-integration.md](./phase-09b-real-engine-integration.md) ([plan](./m9.5-implementation-plan.md)) | Wire real opencode + authorize + tests + agents (de-stub) | M6, M7, M9 |
 | M10 | [phase-10-deployment-delivery.md](./phase-10-deployment-delivery.md) | Deploy + delivery report + change requests | M4, M6, M7, M8 |
 | M11 | [phase-11-hardening-acceptance.md](./phase-11-hardening-acceptance.md) | Pass spec §18 acceptance | all |
 | M12 | [phase-12-integrations-offline-skills.md](./phase-12-integrations-offline-skills.md) | Integration Gateway + offline Skill Packs (post-MVP) | M11 |

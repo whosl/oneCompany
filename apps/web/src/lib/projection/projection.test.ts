@@ -80,4 +80,37 @@ describe("console projection — M9", () => {
     expect(projection.blockingGateId).toBe("gate-1");
     expect(projection.streamItems.some((item) => item.origin === "gate")).toBe(true);
   });
+
+  it("clears the blocking gate once it resolves", () => {
+    let projection = createProjectionFromSnapshot(baseSnapshot);
+    projection = applyEvent(projection, {
+      eventId: "g1",
+      seq: 1,
+      schemaVersion: "1",
+      projectId: "p1",
+      timestamp: "2026-01-01T00:00:01.000Z",
+      payload: {
+        type: "human_gate.created",
+        projectId: "p1",
+        gateId: "gate-1",
+        gateType: "requirement_stuck",
+      },
+    });
+    projection = applyEvent(projection, {
+      eventId: "g2",
+      seq: 2,
+      schemaVersion: "1",
+      projectId: "p1",
+      timestamp: "2026-01-01T00:00:02.000Z",
+      payload: {
+        type: "human_gate.resolved",
+        projectId: "p1",
+        gateId: "gate-1",
+        decision: "force_continue",
+      },
+    });
+
+    expect(projection.blockingGateId).toBeUndefined();
+    expect(projection.openGates).toHaveLength(0);
+  });
 });

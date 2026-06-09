@@ -5,6 +5,8 @@ data/*
 dist
 generated-projects/*
 !generated-projects/.gitkeep
+# Generated projects can be created from any cwd (e.g. apps/api); ignore them everywhere.
+**/generated-projects/
 .turbo
 *.tsbuildinfo
 .DS_Store

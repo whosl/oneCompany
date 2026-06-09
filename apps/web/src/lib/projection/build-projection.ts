@@ -34,20 +34,19 @@ export function applyEvent(projection: ConsoleProjection, envelope: EventEnvelop
   const events = [...projection.events, envelope];
   const agents = { ...projection.agents };
   const openGates = [...projection.openGates];
-  let blockingGateId = projection.blockingGateId;
   const payload = envelope.payload;
 
   updateAgents(agents, envelope, payload);
-  updateGates(openGates, payload, (id) => {
-    blockingGateId = id;
-  });
+  updateGates(openGates, payload);
 
   const next: ConsoleProjection = {
     ...projection,
     events,
     agents,
     openGates,
-    blockingGateId: openGates[0]?.id ?? blockingGateId,
+    // The first open gate is the single emphasized blocking gate; when none are
+    // open this clears so the composer leaves the gate-blocked state.
+    blockingGateId: openGates[0]?.id,
     lastSeq: envelope.seq,
   };
 
@@ -92,9 +91,10 @@ function updateAgents(
 function updateGates(
   openGates: ConsoleProjection["openGates"],
   payload: AgentEvent,
-  onCreated: (gateId: string) => void,
 ): void {
   if (payload.type === "human_gate.created") {
+    // Live gate events do not carry the allowed options (those live in the
+    // snapshot), so this is a placeholder until the hook re-hydrates.
     openGates.push({
       id: payload.gateId,
       gateType: payload.gateType,
@@ -103,7 +103,6 @@ function updateGates(
       decision: null,
       createdAt: new Date().toISOString(),
     });
-    onCreated(payload.gateId);
   }
   if (payload.type === "human_gate.resolved") {
     const index = openGates.findIndex((gate) => gate.id === payload.gateId);

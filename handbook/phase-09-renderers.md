@@ -122,18 +122,30 @@ pnpm -w typecheck && pnpm -w test
 
 ## Definition of Done
 
-- [ ] A single projection store feeds both renderers (no per-view state store).
-- [ ] Claude-inspired visual tokens are implemented and used by the console shell.
-- [ ] Layout: top nav + resizable split with the spec's default ratio; right side hosts the M8 tabs.
-- [ ] Top nav shows project switcher, status, phase, active group, run/pause, deploy entry, avatar dropdown.
-- [ ] Settings opens from avatar and includes only global environment/secrets/readiness; no model-routing, sandbox, shell-risk, or project-management controls.
-- [ ] Project Hub opens from project switcher and handles multi-project management.
-- [ ] Top-nav phase/status/group/progress pills are coherent with the active lifecycle state.
-- [ ] Compact project dropdown and Project Hub modal are mutually exclusive.
-- [ ] Information stream shows all required items, verbose collapsed, with user cards, inline gate cards, and sticky user composer.
-- [ ] Swimlane shows agents x P/A/O/R with active/completed/failed states plus user/gate markers from the same projection.
-- [ ] Switching stream <-> swimlane is lossless and shows the same data.
-- [ ] Projection, top nav, Settings, Project Hub, information stream, swimlane, and mode-switch behaviors are covered by tests that failed before implementation.
+- [x] A single projection store feeds both renderers (no per-view state store).
+- [x] Claude-inspired visual tokens are implemented and used by the console shell.
+- [x] Layout: top nav + resizable split with the spec's default ratio; right side hosts the M8 tabs.
+- [x] Top nav shows project switcher, status, phase, active group, run/pause, deploy entry, avatar dropdown.
+- [x] Settings opens from avatar and includes only global environment/secrets/readiness; no model-routing, sandbox, shell-risk, or project-management controls.
+- [x] Project Hub opens from project switcher and handles multi-project management.
+- [x] Top-nav phase/status/group/progress pills are coherent with the active lifecycle state.
+- [x] Compact project dropdown and Project Hub modal are mutually exclusive.
+- [x] Information stream shows all required items, verbose collapsed, with user cards, inline gate cards, and sticky user composer.
+- [x] Swimlane shows agents x P/A/O/R with active/completed/failed states plus user/gate markers from the same projection.
+- [x] Switching stream <-> swimlane is lossless and shows the same data.
+- [x] Projection, top nav, Settings, Project Hub, information stream, swimlane, and mode-switch behaviors are covered by tests that failed before implementation.
+
+## Deferred to M11 (not blockers for the M9 demo)
+
+The core spine above is required for M9. These §14.3.1 stream refinements are explicitly deferred to phase M11 (`phase-11-hardening-acceptance.md`, Task 11.7) — implement them there, or descope with a note:
+
+- [ ] Run grouping in the stream by `runId` / `agentId` / `correlationId`.
+- [ ] Plan/Act/Observe/Reflect collapsible segments inside the stream (active expanded, completed collapsed). Today only the swimlane shows P/A/O/R.
+- [ ] Newest-at-bottom feed with pin-to-bottom auto-scroll.
+- [ ] Large tool output folded to artifact links (today only "open in Terminal").
+- [ ] Tool-call rows expandable to args/result.
+
+Note: the inline `GateCard` (stream) and the gate buttons in the sticky composer are both intentional surfaces from the §14.3.1 contract and are covered by tests; keep both.
 
 ## Do Not
 

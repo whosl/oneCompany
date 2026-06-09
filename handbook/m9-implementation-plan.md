@@ -23,7 +23,7 @@ Depends on: M1 complete（SSE + `EventEnvelope`）；M2 complete（P/A/O/R + fai
 | Swimlane | agents × P/A/O/R 网格；与 Stream **同源投影** |
 | API 薄层 | 项目列表、console snapshot、pause/resume、environment readiness |
 
-**M9 不做**：真实 deploy/tunnel 执行（M10）、delivery report 生成（M10）、Integration Gateway（M12）、第三左栏模式（§20）、Settings 内项目管理、用户可配 model/sandbox/risk（§14.6）、Archive 真实软删（MVP 可 stub 为 disabled + tooltip）。
+**M9 不做**：真实 deploy/tunnel 执行（M10）、delivery report 生成（M10）、真实引擎 de-stub（M9.5）、§14.3.1 Stream 展示细化（M11 Task 11.7）、Integration Gateway（M12）、第三左栏模式（§20）、Settings 内项目管理、用户可配 model/sandbox/risk（§14.6）、Archive 真实软删（MVP 可 stub 为 disabled + tooltip）。
 
 ## 2. 编排边界（延续 M1/M4/M8，不得破坏）
 
@@ -468,10 +468,23 @@ pnpm --filter @oc/web dev
 - [x] Console API + 投影 + 各 UI 模块先红后绿测试
 - [x] `pnpm -w test` + `pnpm -w typecheck` 绿
 
+## 9.1 延后至 M11（非 M9 阻塞项）
+
+M9 核心 spine 已交付。以下 §14.3.1 **Stream 展示层**细化项明确延后到 **M11**（`phase-11-hardening-acceptance.md` Task 11.7），与 M9.5 de-stub **无关**：
+
+- [ ] Stream 内按 `runId` / `agentId` / `correlationId` 分组
+- [ ] Stream 内 P/A/O/R 可折叠段落（active 展开、completed 折叠；当前仅 Swimlane 展示 P/A/O/R）
+- [ ] 最新在底部 + pin-to-bottom 自动滚动
+- [ ] 大段 tool 输出折叠为 artifact 链接（当前仅「open in Terminal」）
+- [ ] Tool-call 行可展开 args/result
+
+说明：Stream 内联 `GateCard` 与 sticky Composer 的 gate 按钮为 §14.3.1 双 surface，**保留两者**。
+
 ## 10. Out of Scope
 
 - M10 真实 deploy、tunnel 执行、delivery report 生成
-- M11 §18 全量验收走查（M9 后做）
+- M11 §18 全量验收 + Stream §14.3.1 展示细化（Task 11.7）
+- M9.5 真实引擎 de-stub（`m9.5-implementation-plan.md`）
 - M12 连接器 / Browser MCP console-error 实时监控
 - Archive 数据库实现
 - 第三左栏 crowded layout（§20）
