@@ -1,7 +1,8 @@
 import {
+  createDevelopmentRunner,
   registerDevelopmentAgents,
+  resolveEngineMode,
   runAgent,
-  runScriptedDevAgent,
   type DevAgentTask,
 } from "@oc/agent-core";
 import type { Db, EventEnvelope, FinalSuiteId } from "@oc/shared";
@@ -63,11 +64,9 @@ export function createTestingService(
           {
             db,
             onEvent,
-            runner: async (agentIdAtVersion, task) => ({
-              output: runScriptedDevAgent(agentIdAtVersion, task as DevAgentTask),
-            }),
+            runner: createDevelopmentRunner(db, { mode: resolveEngineMode() }),
           },
-          input,
+          { ...input, task: input.task as DevAgentTask },
         ),
       setStatus: (pid, status, trigger) => projects.setStatus(pid, status, trigger),
       getProjectStatus: (pid) => {

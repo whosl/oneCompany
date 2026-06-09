@@ -23,6 +23,7 @@ export function setupTestApp(): {
   const generatedProjectsRoot = path.join(tempDir, "generated-projects");
   process.env.OC_TEST_DB_PATH = dbPath;
   process.env.OC_GENERATED_PROJECTS_ROOT = generatedProjectsRoot;
+  process.env.OC_USE_STUB_ENGINE = "1";
 
   execSync("pnpm exec drizzle-kit push", {
     cwd: path.resolve(process.cwd(), "../../packages/shared"),
@@ -47,6 +48,7 @@ export function setupTestApp(): {
     cleanup: () => {
       delete process.env.OC_TEST_DB_PATH;
       delete process.env.OC_GENERATED_PROJECTS_ROOT;
+      delete process.env.OC_USE_STUB_ENGINE;
       rmSync(tempDir, { recursive: true, force: true });
       resetBroadcasts();
     },

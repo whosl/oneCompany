@@ -1,20 +1,14 @@
-import {
-  registerRequirementAgents,
-  runAgent,
-  runScriptedRequirementAgent,
-  type RequirementAgentTask,
-  type RequirementFixtureProfile,
-} from "@oc/agent-core";
+import type { RequirementFixtureProfile } from "@oc/agent-core";
 import {
   resumeRequirementAfterGate,
   startRequirement,
   submitRequirementAnswers,
   type RequirementRunResult,
-  type RequirementWorkflowDeps,
 } from "@oc/workflow";
 import type { Db, EventEnvelope } from "@oc/shared";
 import type { GateService } from "../gates/service.js";
 import type { ProjectService } from "../projects/service.js";
+import { createRequirementDeps, type RequirementServiceContext } from "./deps.js";
 
 export function createRequirementService(
   db: Db,
@@ -22,40 +16,7 @@ export function createRequirementService(
   gates: GateService,
   onEvent: (envelope: EventEnvelope) => void,
 ) {
-  registerRequirementAgents(db);
-
-  const deps: RequirementWorkflowDeps = {
-    db,
-    onEvent,
-    runAgent: async (input) =>
-      runAgent(
-        {
-          db,
-          onEvent,
-          runner: async (agentIdAtVersion, task) => ({
-            output: runScriptedRequirementAgent(
-              agentIdAtVersion,
-              task as RequirementAgentTask,
-            ),
-          }),
-        },
-        input,
-      ),
-    createGate: (projectId, gateType) => {
-      const gate = gates.createGate(projectId, gateType);
-      return { id: gate.id };
-    },
-    setStatus: (projectId, status, trigger) => {
-      projects.setStatus(projectId, status, trigger);
-    },
-    getProjectStatus: (projectId) => {
-      const project = projects.getProject(projectId);
-      if (!project) {
-        throw new Error(`Project not found: ${projectId}`);
-      }
-      return project.status;
-    },
-  };
+  const ctx: RequirementServiceContext = { db, projects, gates, onEvent };
 
   return {
     async start(
@@ -67,6 +28,7 @@ export function createRequirementService(
       if (!project) {
         throw new Error(`Project not found: ${projectId}`);
       }
+      const deps = createRequirementDeps(ctx, { profile });
       return startRequirement(deps, { projectId, requirement, profile });
     },
 
@@ -74,6 +36,7 @@ export function createRequirementService(
       projectId: string,
       answers: string[],
     ): Promise<RequirementRunResult> {
+      const deps = createRequirementDeps(ctx);
       return submitRequirementAnswers(deps, { projectId, answers });
     },
 
@@ -81,6 +44,7 @@ export function createRequirementService(
       projectId: string,
       decision: string,
     ): Promise<RequirementRunResult> {
+      const deps = createRequirementDeps(ctx);
       return resumeRequirementAfterGate(deps, { projectId, decision });
     },
   };

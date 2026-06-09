@@ -39,8 +39,22 @@ export {
 } from "./agents/development/definitions.js";
 export { runScriptedDevAgent } from "./agents/development/scripted-runner.js";
 export type { DevAgentTask, DevFixtureProfile } from "./agents/development/types.js";
+export {
+  assertOpenAiConfigured,
+  EngineUnavailableError,
+  getOpenAiApiKey,
+  isOpencodeAvailable,
+  resolveEngineMode,
+  type EngineMode,
+} from "./engine-mode.js";
+export {
+  createDevelopmentRunner,
+  createRequirementRunner,
+  type RunnerFactoryOptions,
+} from "./runner-factory.js";
 export { StubHarness } from "./harness/stub.js";
-export { OpencodeHarness } from "./harness/opencode-harness.js";
+export { createOpencodeHarness, OpencodeHarness } from "./harness/opencode-harness.js";
+export { resolveCodingHarness } from "./harness/coding-harness-factory.js";
 export { handlePermission, toToolOp, type AuthorizeFn } from "./harness/permission-bridge.js";
 export type {
   AuthDecision,

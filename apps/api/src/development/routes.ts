@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { DevFixtureProfile } from "@oc/agent-core";
+import { isFixtureProfileAllowed } from "../config/engine-mode.js";
 import type { DevelopmentService } from "./service.js";
 
 export function createDevelopmentRoutes(development: DevelopmentService) {
@@ -8,6 +9,9 @@ export function createDevelopmentRoutes(development: DevelopmentService) {
   app.post("/:id/development/start", async (c) => {
     const projectId = c.req.param("id");
     const body = (await c.req.json().catch(() => ({}))) as { profile?: DevFixtureProfile };
+    if (body.profile && !isFixtureProfileAllowed()) {
+      return c.json({ error: "fixture profile is only allowed in stub engine mode" }, 400);
+    }
     const result = await development.start(projectId, body.profile);
     return c.json(result);
   });

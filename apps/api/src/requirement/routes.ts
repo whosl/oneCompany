@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { RequirementFixtureProfile } from "@oc/agent-core";
+import { isFixtureProfileAllowed } from "../config/engine-mode.js";
 import type { RequirementService } from "./service.js";
 
 export function createRequirementRoutes(requirement: RequirementService) {
@@ -11,6 +12,10 @@ export function createRequirementRoutes(requirement: RequirementService) {
       requirement: string;
       profile?: RequirementFixtureProfile;
     };
+
+    if (body.profile && !isFixtureProfileAllowed()) {
+      return c.json({ error: "fixture profile is only allowed in stub engine mode" }, 400);
+    }
 
     const result = await requirement.start(projectId, body.requirement, body.profile);
     return c.json(result);
