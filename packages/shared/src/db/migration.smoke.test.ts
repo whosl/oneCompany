@@ -4,11 +4,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { MVP_TABLE_COUNT, MVP_TABLE_NAMES } from "./mvp-tables.js";
+import {
+  INTEGRATION_TABLE_COUNT,
+  INTEGRATION_TABLE_NAMES,
+  MVP_TABLE_COUNT,
+  MVP_TABLE_NAMES,
+} from "./mvp-tables.js";
+
+const ALL_TABLE_NAMES = [...MVP_TABLE_NAMES, ...INTEGRATION_TABLE_NAMES].sort();
 
 describe("migration smoke — M0 baseline", () => {
   it(
-    `creates all ${MVP_TABLE_COUNT} MVP tables via drizzle-kit push`,
+    `creates all ${MVP_TABLE_COUNT + INTEGRATION_TABLE_COUNT} tables via drizzle-kit push`,
     () => {
       const tempDir = mkdtempSync(path.join(tmpdir(), "oc-m0-migrate-"));
       const dbPath = path.join(tempDir, "app.sqlite");
@@ -29,8 +36,8 @@ describe("migration smoke — M0 baseline", () => {
         db.close();
 
         const tableNames = rows.map((row) => row.name);
-        expect(tableNames).toHaveLength(MVP_TABLE_COUNT);
-        expect(tableNames).toEqual([...MVP_TABLE_NAMES].sort());
+        expect(tableNames).toHaveLength(MVP_TABLE_COUNT + INTEGRATION_TABLE_COUNT);
+        expect(tableNames).toEqual(ALL_TABLE_NAMES);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }

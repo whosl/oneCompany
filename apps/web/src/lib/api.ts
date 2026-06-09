@@ -5,8 +5,11 @@ import type {
   EnvironmentReadiness,
   FileContentResponse,
   FilesListResponse,
+  IntegrationDefinition,
+  IntegrationStatusSnapshot,
   PreviewStatus,
   ReportSnapshot,
+  SkillPack,
   TestsResultsResponse,
 } from "@oc/shared";
 
@@ -187,3 +190,21 @@ export const consoleApi = {
 };
 
 export type ConsoleApi = typeof consoleApi;
+
+export const integrationsApi = {
+  listDefinitions() {
+    return requestJson<{ integrations: IntegrationDefinition[] }>("/integrations");
+  },
+
+  listSkillPacks() {
+    return requestJson<{ skillPacks: SkillPack[] }>("/integrations/skill-packs");
+  },
+
+  listProjectStatus(projectId: string) {
+    return requestJson<{ integrations: IntegrationStatusSnapshot[] }>(
+      `/projects/${projectId}/integrations`,
+    );
+  },
+};
+
+export type IntegrationsApi = typeof integrationsApi;

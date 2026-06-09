@@ -1,0 +1,11 @@
+{
+  "id": "playwright-offline",
+  "version": "1.0.0",
+  "replacesIntegrationIds": ["playwright"],
+  "title": "Playwright Offline",
+  "description": "Acceptance test templates and browser-check runbooks",
+  "capabilities": ["screenshot-checklist", "console-error-triage"],
+  "requiredLocalTools": ["node"],
+  "docsPath": "docs",
+  "recipesPath": "recipes"
+}

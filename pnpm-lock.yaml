@@ -38,6 +38,9 @@ importers:
       '@oc/agent-core':
         specifier: workspace:^
         version: link:../../packages/agent-core
+      '@oc/integrations':
+        specifier: workspace:^
+        version: link:../../packages/integrations
       '@oc/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -195,6 +198,34 @@ importers:
         specifier: ^3.0.4
         version: 3.2.6(@types/node@20.19.42)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
+  packages/integrations:
+    dependencies:
+      '@oc/shared':
+        specifier: workspace:^
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.39.3
+        version: 0.39.3(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.13
+      better-sqlite3:
+        specifier: ^11.8.1
+        version: 11.10.0
+      drizzle-kit:
+        specifier: ^0.30.4
+        version: 0.30.6
+      tsup:
+        specifier: ^8.3.6
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.6(@types/node@20.19.42)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(tsx@4.22.4)
+
   packages/shared:
     dependencies:
       better-sqlite3:
@@ -249,6 +280,9 @@ importers:
       '@oc/agent-core':
         specifier: workspace:^
         version: link:../agent-core
+      '@oc/integrations':
+        specifier: workspace:^
+        version: link:../integrations
       '@oc/shared':
         specifier: workspace:^
         version: link:../shared

@@ -158,7 +158,11 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
         </section>
       </div>
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        projectId={projectId}
+      />
       <ProjectHub
         open={hubOpen}
         currentProjectId={projectId}

@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external @oc/agent-core --external @oc/workspace --external drizzle-orm --external @langchain/langgraph --external @langchain/core",
+    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external @oc/integrations --external @oc/agent-core --external @oc/workspace --external drizzle-orm --external @langchain/langgraph --external @langchain/core",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run"
@@ -29,6 +29,7 @@
     "@langchain/langgraph": "^0.2.74",
     "@langchain/langgraph-checkpoint-sqlite": "^0.1.5",
     "@oc/agent-core": "workspace:^",
+    "@oc/integrations": "workspace:^",
     "@oc/shared": "workspace:^",
     "@oc/workspace": "workspace:^",
     "drizzle-orm": "^0.39.3"

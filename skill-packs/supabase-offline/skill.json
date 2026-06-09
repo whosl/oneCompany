@@ -1,0 +1,11 @@
+{
+  "id": "supabase-offline",
+  "version": "1.0.0",
+  "replacesIntegrationIds": ["supabase"],
+  "title": "Supabase Offline",
+  "description": "Local schema and seed SQL templates for dev databases",
+  "capabilities": ["schema-templates", "seed-sql"],
+  "requiredLocalTools": ["sqlite3"],
+  "docsPath": "docs",
+  "recipesPath": "recipes"
+}

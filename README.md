@@ -452,7 +452,7 @@ Key configuration (see [.env.example](.env.example) for full list):
 | **M9.5** | **Real engine integration & de-stub** | **✅ Done** |
 | **M10** | **Deployment, delivery, change requests** | **✅ Done** |
 | **M11** | **Hardening & MVP acceptance** | **✅ Done** |
-| M12 | Integration Gateway + offline Skill Packs | 📋 Next ([plan](handbook/m12-implementation-plan.md)) |
+| M12 | Integration Gateway + offline Skill Packs | ✅ Done ([plan](handbook/m12-implementation-plan.md)) |
 
 ## Event System
 

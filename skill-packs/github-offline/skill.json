@@ -1,0 +1,12 @@
+{
+  "id": "github-offline",
+  "version": "1.0.0",
+  "replacesIntegrationIds": ["github"],
+  "title": "GitHub Offline",
+  "description": "Local git workflow recipes and PR templates without remote API calls",
+  "capabilities": ["branch", "pr-template", "push-checklist"],
+  "requiredLocalTools": ["git"],
+  "docsPath": "docs",
+  "recipesPath": "recipes",
+  "templatesPath": "templates"
+}

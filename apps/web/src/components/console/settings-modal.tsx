@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { EnvironmentReadiness } from "@oc/shared";
 import { consoleApi } from "@/lib/api";
@@ -8,7 +9,15 @@ function engineLabel(ready: boolean): string {
   return ready ? "Ready" : "Missing";
 }
 
-export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsModal({
+  open,
+  onClose,
+  projectId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  projectId?: string;
+}) {
   const [readiness, setReadiness] = useState<EnvironmentReadiness | null>(null);
 
   useEffect(() => {
@@ -110,6 +119,20 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
                   <li key={policy}>{policy}</li>
                 ))}
               </ul>
+            </section>
+
+            <section data-testid="settings-integrations-link">
+              <h3 className="font-medium">Integrations</h3>
+              <p className="text-[var(--oc-text-muted)]">
+                View connector readiness, offline fallback packs, and secret readiness (names only).
+              </p>
+              <Link
+                href={projectId ? `/integrations?projectId=${projectId}` : "/integrations"}
+                className="mt-2 inline-block text-sm underline"
+                onClick={onClose}
+              >
+                Open Integrations
+              </Link>
             </section>
           </div>
         ) : (

@@ -1,0 +1,30 @@
+{
+  "name": "@oc/integrations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@oc/shared": "workspace:^",
+    "drizzle-orm": "^0.39.3"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external drizzle-orm",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "better-sqlite3": "^11.8.1",
+    "drizzle-kit": "^0.30.4",
+    "tsup": "^8.3.6",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}

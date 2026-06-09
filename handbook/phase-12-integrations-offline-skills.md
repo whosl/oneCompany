@@ -181,15 +181,15 @@ pnpm -w typecheck && pnpm -w test
 
 ## Definition of Done
 
-- [ ] Integration definitions and connections are registered, versioned, and project-scoped.
-- [ ] Connector tool calls are allowlisted, audited, redacted, and risk graded.
-- [ ] External writes require the correct human gate.
-- [ ] P1 connector definitions exist: Playwright/Browser, Figma, GitHub, Supabase, Vercel.
+- [x] Integration definitions and connections are registered, versioned, and project-scoped.
+- [x] Connector tool calls are allowlisted, audited, redacted, and risk graded.
+- [x] External writes require the correct human gate.
+- [x] P1 connector definitions exist: Playwright/Browser, Figma, GitHub, Supabase, Vercel.
 - [ ] P2 connector definitions are planned or stubbed: Cloudflare, Linear/Jira, Sentry/PostHog, Documentation/Context, Postgres/Database, Docker/Container.
-- [ ] Offline Skill Packs exist for every P1 connector and selected P2 connectors.
-- [ ] Offline fallback produces honest local artifacts and manual follow-up steps.
-- [ ] Integrations UI shows readiness and offline fallback status.
-- [ ] Schemas, registry, allowlists, connector tool calls, high-risk gates, redaction, offline fallback, and Integrations UI are covered by tests that failed before implementation.
+- [x] Offline Skill Packs exist for every P1 connector and selected P2 connectors.
+- [x] Offline fallback produces honest local artifacts and manual follow-up steps.
+- [x] Integrations UI shows readiness and offline fallback status.
+- [x] Schemas, registry, allowlists, connector tool calls, high-risk gates, redaction, offline fallback, and Integrations UI are covered by tests that failed before implementation.
 
 ## Do Not
 

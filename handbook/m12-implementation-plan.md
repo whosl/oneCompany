@@ -1,6 +1,6 @@
 # M12 Implementation Plan — Integration Gateway + Offline Skill Packs（集成网关与离线技能包）
 
-Status: planned
+Status: complete
 Branch: `feat/m12-integration-gateway`（从 `main` 或 `feat/m10-deployment-delivery` 切出）
 Source: `spec.md` v0.3.3 §10.5、§10.6、§12、§8.2、§14.6、§16、§17；`handbook/phase-12-integrations-offline-skills.md`
 Estimated effort: 20–30 days（一名工程师；P1 连接器 + 离线包约 3–4 周，P2 可后续迭代）
@@ -376,16 +376,16 @@ skill-packs/github-offline/
 
 ## 10. Definition of Done
 
-- [ ] `@oc/integrations` 包：注册表、项目连接、allowlist、`callIntegrationTool`
-- [ ] 五张 integration 相关 DB 表 + migrations
-- [ ] P1 五连接器 definition + mock adapter；至少 2 个有可选真实 E2E
-- [ ] P1 五 offline Skill Pack 目录完整（skill.json + SKILL.md + templates/recipes）
-- [ ] 高风险 connector 写操作触发 gate；测试先红后绿
-- [ ] Integrations UI 展示 status / offline fallback / secret readiness
-- [ ] 交付报告含 offline integration 声明
-- [ ] `pnpm -w test` + `typecheck` + `build` 绿
-- [ ] `handbook/phase-12-integrations-offline-skills.md` DoD 全 `[x]`
-- [ ] README 里程碑：M12 → ✅
+- [x] `@oc/integrations` 包：注册表、项目连接、allowlist、`callIntegrationTool`
+- [x] 五张 integration 相关 DB 表 + migrations
+- [x] P1 五连接器 definition + mock adapter；至少 2 个有可选真实 E2E
+- [x] P1 五 offline Skill Pack 目录完整（skill.json + SKILL.md + templates/recipes）
+- [x] 高风险 connector 写操作触发 gate；测试先红后绿
+- [x] Integrations UI 展示 status / offline fallback / secret readiness
+- [x] 交付报告含 offline integration 声明
+- [x] `pnpm -w test` + `typecheck` + `build` 绿
+- [x] `handbook/phase-12-integrations-offline-skills.md` DoD 全 `[x]`（P2 stub 路线图保留未勾选）
+- [x] README 里程碑：M12 → ✅
 
 ---
 

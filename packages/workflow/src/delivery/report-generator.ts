@@ -14,6 +14,7 @@ import {
 import { loadLatestAcceptance, loadLatestPrd } from "../development/artifacts.js";
 import { loadTestResults } from "../testing/results.js";
 import { collectProjectRisks } from "./collect-risks.js";
+import { buildIntegrationReportNotes } from "./report-integrations.js";
 import {
   DELIVERY_REPORT_SECTION_IDS,
   renderDeliveryReportMarkdown,
@@ -112,7 +113,10 @@ export function buildDeliveryReportSections(
     readRepoFile(input.repoPath, ["RUN.md", "README.md", "docs/RUN.md"]) ??
     "See repository README for setup. Run `pnpm install` then `pnpm dev` for local preview.";
   const testRows = loadTestResults(deps.db, input.projectId);
-  const risks = collectProjectRisks(deps.db, input.projectId, input.stateRisks ?? []);
+  const risks = [
+    ...collectProjectRisks(deps.db, input.projectId, input.stateRisks ?? []),
+    ...buildIntegrationReportNotes(deps.db, input.projectId),
+  ];
   const deploymentUrl = input.deploymentUrl ?? input.previewUrl ?? "No deployment URL (preview only)";
   const features =
     input.taskTitles && input.taskTitles.length > 0
@@ -161,7 +165,8 @@ export function buildDeliveryReportSections(
               ? risks.map((risk) => `- ${risk}`).join("\n")
               : "- No additional risks recorded",
         };
-      case "follow-up-recommendations":
+      case "follow-up-recommendations": {
+        const integrationNotes = buildIntegrationReportNotes(deps.db, input.projectId);
         return {
           id,
           title: sectionTitle(id),
@@ -169,8 +174,10 @@ export function buildDeliveryReportSections(
             "- Review any [MOCK] data placeholders and supply production API keys where needed.",
             "- Run full acceptance suite before production traffic.",
             "- Configure Cloudflare Tunnel or hosting provider for sustained public access.",
+            ...integrationNotes.map((note) => `- ${note}`),
           ].join("\n"),
         };
+      }
       default:
         return { id, title: sectionTitle(id), content: "N/A" };
     }

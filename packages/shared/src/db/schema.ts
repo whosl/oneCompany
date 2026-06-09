@@ -218,3 +218,60 @@ export const commits = sqliteTable("commits", {
   summary: text("summary").notNull(),
   created_at: text("created_at").notNull(),
 });
+
+export const integrationDefinitions = sqliteTable("integration_definitions", {
+  id: text("id").primaryKey(),
+  integration_id: text("integration_id").notNull(),
+  version: text("version").notNull(),
+  definition_json: text("definition_json").notNull(),
+  created_at: text("created_at").notNull(),
+});
+
+export const integrationConnections = sqliteTable("integration_connections", {
+  id: text("id").primaryKey(),
+  project_id: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  integration_id: text("integration_id").notNull(),
+  integration_version: text("integration_version").notNull(),
+  account_label: text("account_label").notNull(),
+  scopes_json: text("scopes_json").notNull(),
+  status: text("status").notNull(),
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+});
+
+export const integrationToolCalls = sqliteTable("integration_tool_calls", {
+  id: text("id").primaryKey(),
+  project_id: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  integration_id: text("integration_id").notNull(),
+  tool_name: text("tool_name").notNull(),
+  mode: text("mode").notNull(),
+  status: text("status").notNull(),
+  event_id: text("event_id"),
+  output_ref: text("output_ref"),
+  created_at: text("created_at").notNull(),
+});
+
+export const skillPacks = sqliteTable("skill_packs", {
+  id: text("id").primaryKey(),
+  pack_id: text("pack_id").notNull(),
+  version: text("version").notNull(),
+  manifest_json: text("manifest_json").notNull(),
+  root_path: text("root_path").notNull(),
+  created_at: text("created_at").notNull(),
+});
+
+export const skillPackRuns = sqliteTable("skill_pack_runs", {
+  id: text("id").primaryKey(),
+  project_id: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  pack_id: text("pack_id").notNull(),
+  recipe: text("recipe").notNull(),
+  status: text("status").notNull(),
+  artifact_path: text("artifact_path"),
+  created_at: text("created_at").notNull(),
+});

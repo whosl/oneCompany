@@ -1,0 +1,11 @@
+{
+  "id": "vercel-offline",
+  "version": "1.0.0",
+  "replacesIntegrationIds": ["vercel"],
+  "title": "Vercel Offline",
+  "description": "vercel.json templates and preview deployment runbooks",
+  "capabilities": ["vercel-json", "preview-runbook"],
+  "requiredLocalTools": ["node"],
+  "docsPath": "docs",
+  "recipesPath": "recipes"
+}

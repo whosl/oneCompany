@@ -1,0 +1,11 @@
+{
+  "id": "figma-offline",
+  "version": "1.0.0",
+  "replacesIntegrationIds": ["figma"],
+  "title": "Figma Offline",
+  "description": "Design token references and layout pattern recipes",
+  "capabilities": ["design-tokens", "layout-patterns"],
+  "requiredLocalTools": [],
+  "docsPath": "docs",
+  "recipesPath": "recipes"
+}
