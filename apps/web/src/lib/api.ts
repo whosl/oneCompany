@@ -160,6 +160,30 @@ export const consoleApi = {
 
   resolveGate: panelApi.resolveGate,
   listOpenGates: panelApi.listOpenGates,
+
+  startTesting(projectId: string, requestDeploy = false) {
+    return requestJson(`/projects/${projectId}/testing/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestDeploy }),
+    });
+  },
+
+  submitDeploymentUrl(projectId: string, url: string) {
+    return requestJson(`/projects/${projectId}/deployment/url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+  },
+
+  createChangeRequest(projectId: string, summary: string, details?: string) {
+    return requestJson(`/projects/${projectId}/change-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ summary, kind: "requirement_change", details }),
+    });
+  },
 };
 
 export type ConsoleApi = typeof consoleApi;

@@ -449,8 +449,8 @@ Key configuration (see [.env.example](.env.example) for full list):
 | M7 | Testing & QA integration + local preview | ✅ Done |
 | M8 | Right panel tabs | ✅ Done |
 | M9 | Info stream + swimlane renderers | ✅ Done |
-| **M9.5** | **Real engine integration & de-stub** | **🔄 In Progress** |
-| M10 | Deployment, delivery, change requests | 📋 Planned |
+| **M9.5** | **Real engine integration & de-stub** | **✅ Done** |
+| **M10** | **Deployment, delivery, change requests** | **✅ Done** |
 | M11 | Hardening & MVP acceptance | 📋 Planned |
 | M12 | Integration Gateway + offline Skill Packs | 📋 Post-MVP |
 

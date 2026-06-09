@@ -23,11 +23,15 @@ import {
 } from "@oc/workspace";
 import type { ProjectService } from "../projects/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
+import type { DeploymentService } from "../deployment/service.js";
+import type { DeliveryService } from "../delivery/service.js";
 
 export function createTestingService(
   db: Db,
   projects: ProjectService,
   workspace: WorkspaceService,
+  deployment: DeploymentService,
+  delivery: DeliveryService,
   onEvent: (envelope: EventEnvelope) => void,
 ) {
   registerDevelopmentAgents(db);
@@ -84,7 +88,14 @@ export function createTestingService(
       projectId: string,
       options: { requestDeploy?: boolean } = {},
     ): Promise<TestingRunResult> {
-      return runTestingPhase(buildDeps(projectId), { projectId, ...options });
+      const result = await runTestingPhase(buildDeps(projectId), { projectId, ...options });
+      const status = projects.getProject(projectId)?.status;
+      if (status === "Deploying") {
+        deployment.start(projectId);
+      } else if (status === "Awaiting Acceptance") {
+        await delivery.enterAwaitingAcceptance(projectId);
+      }
+      return result;
     },
 
     getStatus(projectId: string): TestingRunResult {

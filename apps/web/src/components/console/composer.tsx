@@ -50,6 +50,9 @@ export function Composer({
   );
   const gateOptions = blockingGate?.options ?? [];
   const awaitingAnswers = status === "Asking Questions" && pendingQuestions.length > 0;
+  const canSubmitChangeRequest =
+    !blockingGate && (status === "Developing" || status === "Testing" || status === "Tech Plan Review");
+  const deploymentGateBlocked = blockingGate?.gateType === "deployment";
   const allQuestionAnswersReady =
     pendingQuestions.length > 0 &&
     questionAnswers.length === pendingQuestions.length &&
@@ -76,6 +79,37 @@ export function Composer({
       onSubmitted?.();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Submit failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitChangeRequest() {
+    setPending(true);
+    setError(null);
+    try {
+      await consoleApi.createChangeRequest(projectId, text.trim());
+      setText("");
+      onSubmitted?.();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Change request failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitDeploymentUrl() {
+    if (!blockingGate || blockingGate.gateType !== "deployment") {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      await consoleApi.submitDeploymentUrl(projectId, text.trim());
+      setText("");
+      onSubmitted?.();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Deployment URL failed");
     } finally {
       setPending(false);
     }
@@ -150,11 +184,15 @@ export function Composer({
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder={
-            blockingGate
-              ? "Attach custom text to an allowed gate decision"
-              : status === "PRD Ready"
-                ? "Optional: add notes or a revised requirement"
-                : "Describe your product requirement"
+            deploymentGateBlocked
+              ? "Paste your Cloudflare Tunnel URL (https://...)"
+              : blockingGate
+                ? "Attach custom text to an allowed gate decision"
+                : canSubmitChangeRequest
+                  ? "Submit a requirement change for Change Review"
+                  : status === "PRD Ready"
+                    ? "Optional: add notes or a revised requirement"
+                    : "Describe your product requirement"
           }
           aria-label="Composer input"
         />
@@ -186,7 +224,18 @@ export function Composer({
             submit custom
           </button>
         ) : null}
-        {!blockingGate && status !== "PRD Ready" ? (
+        {deploymentGateBlocked ? (
+          <button
+            type="button"
+            disabled={pending || text.trim().length === 0}
+            className="rounded-md bg-[var(--oc-accent-primary)] px-3 py-1 text-xs text-white"
+            onClick={() => void submitDeploymentUrl()}
+            data-testid="composer-submit-deployment-url"
+          >
+            Submit tunnel URL
+          </button>
+        ) : null}
+        {!blockingGate && status !== "PRD Ready" && !canSubmitChangeRequest ? (
           <button
             type="button"
             disabled={
@@ -196,6 +245,17 @@ export function Composer({
             onClick={() => void submitRequirement()}
           >
             {awaitingAnswers ? "Submit answers" : "Send"}
+          </button>
+        ) : null}
+        {canSubmitChangeRequest ? (
+          <button
+            type="button"
+            disabled={pending || text.trim().length === 0}
+            className="rounded-md bg-[var(--oc-accent-primary)] px-3 py-1 text-xs text-white"
+            onClick={() => void submitChangeRequest()}
+            data-testid="composer-submit-change-request"
+          >
+            Submit change request
           </button>
         ) : null}
         {!blockingGate && status === "PRD Ready" && text.trim().length > 0 ? (

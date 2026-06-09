@@ -5,18 +5,24 @@ import { ProjectSwitcher } from "./project-switcher";
 
 export function TopNav({
   projection,
+  projectId,
   dropdownOpen,
   onToggleDropdown,
   onOpenHub,
   onOpenSettings,
   onPauseResume,
+  onDeploy,
+  deployPending = false,
 }: {
   projection: ConsoleProjection;
+  projectId: string;
   dropdownOpen: boolean;
   onToggleDropdown: () => void;
   onOpenHub: () => void;
   onOpenSettings: () => void;
   onPauseResume: () => void;
+  onDeploy?: (projectId: string) => void;
+  deployPending?: boolean;
 }) {
   const { snapshot } = projection;
   const isPaused = snapshot.project.status === "Paused";
@@ -50,8 +56,15 @@ export function TopNav({
       </div>
 
       <div className="flex items-center gap-2">
-        <button type="button" className="rounded-md border px-3 py-1 text-xs" title="Deploy in M10">
-          Deploy
+        <button
+          type="button"
+          className="rounded-md border px-3 py-1 text-xs"
+          title="Run final tests and request deployment"
+          disabled={deployPending || snapshot.project.status !== "Testing"}
+          onClick={() => onDeploy?.(projectId)}
+          data-testid="top-nav-deploy"
+        >
+          {deployPending ? "Deploying…" : "Deploy"}
         </button>
         <button
           type="button"

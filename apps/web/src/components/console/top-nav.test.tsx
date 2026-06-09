@@ -41,6 +41,7 @@ describe("TopNav — M9", () => {
     render(
       <TopNav
         projection={developingProjection}
+        projectId="p1"
         dropdownOpen={false}
         onToggleDropdown={vi.fn()}
         onOpenHub={vi.fn()}

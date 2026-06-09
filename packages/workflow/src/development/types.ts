@@ -27,6 +27,18 @@ export type DevelopmentWorkflowPhase =
 
 export type DevelopmentGateType = "tech_plan_confirm" | "slice_failure" | "change_review";
 
+export type DeploymentSessionMeta = {
+  phase: "idle" | "awaiting_gate" | "completed";
+  gateId?: string;
+  pendingUrl?: string;
+};
+
+export type DeliverySessionMeta = {
+  phase: "idle" | "awaiting_final_acceptance" | "completed";
+  gateId?: string;
+  reportGenerated?: boolean;
+};
+
 export type DevelopmentSessionMeta = {
   phase: DevelopmentWorkflowPhase;
   profile: DevFixtureProfile;
@@ -34,6 +46,7 @@ export type DevelopmentSessionMeta = {
   gateType?: DevelopmentGateType;
   currentSliceId?: string;
   pendingChangeRequestId?: string;
+  pendingChangeRequestKind?: "skip_slice" | "requirement_change";
   sliceRetryBudgetExtension?: number;
 };
 
@@ -41,6 +54,8 @@ export type DevelopmentSessionPayload = {
   state: DevState;
   meta: DevelopmentSessionMeta;
   testing?: TestingSessionMeta;
+  deployment?: DeploymentSessionMeta;
+  delivery?: DeliverySessionMeta;
 };
 
 export type AuthoritativeCheckResult = {

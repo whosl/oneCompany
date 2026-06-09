@@ -1,6 +1,6 @@
 # M10 Implementation Plan — Deployment, Delivery, Change Requests（部署交付与变更请求）
 
-Status: planned
+Status: complete
 Branch: `feat/m10-deployment-delivery`（从 `feat/m9.5-real-engine` 或 `main` 切出）
 Source: `spec.md` v0.3.3 §3.1、§5.4、§5.5、§6、§12、§16、§17；`handbook/phase-10-deployment-delivery.md`；`dev-plan.md` M10
 Estimated effort: 10–14 days（一名工程师）
@@ -549,15 +549,15 @@ OC_USE_STUB_ENGINE=1 pnpm --filter @oc/api test golden-path
 
 ## 11. Definition of Done
 
-- [ ] `Deploying` 自动拉起 `deployment` gate；批准前 API/UI 无 `deploymentUrl`
-- [ ] 用户提交 tunnel URL 后写入 `deployments` + `DevState.deploymentUrl`；→ `Awaiting Acceptance`
-- [ ] 需求变更 + skip-slice 均走 `Change Review`；`change_requests` 有 `kind`；无静默豁免
-- [ ] `artifacts/delivery-report.md` 含 spec §17 **全部**章节；risks 含 force-continue / skip / skip-risk 决策
-- [ ] `Awaiting Acceptance` 拉起 `final_acceptance` gate；`accept` → `Delivered`
-- [ ] 缺 key → mock data + 用户提示；secrets 不进 logs/report/stream
-- [ ] 上述行为均有先红后绿的测试；`pnpm -w test` + `typecheck` + `build` 绿
-- [ ] `handbook/phase-10-deployment-delivery.md` DoD 复选框全部 `[x]`
-- [ ] README 里程碑表：M10 → ✅；M11 标为下一里程碑
+- [x] `Deploying` 自动拉起 `deployment` gate；批准前 API/UI 无 `deploymentUrl`
+- [x] 用户提交 tunnel URL 后写入 `deployments` + `DevState.deploymentUrl`；→ `Awaiting Acceptance`
+- [x] 需求变更 + skip-slice 均走 `Change Review`；`change_requests` 有 `kind`；无静默豁免
+- [x] `artifacts/delivery-report.md` 含 spec §17 **全部**章节；risks 含 force-continue / skip / skip-risk 决策
+- [x] `Awaiting Acceptance` 拉起 `final_acceptance` gate；`accept` → `Delivered`
+- [x] 缺 key → mock data + 用户提示；secrets 不进 logs/report/stream
+- [x] 上述行为均有先红后绿的测试；`pnpm -w test` + `typecheck` + `build` 绿
+- [x] `handbook/phase-10-deployment-delivery.md` DoD 复选框全部 `[x]`
+- [x] README 里程碑表：M10 → ✅；M11 标为下一里程碑
 
 ## 12. Suggested PR Slices
 

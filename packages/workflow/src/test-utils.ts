@@ -321,12 +321,15 @@ export function createTestingDeps(
   db: Db,
   repoPath: string,
   options: TestingDepsOptions = {},
-): TestingWorkflowDeps {
+): TestingWorkflowDeps & {
+  createGate: (projectId: string, gateType: string) => { id: string };
+} {
   const suiteOverrides = options.suiteResults ?? {};
 
   return {
     db,
     repoPath,
+    createGate: (projectId, gateType) => createGate(db, projectId, gateType),
     loadSession: (projectId) => loadDevSession(db, projectId),
     saveSession: (projectId, payload) => saveDevSession(db, projectId, payload),
     startPreview: async (projectId) => ({

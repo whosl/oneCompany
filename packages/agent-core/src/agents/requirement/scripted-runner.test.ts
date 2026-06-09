@@ -36,7 +36,7 @@ describe("scripted requirement runner — M3", () => {
         questionRounds: [
           {
             topic: "users",
-            questions: ["q1"],
+            questions: [{ question: "q1", suggestedAnswers: ["A", "B", "C"] }],
             answers: ["a1"],
             scoreAfter: 70,
           },

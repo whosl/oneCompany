@@ -19,6 +19,7 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [deployPending, setDeployPending] = useState(false);
   const pendingQuestions = projection?.snapshot.requirement?.pendingQuestions ?? [];
   const pendingQuestionKey = useMemo(
     () => pendingQuestions.map((item) => item.question).join("\u0000"),
@@ -42,7 +43,9 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
     <div className="flex h-screen flex-col bg-[var(--oc-app-bg)]" data-testid="console-layout">
       <TopNav
         projection={projection}
+        projectId={projectId}
         dropdownOpen={dropdownOpen && !hubOpen}
+        deployPending={deployPending}
         onToggleDropdown={() => setDropdownOpen((open) => !open)}
         onOpenHub={() => {
           setHubOpen(true);
@@ -55,6 +58,13 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
             ? consoleApi.resumeProject(projectId)
             : consoleApi.pauseProject(projectId)
           ).then(() => refresh());
+        }}
+        onDeploy={(id) => {
+          setDeployPending(true);
+          void consoleApi
+            .startTesting(id, true)
+            .then(() => refresh())
+            .finally(() => setDeployPending(false));
         }}
       />
 

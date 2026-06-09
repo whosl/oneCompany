@@ -25,6 +25,12 @@ import { createPanelRoutes } from "./panel/routes.js";
 import { createPanelService } from "./panel/service.js";
 import { createWorkspaceRoutes } from "./workspace/routes.js";
 import { createWorkspaceService } from "./workspace/service.js";
+import { createDeploymentRoutes } from "./deployment/routes.js";
+import { createDeploymentService } from "./deployment/service.js";
+import { createDeliveryRoutes } from "./delivery/routes.js";
+import { createDeliveryService } from "./delivery/service.js";
+import { createChangeRequestRoutes } from "./change-requests/routes.js";
+import { createChangeRequestService } from "./change-requests/service.js";
 
 export type AppDependencies = {
   db: Db;
@@ -35,7 +41,12 @@ export function createApp(deps: AppDependencies) {
   const app = new Hono();
   const onEvent = broadcastEvent;
   const projects = createProjectService(deps.db, onEvent);
-  const resumeRef: { requirement?: RequirementService; development?: DevelopmentService } = {};
+  const resumeRef: {
+    requirement?: RequirementService;
+    development?: DevelopmentService;
+    deployment?: ReturnType<typeof createDeploymentService>;
+    delivery?: ReturnType<typeof createDeliveryService>;
+  } = {};
   const gates = createGateService(deps.db, onEvent, {
     onGateResolved: async (gate, decision) => {
       await createGateResumeHandler(resumeRef)(gate, decision);
@@ -45,14 +56,27 @@ export function createApp(deps: AppDependencies) {
     onEvent,
     generatedProjectsRoot: deps.generatedProjectsRoot,
   });
+  const delivery = createDeliveryService(deps.db, projects, gates, workspace, onEvent);
+  const deployment = createDeploymentService(
+    deps.db,
+    projects,
+    gates,
+    workspace,
+    delivery,
+    onEvent,
+  );
+  const devCtx = { db: deps.db, projects, gates, workspace, onEvent };
   const requirement = createRequirementService(deps.db, projects, gates, onEvent);
   const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
-  const testing = createTestingService(deps.db, projects, workspace, onEvent);
+  const changeRequests = createChangeRequestService(deps.db, projects, devCtx);
+  const testing = createTestingService(deps.db, projects, workspace, deployment, delivery, onEvent);
   const panel = createPanelService(deps.db, projects, workspace);
   const consoleService = createConsoleService(deps.db, projects, gates);
   const environment = createEnvironmentService();
   resumeRef.requirement = requirement;
   resumeRef.development = development;
+  resumeRef.deployment = deployment;
+  resumeRef.delivery = delivery;
 
   app.get("/health", (c) => c.json({ ok: true }));
   app.route("/environment", createEnvironmentRoutes(environment));
@@ -65,6 +89,9 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createRequirementRoutes(requirement));
   app.route("/projects", createDevelopmentRoutes(development));
   app.route("/projects", createTestingRoutes(testing));
+  app.route("/projects", createDeploymentRoutes(deployment));
+  app.route("/projects", createDeliveryRoutes(delivery));
+  app.route("/projects", createChangeRequestRoutes(changeRequests));
   app.route("/projects", createPanelRoutes(panel));
   app.route("/projects", createConsoleRoutes(consoleService));
 

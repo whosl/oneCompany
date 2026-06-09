@@ -67,6 +67,30 @@ export {
 export { runTestingPhase, getTestingStatus } from "./testing/engine.js";
 export { persistRunnerResult, loadTestResults } from "./testing/results.js";
 export type { TestingRunResult, TestingWorkflowDeps } from "./testing/types.js";
+export {
+  startDeploymentPhase,
+  submitDeploymentUrl,
+  handleDeploymentGateDecision,
+  getDeploymentStatus,
+  type DeploymentRunResult,
+  type DeploymentWorkflowDeps,
+} from "./deployment/index.js";
+export {
+  generateDeliveryReport,
+  buildDeliveryReportSections,
+  enterAwaitingAcceptance,
+  handleFinalAcceptanceDecision,
+  getFinalAcceptanceStatus,
+  collectProjectRisks,
+  assertReportComplete,
+  type FinalAcceptanceDeps,
+  type FinalAcceptanceResult,
+} from "./delivery/index.js";
+export {
+  createRequirementChangeRequest,
+  startRequirementChangeReview,
+} from "./development/change-review.js";
+export { analyzeChangeImpact } from "./development/change-request-impact.js";
 export { buildReportSnapshot, loadArtifactsForProject } from "./panel/index.js";
 export { buildConsoleSnapshot, derivePhaseFromStatus, isCompletenessLocked } from "./console/index.js";
 export {

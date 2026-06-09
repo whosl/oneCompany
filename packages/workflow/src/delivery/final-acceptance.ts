@@ -1,0 +1,108 @@
+import type { Db, EventEnvelope, ProjectStatus } from "@oc/shared";
+import type { DevelopmentSessionPayload } from "../development/types.js";
+import type { DeliveryReportDeps, GenerateDeliveryReportInput } from "./report-generator.js";
+import { generateDeliveryReport } from "./report-generator.js";
+
+export type FinalAcceptanceDeps = DeliveryReportDeps & {
+  createGate: (projectId: string, gateType: "final_acceptance") => { id: string };
+  setStatus: (projectId: string, status: ProjectStatus, trigger: string) => void;
+  getProjectStatus: (projectId: string) => ProjectStatus;
+  loadSession: (projectId: string) => DevelopmentSessionPayload;
+  saveSession: (projectId: string, payload: DevelopmentSessionPayload) => void;
+};
+
+export type FinalAcceptanceResult = {
+  phase: "idle" | "awaiting_final_acceptance" | "completed";
+  projectStatus: ProjectStatus;
+  gateId?: string;
+};
+
+export function enterAwaitingAcceptance(
+  deps: FinalAcceptanceDeps,
+  input: GenerateDeliveryReportInput,
+): FinalAcceptanceResult {
+  const status = deps.getProjectStatus(input.projectId);
+  if (status !== "Awaiting Acceptance") {
+    throw new Error(`Expected Awaiting Acceptance, got ${status}`);
+  }
+
+  const payload = deps.loadSession(input.projectId);
+  if (!payload.delivery?.reportGenerated) {
+    generateDeliveryReport(deps, {
+      ...input,
+      stateRisks: input.stateRisks ?? payload.state.risks,
+      taskTitles: input.taskTitles ?? payload.state.taskQueue.map((task) => task.title),
+    });
+  }
+
+  if (payload.delivery?.phase === "awaiting_final_acceptance" && payload.delivery.gateId) {
+    return toResult(deps, {
+      ...payload,
+      delivery: { ...payload.delivery, reportGenerated: true },
+    });
+  }
+
+  const gate = deps.createGate(input.projectId, "final_acceptance");
+  const next: DevelopmentSessionPayload = {
+    ...payload,
+    delivery: {
+      phase: "awaiting_final_acceptance",
+      gateId: gate.id,
+      reportGenerated: true,
+    },
+  };
+  deps.saveSession(input.projectId, next);
+  return toResult(deps, next);
+}
+
+export function handleFinalAcceptanceDecision(
+  deps: FinalAcceptanceDeps,
+  input: { projectId: string; decision: string },
+): FinalAcceptanceResult {
+  const payload = deps.loadSession(input.projectId);
+  if (payload.delivery?.phase !== "awaiting_final_acceptance") {
+    throw new Error("No final acceptance gate awaiting decision");
+  }
+
+  if (input.decision === "accept") {
+    deps.setStatus(input.projectId, "Delivered", "final_acceptance_accepted");
+    const next: DevelopmentSessionPayload = {
+      ...payload,
+      delivery: { phase: "completed", reportGenerated: true },
+    };
+    deps.saveSession(input.projectId, next);
+    return toResult(deps, next);
+  }
+
+  if (input.decision === "reject_and_redo") {
+    deps.setStatus(input.projectId, "Developing", "final_acceptance_rejected");
+    const next: DevelopmentSessionPayload = {
+      ...payload,
+      delivery: { phase: "idle", reportGenerated: payload.delivery.reportGenerated },
+      meta: { ...payload.meta, phase: "slicing" },
+    };
+    deps.saveSession(input.projectId, next);
+    return toResult(deps, next);
+  }
+
+  throw new Error(`Unsupported final acceptance decision: ${input.decision}`);
+}
+
+export function getFinalAcceptanceStatus(
+  deps: FinalAcceptanceDeps,
+  projectId: string,
+): FinalAcceptanceResult {
+  const payload = deps.loadSession(projectId);
+  return toResult(deps, payload);
+}
+
+function toResult(
+  deps: FinalAcceptanceDeps,
+  payload: DevelopmentSessionPayload,
+): FinalAcceptanceResult {
+  return {
+    phase: payload.delivery?.phase ?? "idle",
+    projectStatus: deps.getProjectStatus(payload.state.projectId),
+    gateId: payload.delivery?.gateId,
+  };
+}

@@ -96,6 +96,32 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     ...base,
     changeRequestId: z.string(),
     summary: z.string(),
+    kind: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("deployment.started"),
+    ...base,
+  }),
+  z.object({
+    type: z.literal("deployment.url_confirmed"),
+    ...base,
+    url: z.string(),
+  }),
+  z.object({
+    type: z.literal("deployment.completed"),
+    ...base,
+    url: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("delivery.report_generated"),
+    ...base,
+    artifactPath: z.string(),
+  }),
+  z.object({
+    type: z.literal("environment.missing_key"),
+    ...base,
+    keyName: z.string(),
+    message: z.string(),
   }),
   z.object({
     type: z.literal("change_request.resolved"),

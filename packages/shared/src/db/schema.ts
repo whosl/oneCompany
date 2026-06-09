@@ -199,6 +199,9 @@ export const changeRequests = sqliteTable("change_requests", {
     .notNull()
     .references(() => projects.id),
   summary: text("summary").notNull(),
+  kind: text("kind").notNull().default("skip_slice"),
+  impact_summary: text("impact_summary"),
+  affected_commits: text("affected_commits"),
   status: text("status").notNull(),
   decision: text("decision"),
   created_at: text("created_at").notNull(),

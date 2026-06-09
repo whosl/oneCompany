@@ -78,12 +78,12 @@ pnpm -w typecheck && pnpm -w test
 
 ## Definition of Done
 
-- [ ] Deployment is gated; tunnel URL stored; runs on real machine (not sandbox); then `Awaiting Acceptance`.
-- [ ] Change requests (requirement change + skip-slice) route through Change Review and update plan/acceptance; no silent waivers.
-- [ ] Delivery report includes every §17 section and records forced-continue / skip-slice / skip-risk decisions in risks.
-- [ ] Final acceptance gate -> `Delivered` or back to `Developing`.
-- [ ] Missing API key -> mock data + user prompt; secrets never logged.
-- [ ] Deployment, Change Review, delivery report, final acceptance, and missing-key behavior are covered by tests that failed before implementation.
+- [x] Deployment is gated; tunnel URL stored; runs on real machine (not sandbox); then `Awaiting Acceptance`.
+- [x] Change requests (requirement change + skip-slice) route through Change Review and update plan/acceptance; no silent waivers.
+- [x] Delivery report includes every §17 section and records forced-continue / skip-slice / skip-risk decisions in risks.
+- [x] Final acceptance gate -> `Delivered` or back to `Developing`.
+- [x] Missing API key -> mock data + user prompt; secrets never logged.
+- [x] Deployment, Change Review, delivery report, final acceptance, and missing-key behavior are covered by tests that failed before implementation.
 
 ## Do Not
 

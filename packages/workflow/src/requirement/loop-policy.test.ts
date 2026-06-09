@@ -35,8 +35,18 @@ describe("requirement loop policy — M3", () => {
       completenessScore: 70,
       maxQuestionRounds: 2,
       questionRounds: [
-        { topic: "a", questions: ["q"], answers: ["a"], scoreAfter: 70 },
-        { topic: "b", questions: ["q"], answers: ["a"], scoreAfter: 71 },
+        {
+          topic: "a",
+          questions: [{ question: "q", suggestedAnswers: ["A", "B", "C"] }],
+          answers: ["a"],
+          scoreAfter: 70,
+        },
+        {
+          topic: "b",
+          questions: [{ question: "q", suggestedAnswers: ["A", "B", "C"] }],
+          answers: ["a"],
+          scoreAfter: 71,
+        },
       ],
     };
     expect(canAskAnotherRound(state)).toBe(false);
@@ -49,9 +59,24 @@ describe("requirement loop policy — M3", () => {
       completenessScore: 72,
       completenessThreshold: 85,
       questionRounds: [
-        { topic: "a", questions: ["q"], answers: ["a"], scoreAfter: 70 },
-        { topic: "b", questions: ["q"], answers: ["a"], scoreAfter: 71 },
-        { topic: "c", questions: ["q"], answers: ["a"], scoreAfter: 72 },
+        {
+          topic: "a",
+          questions: [{ question: "q", suggestedAnswers: ["A", "B", "C"] }],
+          answers: ["a"],
+          scoreAfter: 70,
+        },
+        {
+          topic: "b",
+          questions: [{ question: "q", suggestedAnswers: ["A", "B", "C"] }],
+          answers: ["a"],
+          scoreAfter: 71,
+        },
+        {
+          topic: "c",
+          questions: [{ question: "q", suggestedAnswers: ["A", "B", "C"] }],
+          answers: ["a"],
+          scoreAfter: 72,
+        },
       ],
     };
     expect(isStuck(state)).toBe(true);
@@ -63,8 +88,18 @@ describe("requirement loop policy — M3", () => {
       ...validRequirementState,
       completenessScore: 80,
       questionRounds: [
-        { topic: "a", questions: ["q"], answers: ["a"], scoreAfter: 70 },
-        { topic: "b", questions: ["q"], answers: ["a"], scoreAfter: 78 },
+        {
+          topic: "a",
+          questions: [{ question: "q", suggestedAnswers: ["A", "B", "C"] }],
+          answers: ["a"],
+          scoreAfter: 70,
+        },
+        {
+          topic: "b",
+          questions: [{ question: "q", suggestedAnswers: ["A", "B", "C"] }],
+          answers: ["a"],
+          scoreAfter: 78,
+        },
       ],
     };
     expect(isStuck(state)).toBe(false);
