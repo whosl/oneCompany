@@ -42,10 +42,12 @@ export type { DevAgentTask, DevFixtureProfile } from "./agents/development/types
 export {
   assertOpenAiConfigured,
   EngineUnavailableError,
+  getManagedApiKeys,
   getOpenAiApiKey,
   isOpencodeAvailable,
   resolveEngineMode,
   type EngineMode,
+  type ManagedApiKeys,
 } from "./engine-mode.js";
 export {
   createDevelopmentRunner,

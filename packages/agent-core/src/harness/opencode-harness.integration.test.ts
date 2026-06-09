@@ -13,7 +13,7 @@ describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("OpencodeHarness integrati
         goal: "noop slice",
         acceptanceChecks: ["server starts"],
         testCommand: "echo ok",
-        modelTier: "cheap", // set OC_MODEL_CHEAP to your provider/model, e.g. zai-coding-plan/glm-4.5-air
+        modelTier: "cheap", // defaults to zhipuai-coding-plan/glm-5.1 from ~/.local/share/opencode/auth.json
       },
       {
         repoPath: process.cwd(),

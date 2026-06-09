@@ -7,10 +7,13 @@ export async function callOpenAiChatJson(params: {
 }): Promise<unknown> {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) {
-    throw new EngineUnavailableError("OPENAI_API_KEY is not configured");
+    throw new EngineUnavailableError("OpenAI-compatible API key is not configured");
   }
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const baseUrl = process.env.OC_LLM_BASE_URL?.trim() || "https://api.openai.com/v1";
+  const endpoint = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

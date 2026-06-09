@@ -1,6 +1,7 @@
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk";
 import { isOpencodeAvailable } from "../engine-mode.js";
 import { pickModel } from "../router.js";
+import { injectOpencodeAuth } from "./opencode-auth.js";
 import { createEventBridge } from "./event-bridge.js";
 import { handlePermission } from "./permission-bridge.js";
 import { releaseProjectServer, startProjectServer } from "./opencode-server.js";
@@ -41,28 +42,52 @@ function buildTddPrompt(slice: SliceSpec): string {
     .join("\n\n");
 }
 
-async function waitForSessionIdle(
+function assistantHasText(messages: Array<{ info: { role: string }; parts: Array<{ type: string; text?: string }> }>): boolean {
+  return messages.some(
+    (message) =>
+      message.info.role === "assistant" &&
+      message.parts.some((part) => part.type === "text" && Boolean(part.text?.trim())),
+  );
+}
+
+async function hasAssistantMessage(
   client: OpencodeClient,
+  sessionId: string,
+  directory: string,
+): Promise<boolean> {
+  const response = await client.session.messages({
+    path: { id: sessionId },
+    query: { directory },
+  });
+  return assistantHasText(response.data ?? []);
+}
+
+async function waitForSessionCompletion(
+  client: OpencodeClient,
+  bridge: ReturnType<typeof createEventBridge>,
   sessionId: string,
   directory: string,
   timeoutMs: number,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  let sawBusy = false;
 
   while (Date.now() < deadline) {
-    const response = await client.session.status({ query: { directory } });
-    const status = response.data?.[sessionId];
-    if (status?.type === "busy") {
-      sawBusy = true;
-    }
-    if (sawBusy && status?.type === "idle") {
+    if (bridge.hasAssistantReply()) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    if (await hasAssistantMessage(client, sessionId, directory)) {
+      return;
+    }
+
+    if (bridge.isIdle()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
   }
 
-  throw new Error(`opencode session idle timeout after ${timeoutMs}ms`);
+  throw new Error(`opencode session completion timeout after ${timeoutMs}ms`);
 }
 
 async function collectChangedFiles(
@@ -88,9 +113,16 @@ export function createOpencodeHarness(): CodingHarness {
 
       const server = await startProjectServer(ctx.repoPath);
       const directory = ctx.repoPath;
+      const model = parseModelRef(pickModel(slice.modelTier));
+      let bridge: ReturnType<typeof createEventBridge> | undefined;
 
       try {
         const client = createOpencodeClient({ baseUrl: server.url });
+        await injectOpencodeAuth(client, {
+          directory,
+          preferredProviderIDs: [model.providerID],
+        });
+
         const sessionResponse = await client.session.create({
           body: { title: `slice:${slice.sliceId}` },
           query: { directory },
@@ -100,7 +132,7 @@ export function createOpencodeHarness(): CodingHarness {
           throw new Error("opencode session.create returned no session");
         }
 
-        const bridge = createEventBridge(client, {
+        bridge = createEventBridge(client, {
           sessionId: session.id,
           directory,
           emit: (event) => ctx.emit(event),
@@ -114,8 +146,6 @@ export function createOpencodeHarness(): CodingHarness {
 
         emitPhase(ctx, "act", `prompting opencode for ${slice.sliceId}`);
 
-        const model = parseModelRef(pickModel(slice.modelTier));
-
         await client.session.promptAsync({
           path: { id: session.id },
           query: { directory },
@@ -125,7 +155,7 @@ export function createOpencodeHarness(): CodingHarness {
           },
         });
 
-        await waitForSessionIdle(client, session.id, directory, DEFAULT_SLICE_TIMEOUT_MS);
+        await waitForSessionCompletion(client, bridge, session.id, directory, DEFAULT_SLICE_TIMEOUT_MS);
         bridge.stop();
 
         const changedFiles = await collectChangedFiles(client, directory, bridge.changedFiles);
@@ -145,6 +175,7 @@ export function createOpencodeHarness(): CodingHarness {
           changedFiles: [],
         };
       } finally {
+        bridge?.stop();
         await releaseProjectServer(ctx.repoPath);
       }
     },

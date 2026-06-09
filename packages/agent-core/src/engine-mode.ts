@@ -14,14 +14,24 @@ export function resolveEngineMode(): EngineMode {
   return "real";
 }
 
+export type ManagedApiKeys = {
+  openai?: string;
+};
+
+export function getManagedApiKeys(): ManagedApiKeys {
+  return {
+    openai: process.env.OC_LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? process.env.OC_OPENAI_API_KEY,
+  };
+}
+
 export function getOpenAiApiKey(): string | undefined {
-  return process.env.OPENAI_API_KEY ?? process.env.OC_OPENAI_API_KEY;
+  return getManagedApiKeys().openai;
 }
 
 export function assertOpenAiConfigured(): void {
   if (!getOpenAiApiKey()) {
     throw new EngineUnavailableError(
-      "OPENAI_API_KEY is not configured. Set OPENAI_API_KEY or use OC_USE_STUB_ENGINE=1 for tests.",
+      "OpenAI-compatible API key is not configured. Set OC_LLM_API_KEY or OPENAI_API_KEY (or use OC_USE_STUB_ENGINE=1 for tests).",
     );
   }
 }

@@ -21,6 +21,8 @@ export type EventBridgeContext = {
 
 export type EventBridgeHandle = {
   changedFiles: Set<string>;
+  isIdle(): boolean;
+  hasAssistantReply(): boolean;
   stop(): void;
 };
 
@@ -30,6 +32,8 @@ export function createEventBridge(
 ): EventBridgeHandle {
   const changedFiles = new Set<string>();
   const seenToolCalls = new Set<string>();
+  let sessionIdle = false;
+  let assistantReply = false;
   let aborted = false;
 
   void (async () => {
@@ -45,6 +49,12 @@ export function createEventBridge(
         handleOpencodeEvent(event, ctx, {
           changedFiles,
           seenToolCalls,
+          markSessionIdle: () => {
+            sessionIdle = true;
+          },
+          markAssistantReply: () => {
+            assistantReply = true;
+          },
         });
       }
     } catch {
@@ -54,6 +64,12 @@ export function createEventBridge(
 
   return {
     changedFiles,
+    isIdle() {
+      return sessionIdle;
+    },
+    hasAssistantReply() {
+      return assistantReply;
+    },
     stop() {
       aborted = true;
     },
@@ -66,9 +82,21 @@ function handleOpencodeEvent(
   hooks: {
     changedFiles: Set<string>;
     seenToolCalls: Set<string>;
+    markSessionIdle: () => void;
+    markAssistantReply: () => void;
   },
 ): void {
   switch (event.type) {
+    case "session.idle": {
+      if (event.properties.sessionID !== ctx.sessionId) {
+        return;
+      }
+      hooks.markSessionIdle();
+      return;
+    }
+    case "message.updated": {
+      return;
+    }
     case "permission.updated": {
       if (event.properties.sessionID !== ctx.sessionId) {
         return;
@@ -77,10 +105,17 @@ function handleOpencodeEvent(
       return;
     }
     case "message.part.updated": {
-      if (event.properties.part.sessionID !== ctx.sessionId) {
+      const part = event.properties.part;
+      if (part.sessionID !== ctx.sessionId) {
         return;
       }
-      handleToolPart(event.properties.part, ctx, hooks);
+      if (
+        part.type === "text" &&
+        (Boolean(part.text?.trim()) || Boolean(event.properties.delta?.trim()))
+      ) {
+        hooks.markAssistantReply();
+      }
+      handleToolPart(part, ctx, hooks);
       return;
     }
     case "command.executed": {

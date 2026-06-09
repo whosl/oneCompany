@@ -15,11 +15,16 @@ function portForRepo(repoPath: string): number {
 }
 
 function governedConfig() {
+  const model = process.env.OC_MODEL_STRONG ?? process.env.OC_MODEL_STANDARD;
+  const modelSmall = process.env.OC_MODEL_CHEAP;
+
   return {
     permission: {
       edit: "ask" as const,
       bash: "ask" as const,
     },
+    ...(model ? { model } : {}),
+    ...(modelSmall ? { model_small: modelSmall } : {}),
   };
 }
 
