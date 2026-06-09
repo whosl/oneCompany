@@ -94,6 +94,10 @@ export function classifyCommand(cmd: string, ctx: RiskClassifierContext = {}): R
     return "low";
   }
 
+  if (/^\b(echo|printf)\b/i.test(normalized) && !/\s>\s+/.test(normalized)) {
+    return "low";
+  }
+
   if (MEDIUM_CONSTRAINED_PATTERN.test(normalized)) {
     if (hasLockfile(ctx) && isRegistryPinned(ctx)) {
       return "medium_constrained";

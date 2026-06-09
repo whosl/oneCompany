@@ -8,10 +8,20 @@ import { TerminalTab } from "./terminal-tab";
 import { TestsTab } from "./tests-tab";
 
 const TABS = ["Files", "Preview", "Terminal", "Tests", "Report"] as const;
-type TabId = (typeof TABS)[number];
+export type RightPanelTabId = (typeof TABS)[number];
 
-export function RightPanel({ projectId }: { projectId: string }) {
-  const [activeTab, setActiveTab] = useState<TabId>("Files");
+export function RightPanel({
+  projectId,
+  activeTab: controlledTab,
+  onTabChange,
+}: {
+  projectId: string;
+  activeTab?: RightPanelTabId;
+  onTabChange?: (tab: RightPanelTabId) => void;
+}) {
+  const [internalTab, setInternalTab] = useState<RightPanelTabId>("Files");
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = onTabChange ?? setInternalTab;
 
   return (
     <section className="oc-panel flex h-full flex-col rounded-lg" data-testid="right-panel">

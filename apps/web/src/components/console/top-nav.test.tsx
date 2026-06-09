@@ -30,6 +30,8 @@ const developingProjection: ConsoleProjection = {
   openGates: [],
   agents: {},
   streamItems: [],
+  streamGroups: [],
+  ungroupedStreamItems: [],
   swimlane: [],
   lastSeq: 0,
 };

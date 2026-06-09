@@ -21,6 +21,8 @@ const projection: ConsoleProjection = {
     "coder@1": { agentId: "coder@1", latestPlan: "Plan", failed: true },
   },
   streamItems: [],
+  streamGroups: [],
+  ungroupedStreamItems: [],
   swimlane: [
     { agentId: "user", phase: "user", summary: "Requirement submitted", status: "completed" },
     { agentId: "coder@1", phase: "plan", summary: "Plan", status: "failed" },

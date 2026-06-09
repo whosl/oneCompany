@@ -12,6 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    exclude: ["e2e/**", "node_modules/**"],
     environmentMatchGlobs: [["src/**/*.test.tsx", "jsdom"]],
     testTimeout: 30_000,
     hookTimeout: 30_000,

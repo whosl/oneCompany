@@ -47,6 +47,8 @@ const blockedProjection: ConsoleProjection = {
   blockingGateId: "gate-1",
   agents: {},
   streamItems: [],
+  streamGroups: [],
+  ungroupedStreamItems: [],
   swimlane: [],
   lastSeq: 0,
 };

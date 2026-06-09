@@ -33,6 +33,8 @@ vi.mock("@/lib/projection/use-console-projection", () => ({
       openGates: [],
       agents: {},
       streamItems: [],
+      streamGroups: [],
+      ungroupedStreamItems: [],
       swimlane: [],
       lastSeq: 0,
     },

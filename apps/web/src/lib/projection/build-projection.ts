@@ -5,6 +5,8 @@ import type {
   StreamItem,
   SwimlaneCell,
 } from "@oc/shared";
+import { attachParorSegments } from "./stream-paror.js";
+import { groupStreamItems } from "./stream-grouping.js";
 import type { AgentProjection, ConsoleProjection } from "./types";
 
 const LARGE_OUTPUT_THRESHOLD = 500;
@@ -17,6 +19,8 @@ export function createProjectionFromSnapshot(snapshot: ConsoleSnapshot): Console
     blockingGateId: snapshot.openGates[0]?.id,
     agents: {},
     streamItems: [],
+    streamGroups: [],
+    ungroupedStreamItems: [],
     swimlane: [],
     lastSeq: snapshot.lastSeq,
   };
@@ -26,6 +30,9 @@ export function createProjectionFromSnapshot(snapshot: ConsoleSnapshot): Console
   }
 
   projection.streamItems = deriveStreamItems(projection);
+  const grouped = groupStreamItems(projection.streamItems, projection.events);
+  projection.ungroupedStreamItems = grouped.ungrouped;
+  projection.streamGroups = attachParorSegments(grouped.groups);
   projection.swimlane = deriveSwimlane(projection);
   return projection;
 }
@@ -51,6 +58,9 @@ export function applyEvent(projection: ConsoleProjection, envelope: EventEnvelop
   };
 
   next.streamItems = deriveStreamItems(next);
+  const grouped = groupStreamItems(next.streamItems, next.events);
+  next.ungroupedStreamItems = grouped.ungrouped;
+  next.streamGroups = attachParorSegments(grouped.groups);
   next.swimlane = deriveSwimlane(next);
   return next;
 }
@@ -188,16 +198,40 @@ export function deriveStreamItems(projection: ConsoleProjection): StreamItem[] {
       continue;
     }
 
-    if (payload.type === "tool_call.output") {
-      const large = payload.output.length > LARGE_OUTPUT_THRESHOLD;
+    if (payload.type === "tool_call.started") {
       items.push({
         id: event.eventId,
         origin: "agent",
         kind: payload.type,
-        title: "Command output",
-        summary: large ? `${payload.output.slice(0, 120)}…` : payload.output,
+        title: payload.toolName,
+        summary: "Tool call started",
         timestamp: event.timestamp,
-        metadata: { large, toolCallId: payload.toolCallId },
+        metadata: {
+          toolCallId: payload.toolCallId,
+          toolName: payload.toolName,
+        },
+        expanded: false,
+      });
+      continue;
+    }
+
+    if (payload.type === "tool_call.output" || payload.type === "tool_call.failed") {
+      const output = payload.type === "tool_call.output" ? payload.output : payload.error;
+      const large = output.length > LARGE_OUTPUT_THRESHOLD;
+      items.push({
+        id: event.eventId,
+        origin: "agent",
+        kind: "tool_call.result",
+        title: payload.type === "tool_call.failed" ? "Tool call failed" : "Tool output",
+        summary: large ? `${output.slice(0, 120)}…` : output,
+        timestamp: event.timestamp,
+        metadata: {
+          large,
+          toolCallId: payload.toolCallId,
+          toolName: payload.type === "tool_call.failed" ? "failed" : "output",
+          navigateTab: large ? "terminal" : undefined,
+          artifactPath: large ? `logs/cmd-${payload.toolCallId}.log` : undefined,
+        },
         expanded: false,
       });
       continue;

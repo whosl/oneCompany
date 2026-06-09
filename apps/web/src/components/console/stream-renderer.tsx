@@ -5,6 +5,96 @@ import type { ConsoleProjection } from "@/lib/projection/types";
 import { consoleApi } from "@/lib/api";
 import { usePinToBottom } from "@/lib/use-pin-to-bottom";
 import { RequirementQuestionCard } from "./requirement-question-card";
+import { StreamRunGroup } from "./stream-run-group";
+import { StreamToolCallRow } from "./stream-tool-call-row";
+
+function renderStreamItem(
+  item: ConsoleProjection["streamItems"][number],
+  options: {
+    questionAnswers?: string[];
+    onQuestionAnswerChange?: (index: number, answer: string) => void;
+    onNavigateTab?: (tab: "files" | "tests" | "terminal") => void;
+  },
+) {
+  const isUser = item.origin === "user";
+  const isQuestion = item.kind === "requirement.question";
+  const questionIndex =
+    typeof item.metadata?.questionIndex === "number" ? item.metadata.questionIndex : -1;
+  const suggestedAnswers = Array.isArray(item.metadata?.suggestedAnswers)
+    ? (item.metadata.suggestedAnswers as string[])
+    : [];
+
+  if (isQuestion && questionIndex >= 0) {
+    return (
+      <RequirementQuestionCard
+        key={item.id}
+        index={questionIndex}
+        question={item.summary}
+        suggestedAnswers={suggestedAnswers}
+        value={options.questionAnswers?.[questionIndex] ?? ""}
+        onChange={(answer) => options.onQuestionAnswerChange?.(questionIndex, answer)}
+      />
+    );
+  }
+
+  if (item.kind.startsWith("tool_call.")) {
+    return (
+      <StreamToolCallRow
+        key={item.id}
+        title={String(item.metadata?.toolName ?? item.title)}
+        summary={item.summary}
+        status={
+          item.kind === "tool_call.started"
+            ? "started"
+            : item.metadata?.toolName === "failed"
+              ? "failed"
+              : "output"
+        }
+        artifactPath={
+          typeof item.metadata?.artifactPath === "string" ? item.metadata.artifactPath : undefined
+        }
+        onOpenTerminal={() => options.onNavigateTab?.("terminal")}
+      />
+    );
+  }
+
+  return (
+    <article
+      key={item.id}
+      className={
+        isUser
+          ? "rounded-md border border-[var(--oc-accent-soft)] bg-[var(--oc-surface-warm)] p-3"
+          : "rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] p-3"
+      }
+      data-testid={`stream-item-${item.kind}`}
+    >
+      <header className="text-xs font-semibold uppercase tracking-wide text-[var(--oc-text-muted)]">
+        {item.title}
+      </header>
+      <p className="mt-1 text-sm whitespace-pre-wrap">{item.summary}</p>
+      {item.metadata?.navigateTab ? (
+        <button
+          type="button"
+          className="mt-2 text-xs text-[var(--oc-accent-primary)] underline"
+          onClick={() =>
+            options.onNavigateTab?.(item.metadata?.navigateTab as "files" | "tests" | "terminal")
+          }
+        >
+          Open in {String(item.metadata.navigateTab)} tab
+        </button>
+      ) : null}
+      {item.metadata?.large ? (
+        <button
+          type="button"
+          className="mt-2 text-xs text-[var(--oc-accent-primary)] underline"
+          onClick={() => options.onNavigateTab?.("terminal")}
+        >
+          Open in Terminal
+        </button>
+      ) : null}
+    </article>
+  );
+}
 
 export function StreamRenderer({
   projection,
@@ -24,6 +114,7 @@ export function StreamRenderer({
   );
   const streamScrollKey = `${projection.lastSeq}:${projection.streamItems.length}:${blockingGate?.id ?? "none"}`;
   const { containerRef, pinned, handleScroll, scrollToBottom } = usePinToBottom(streamScrollKey);
+  const renderOptions = { questionAnswers, onQuestionAnswerChange, onNavigateTab };
 
   return (
     <div className="relative flex h-full flex-col" data-testid="stream-renderer">
@@ -43,65 +134,14 @@ export function StreamRenderer({
         data-testid="stream-scroll-container"
         onScroll={handleScroll}
       >
-        {projection.streamItems
+        {(projection.ungroupedStreamItems ??
+          projection.streamItems.filter((item) => item.origin !== "gate"))
           .filter((item) => item.origin !== "gate")
-          .map((item) => {
-          const isUser = item.origin === "user";
-          const isQuestion = item.kind === "requirement.question";
-          const questionIndex =
-            typeof item.metadata?.questionIndex === "number" ? item.metadata.questionIndex : -1;
-          const suggestedAnswers = Array.isArray(item.metadata?.suggestedAnswers)
-            ? (item.metadata.suggestedAnswers as string[])
-            : [];
+          .map((item) => renderStreamItem(item, renderOptions))}
 
-          if (isQuestion && questionIndex >= 0) {
-            return (
-              <RequirementQuestionCard
-                key={item.id}
-                index={questionIndex}
-                question={item.summary}
-                suggestedAnswers={suggestedAnswers}
-                value={questionAnswers?.[questionIndex] ?? ""}
-                onChange={(answer) => onQuestionAnswerChange?.(questionIndex, answer)}
-              />
-            );
-          }
-
-          return (
-            <article
-              key={item.id}
-              className={
-                isUser
-                  ? "rounded-md border border-[var(--oc-accent-soft)] bg-[var(--oc-surface-warm)] p-3"
-                  : "rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] p-3"
-              }
-              data-testid={`stream-item-${item.kind}`}
-            >
-              <header className="text-xs font-semibold uppercase tracking-wide text-[var(--oc-text-muted)]">
-                {item.title}
-              </header>
-              <p className="mt-1 text-sm whitespace-pre-wrap">{item.summary}</p>
-              {item.metadata?.navigateTab ? (
-                <button
-                  type="button"
-                  className="mt-2 text-xs text-[var(--oc-accent-primary)] underline"
-                  onClick={() => onNavigateTab?.(item.metadata?.navigateTab as "files" | "tests")}
-                >
-                  Open in {String(item.metadata.navigateTab)} tab
-                </button>
-              ) : null}
-              {item.metadata?.large ? (
-                <button
-                  type="button"
-                  className="mt-2 text-xs text-[var(--oc-accent-primary)] underline"
-                  onClick={() => onNavigateTab?.("terminal")}
-                >
-                  Open in Terminal
-                </button>
-              ) : null}
-            </article>
-          );
-        })}
+        {(projection.streamGroups ?? []).map((group) => (
+          <StreamRunGroup key={group.id} group={group} onNavigateTab={onNavigateTab} />
+        ))}
 
         {blockingGate ? (
           <GateCard

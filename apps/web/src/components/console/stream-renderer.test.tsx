@@ -59,6 +59,17 @@ const projection: ConsoleProjection = {
       timestamp: "t",
     },
   ],
+  streamGroups: [],
+  ungroupedStreamItems: [
+    {
+      id: "u1",
+      origin: "user",
+      kind: "user.requirement.raw",
+      title: "Your requirement",
+      summary: "Build a todo app",
+      timestamp: "t",
+    },
+  ],
   swimlane: [],
   lastSeq: 0,
 };

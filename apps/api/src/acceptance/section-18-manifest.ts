@@ -42,7 +42,7 @@ export const SECTION_18_ACCEPTANCE: AcceptanceCriterion[] = [
     id: "figma-console-baseline",
     criterion: "Console implements top nav, Stream, Swimlane, right tabs, Settings, and Project Hub.",
     mode: "manual",
-    probe: "handbook/acceptance/section-18-checklist.md",
+    probe: "apps/web/e2e/console-baseline.spec.ts",
   },
   {
     id: "dev-slices-events",
@@ -84,7 +84,7 @@ export const SECTION_18_ACCEPTANCE: AcceptanceCriterion[] = [
     id: "high-risk-gates",
     criterion: "High-risk operations require confirmation and are logged.",
     mode: "automated",
-    probe: "packages/workspace/src/authorize.test.ts",
+    probe: "packages/workspace/src/risk.regression.test.ts",
   },
   {
     id: "opencode-governance",
@@ -96,13 +96,13 @@ export const SECTION_18_ACCEPTANCE: AcceptanceCriterion[] = [
     id: "logs-redacted-chunked",
     criterion: "Command logs are redacted and large output is chunked.",
     mode: "automated",
-    probe: "packages/workspace/src/log-pipeline.test.ts",
+    probe: "apps/api/src/workspace/logging-audit.test.ts",
   },
   {
     id: "failed-paused-reachable",
     criterion: "Failed and Paused states are reachable.",
     mode: "automated",
-    probe: "apps/api/src/projects/projects-pause.test.ts",
+    probe: "apps/api/src/projects/projects-failed.test.ts;packages/workflow/src/development/slice-failure-gate.test.ts",
   },
   {
     id: "final-acceptance",

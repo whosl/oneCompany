@@ -451,7 +451,7 @@ Key configuration (see [.env.example](.env.example) for full list):
 | M9 | Info stream + swimlane renderers | ✅ Done |
 | **M9.5** | **Real engine integration & de-stub** | **✅ Done** |
 | **M10** | **Deployment, delivery, change requests** | **✅ Done** |
-| M11 | Hardening & MVP acceptance | 📋 Planned |
+| **M11** | **Hardening & MVP acceptance** | **✅ Done** |
 | M12 | Integration Gateway + offline Skill Packs | 📋 Post-MVP |
 
 ## Event System

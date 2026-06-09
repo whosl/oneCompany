@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RightPanel } from "../right-panel/right-panel";
+import { RightPanel, type RightPanelTabId } from "../right-panel/right-panel";
 import { useConsoleProjection } from "@/lib/projection/use-console-projection";
 import { consoleApi } from "@/lib/api";
 import { TopNav } from "./top-nav";
@@ -20,6 +20,7 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
   const [hubOpen, setHubOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [deployPending, setDeployPending] = useState(false);
+  const [rightTab, setRightTab] = useState<RightPanelTabId>("Files");
   const pendingQuestions = projection?.snapshot.requirement?.pendingQuestions ?? [];
   const pendingQuestionKey = useMemo(
     () => pendingQuestions.map((item) => item.question).join("\u0000"),
@@ -105,7 +106,14 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
                     return next;
                   });
                 }}
-                onNavigateTab={() => undefined}
+                onNavigateTab={(tab) => {
+                  const mapping: Record<"files" | "tests" | "terminal", RightPanelTabId> = {
+                    files: "Files",
+                    tests: "Tests",
+                    terminal: "Terminal",
+                  };
+                  setRightTab(mapping[tab]);
+                }}
                 onGateResolved={() => void refresh()}
               />
             ) : (
@@ -146,7 +154,7 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
         />
 
         <section className="min-w-0 flex-1 p-3" style={{ width: `${100 - leftWidth}%` }} data-testid="right-panel-slot">
-          <RightPanel projectId={projectId} />
+          <RightPanel projectId={projectId} activeTab={rightTab} onTabChange={setRightTab} />
         </section>
       </div>
 

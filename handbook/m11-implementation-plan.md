@@ -1,6 +1,6 @@
 # M11 Implementation Plan — Hardening & MVP Acceptance（加固与 MVP 验收）
 
-Status: planned
+Status: complete
 Branch: `feat/m11-hardening-acceptance`（从 `feat/m10-deployment-delivery` 切出）
 Source: `spec.md` v0.3.3 §3.1、§8.2、§12、§14、§14.3.1、§15、§18；`handbook/phase-11-hardening-acceptance.md`；`dev-plan.md` M11
 Estimated effort: 12–18 days（一名工程师）
