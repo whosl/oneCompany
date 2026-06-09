@@ -33,7 +33,11 @@ import {
   REQUIREMENT_STUCK_GATE_TYPE,
   STUCK_BUDGET_EXTENSION as BUDGET_EXTENSION,
 } from "./types.js";
-import { resolveGraphCheckpointer } from "../graph/checkpointer.js";
+import { hasGraphCheckpoint, resolveGraphCheckpointer } from "../graph/checkpointer.js";
+import {
+  resumeRequirementAfterGateLegacy,
+  submitRequirementAnswersLegacy,
+} from "./engine-legacy.js";
 
 const RequirementGraphAnnotation = Annotation.Root({
   payload: Annotation<RequirementSessionPayload>,
@@ -403,6 +407,10 @@ export async function submitRequirementAnswersGraph(
     throw new Error(`Expected awaiting_answers, got ${existing.meta.phase}`);
   }
 
+  if (!(await hasGraphCheckpoint(input.projectId))) {
+    return submitRequirementAnswersLegacy(deps, input);
+  }
+
   const graph = buildRequirementGraph(deps);
   const finalState = (await graph.invoke(
     new Command({ resume: input.answers }),
@@ -424,6 +432,10 @@ export async function resumeRequirementAfterGateGraph(
   const existing = loadRequirementSession(deps.db, input.projectId);
   if (existing.meta.phase !== "awaiting_gate") {
     throw new Error(`Expected awaiting_gate, got ${existing.meta.phase}`);
+  }
+
+  if (!(await hasGraphCheckpoint(input.projectId))) {
+    return resumeRequirementAfterGateLegacy(deps, input);
   }
 
   const graph = buildRequirementGraph(deps);

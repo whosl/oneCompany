@@ -27,13 +27,13 @@ describe("gate service — resume ordering", () => {
       expect(row?.status).toBe("resolved");
       expect(row?.decision).toBe("keep_answering");
 
-      const resolvedEvents = db
+      const projectEvents = db
         .select()
         .from(events)
         .where(eq(events.project_id, project.id))
-        .all()
-        .filter((event) => event.type === "human_gate.resolved");
-      expect(resolvedEvents).toHaveLength(1);
+        .all();
+      expect(projectEvents.filter((event) => event.type === "human_gate.resolved")).toHaveLength(1);
+      expect(projectEvents.filter((event) => event.type === "run.failed")).toHaveLength(1);
 
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(consoleError).toHaveBeenCalledWith(

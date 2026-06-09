@@ -1,4 +1,5 @@
 import type { NormalizedRunnerResult } from "@oc/shared";
+import { readOutputText } from "../log-pipeline.js";
 import { runCommand } from "../shell.js";
 import type { RunnerDeps, SuiteSpec } from "./types.js";
 
@@ -63,9 +64,7 @@ export async function runVitest(
     cwd: spec.cwd ?? deps.repoPath,
   });
 
-  const output =
-    result.outputRef.kind === "inline" ? (result.outputRef.text ?? "") : "";
-  const parsed = parseVitestJson(output);
+  const parsed = parseVitestJson(readOutputText(result.outputRef));
 
   return {
     suite: spec.suite,

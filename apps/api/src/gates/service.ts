@@ -154,7 +154,21 @@ export function createGateService(
       try {
         await options.onGateResolved(resolvedGate, decision);
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         console.error(`gate resume failed for ${gateId}:`, error);
+        const failedEnvelope = emit(db, {
+          projectId: gate.projectId,
+          runId: gateId,
+          agentId: "workflow:gate-resume",
+          payload: {
+            type: "run.failed",
+            projectId: gate.projectId,
+            agentId: "workflow:gate-resume",
+            runId: gateId,
+            reason: `Gate resume failed (${gate.gateType}): ${message}`,
+          },
+        });
+        onEvent(failedEnvelope);
       }
     }
 

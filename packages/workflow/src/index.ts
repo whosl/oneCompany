@@ -69,4 +69,7 @@ export { persistRunnerResult, loadTestResults } from "./testing/results.js";
 export type { TestingRunResult, TestingWorkflowDeps } from "./testing/types.js";
 export { buildReportSnapshot, loadArtifactsForProject } from "./panel/index.js";
 export { buildConsoleSnapshot, derivePhaseFromStatus, isCompletenessLocked } from "./console/index.js";
-export { resetGraphCheckpointerForTests } from "./graph/checkpointer.js";
+export {
+  hasGraphCheckpoint,
+  resetGraphCheckpointerForTests,
+} from "./graph/checkpointer.js";

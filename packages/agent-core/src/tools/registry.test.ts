@@ -3,6 +3,7 @@ import { events } from "@oc/shared";
 import { eq } from "drizzle-orm";
 import { bindAgentTools } from "./bind-tools.js";
 import {
+  assertAgentMayUseTool,
   clearToolRegistryForTests,
   getTool,
   registerTool,
@@ -112,5 +113,49 @@ describe("tool registry — M9.5", () => {
       completenessScore: 10,
       coreFeatures: ["tasks"],
     });
+  });
+
+  it("rejects agents that lack permissions for a tool", () => {
+    registerTool({
+      id: "deploy",
+      version: "1.0.0",
+      description: "Deploy",
+      protocol: "local",
+      riskLevel: "low",
+      permissions: ["deploy"],
+      argsSchema: z.object({}),
+      impl: async () => ({}),
+    });
+
+    const tool = getTool("deploy@1.0.0");
+    expect(() =>
+      assertAgentMayUseTool(
+        {
+          id: "test",
+          version: "1.0.0",
+          group: "requirement",
+          role: "Test",
+          description: "Test",
+          inputSchema: {},
+          outputSchema: {},
+          tools: [],
+          modelPolicy: { tier: "cheap" },
+          riskLevel: "low",
+          permissions: ["read"],
+          executor: "stub",
+        },
+        tool,
+      ),
+    ).toThrow(/lacks permission "deploy"/);
+  });
+
+  it("workspace-read blocks path traversal outside repo root", async () => {
+    const tool = getTool(LOCAL_TOOL_IDS.workspaceRead);
+    const repoPath = "/tmp/oc-workspace-test-repo";
+    const output = await tool.impl(
+      { relativePath: "../outside.txt" },
+      { db: {} as never, projectId: "p1", repoPath },
+    );
+    expect(output).toMatchObject({ error: "Path escapes project root" });
   });
 });

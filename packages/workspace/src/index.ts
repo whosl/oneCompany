@@ -28,6 +28,7 @@ export {
   INLINE_OUTPUT_MAX_BYTES,
   REDACTED,
   persistOutput,
+  readOutputText,
   redact,
   type OutputRef,
   type RedactionIncident,

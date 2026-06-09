@@ -29,6 +29,12 @@ export async function runOptionalToolLoop(
     for (const toolCall of toolCalls) {
       const matched = tools.find((candidate) => candidate.name === toolCall.name);
       if (!matched) {
+        current.push(
+          new ToolMessage({
+            content: `Tool not found: ${toolCall.name}`,
+            tool_call_id: toolCall.id ?? toolCall.name,
+          }),
+        );
         continue;
       }
       const output = await matched.invoke(toolCall.args);

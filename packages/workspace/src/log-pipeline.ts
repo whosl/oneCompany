@@ -24,6 +24,22 @@ function hashText(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+/**
+ * Return the full output text for a ref, reading the chunk file when output was
+ * spilled to disk. Parsers must use this instead of only reading inline text,
+ * otherwise large (chunked) outputs are seen as empty.
+ */
+export function readOutputText(ref: OutputRef): string {
+  if (ref.kind === "inline") {
+    return ref.text;
+  }
+  try {
+    return fs.readFileSync(ref.path, "utf8");
+  } catch {
+    return "";
+  }
+}
+
 export function persistOutput(
   deps: {
     db: Db;

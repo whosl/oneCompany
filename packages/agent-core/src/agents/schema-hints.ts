@@ -77,14 +77,23 @@ const DEVELOPMENT_SCHEMA_HINTS: Record<string, string> = {
 }`,
 };
 
+const REASONING_HINT = `Also include these string fields in the same JSON object:
+  "plan": "brief plan summary visible to the user",
+  "observation": "what was observed from the inputs",
+  "reflection": "brief reflection on the outcome"`;
+
 export function outputSchemaHint(agentIdAtVersion: string): string {
   const hint =
     REQUIREMENT_SCHEMA_HINTS[agentIdAtVersion] ?? DEVELOPMENT_SCHEMA_HINTS[agentIdAtVersion];
   if (!hint) {
-    return "Match the agent output schema exactly; use only the required top-level keys.";
+    return [
+      "Match the agent output schema exactly; use only the required top-level keys.",
+      REASONING_HINT,
+    ].join("\n");
   }
   return [
     "Return exactly one JSON object with these top-level keys and shapes (no wrapper keys):",
     hint,
+    REASONING_HINT,
   ].join("\n");
 }

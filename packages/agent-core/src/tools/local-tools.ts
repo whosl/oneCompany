@@ -95,9 +95,10 @@ export function registerLocalTools(): void {
         }
       }
 
-      const fullPath = path.resolve(ctx.repoPath, relativePath);
       const repoRoot = path.resolve(ctx.repoPath);
-      if (!fullPath.startsWith(repoRoot)) {
+      const fullPath = path.resolve(repoRoot, relativePath);
+      const relativeToRoot = path.relative(repoRoot, fullPath);
+      if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
         return { error: "Path escapes project root" };
       }
 

@@ -1,13 +1,15 @@
 import { getAllowedOptions } from "@oc/shared";
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
+import type { DevFixtureProfile } from "@oc/agent-core";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
 import {
   createSkipChangeRequest,
   handleChangeReviewDecision,
   raiseChangeReviewGate,
 } from "./change-review.js";
-import { runSliceLoopUntilHalt } from "./engine-legacy.js";
+import { resumeDevelopmentAfterGateLegacy, runSliceIteration } from "./engine-legacy.js";
 import { runPlanner } from "./planner.js";
+import { allSlicesPassed, getCurrentSlice, hasPendingSlices } from "./slice-policy.js";
 import {
   createDevSession,
   loadDevSession,
@@ -27,8 +29,7 @@ import {
   SLICE_RETRY_BUDGET_EXTENSION,
   TECH_PLAN_CONFIRM_GATE,
 } from "./types.js";
-import { resolveGraphCheckpointer } from "../graph/checkpointer.js";
-import type { DevFixtureProfile } from "@oc/agent-core";
+import { hasGraphCheckpoint, resolveGraphCheckpointer } from "../graph/checkpointer.js";
 
 const DevelopmentGraphAnnotation = Annotation.Root({
   payload: Annotation<DevelopmentSessionPayload>,
@@ -36,6 +37,10 @@ const DevelopmentGraphAnnotation = Annotation.Root({
 });
 
 type DevelopmentGraphState = typeof DevelopmentGraphAnnotation.State;
+
+// Each slice runs as one graph super-step; allow long slice queues plus gate
+// round-trips before LangGraph's recursion guard trips.
+const GRAPH_RECURSION_LIMIT = 150;
 
 function toResult(
   deps: DevelopmentWorkflowDeps,
@@ -88,12 +93,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
           meta: { ...payload.meta, phase: "slicing", gateId: undefined, gateType: undefined },
         };
         saveDevSession(deps.db, payload.state.projectId, payload);
-        const loopResult = await runSliceLoopUntilHalt(deps, payload);
-        const loaded = loadDevSession(deps.db, payload.state.projectId);
-        if (loopResult.phase === "completed" || loopResult.phase === "failed") {
-          return { payload: loaded, result: loopResult };
-        }
-        return { payload: loaded };
+        return { payload };
       }
       case "reject_and_redo":
       case "revise_then_approve": {
@@ -111,6 +111,60 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
     }
   };
 
+  // One pending slice per visit; runSliceIteration owns the per-slice retry loop
+  // and raises the slice-failure gate when the attempt budget is exhausted.
+  const sliceNode = async (
+    state: DevelopmentGraphState,
+  ): Promise<Partial<DevelopmentGraphState>> => {
+    let current: DevelopmentSessionPayload = {
+      ...state.payload,
+      meta: { ...state.payload.meta, phase: "slicing" },
+    };
+
+    const slice = getCurrentSlice(current.state);
+    if (!slice) {
+      return { payload: current };
+    }
+
+    current = {
+      ...current,
+      state: resetSliceAttemptsForNewSlice(current.state),
+      meta: { ...current.meta, currentSliceId: slice.id },
+    };
+
+    const iteration = await runSliceIteration(deps, current);
+    current = { ...current, state: iteration.state };
+
+    if (iteration.kind === "gate") {
+      const gated: DevelopmentSessionPayload = {
+        ...current,
+        meta: {
+          ...current.meta,
+          phase: "awaiting_gate",
+          gateId: iteration.gateId,
+          gateType: SLICE_FAILURE_GATE,
+        },
+      };
+      return { payload: gated };
+    }
+
+    saveDevSession(deps.db, current.state.projectId, current);
+    return { payload: current };
+  };
+
+  const finalizeNode = async (
+    state: DevelopmentGraphState,
+  ): Promise<Partial<DevelopmentGraphState>> => {
+    const current = { ...state.payload };
+    if (allSlicesPassed(current.state)) {
+      deps.setStatus(current.state.projectId, "Testing", "development_slices_complete");
+      const completed = updateDevSessionMeta(current, { phase: "completed" });
+      saveDevSession(deps.db, current.state.projectId, completed);
+      return { payload: completed, result: toResult(deps, completed) };
+    }
+    return { payload: current, result: toResult(deps, current) };
+  };
+
   const waitSliceFailureGateNode = async (
     state: DevelopmentGraphState,
   ): Promise<Partial<DevelopmentGraphState>> => {
@@ -119,7 +173,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
       gateId: state.payload.meta.gateId,
     }) as string;
 
-    let payload = { ...state.payload };
+    const payload = { ...state.payload };
     switch (decision) {
       case "retry": {
         const next: DevelopmentSessionPayload = {
@@ -135,8 +189,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
           },
         };
         saveDevSession(deps.db, payload.state.projectId, next);
-        const loopResult = await runSliceLoopUntilHalt(deps, next);
-        return { payload: loadDevSession(deps.db, payload.state.projectId), result: loopResult };
+        return { payload: next };
       }
       case "replan": {
         const prd = loadLatestPrd(deps.db, payload.state.projectId);
@@ -181,8 +234,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
 
     const next = handleChangeReviewDecision(deps, state.payload, decision);
     if (decision === "update_plan") {
-      const loopResult = await runSliceLoopUntilHalt(deps, next);
-      return { payload: loadDevSession(deps.db, next.state.projectId), result: loopResult };
+      return { payload: next };
     }
     if (decision === "revise_tech_plan") {
       const prd = loadLatestPrd(deps.db, next.state.projectId);
@@ -197,51 +249,63 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
     return { payload: next, result: toResult(deps, next) };
   };
 
-  const routeAfterTechPlan = (state: DevelopmentGraphState): string => {
+  // Shared router for nodes that hand control back via meta.gateType / phase.
+  const routeByState = (state: DevelopmentGraphState): string => {
     if (state.result) {
       return END;
     }
-    if (state.payload.meta.gateType === SLICE_FAILURE_GATE) {
-      return "waitSliceFailureGate";
-    }
-    if (state.payload.meta.gateType === CHANGE_REVIEW_GATE) {
-      return "waitChangeReviewGate";
-    }
-    return "waitTechPlanGate";
-  };
-
-  const routeAfterGateResume = (state: DevelopmentGraphState): string => {
-    if (state.result) {
-      return END;
-    }
-    if (state.payload.meta.gateType === TECH_PLAN_CONFIRM_GATE) {
+    const gateType = state.payload.meta.gateType;
+    if (gateType === TECH_PLAN_CONFIRM_GATE) {
       return "waitTechPlanGate";
     }
-    if (state.payload.meta.gateType === CHANGE_REVIEW_GATE) {
+    if (gateType === SLICE_FAILURE_GATE) {
+      return "waitSliceFailureGate";
+    }
+    if (gateType === CHANGE_REVIEW_GATE) {
       return "waitChangeReviewGate";
     }
+    if (state.payload.meta.phase === "slicing") {
+      // Match legacy runSliceLoopUntilHalt: the loop is gated on pending slices.
+      // A failed slice stays in_progress (not pending), so retry with no pending
+      // slices falls through to finalize (phase stays "slicing") rather than rerun.
+      return hasPendingSlices(state.payload.state) ? "sliceNode" : "finalize";
+    }
+    return END;
+  };
+
+  const routeAfterSlice = (state: DevelopmentGraphState): string => {
     if (state.payload.meta.gateType === SLICE_FAILURE_GATE) {
       return "waitSliceFailureGate";
     }
-    return END;
+    if (hasPendingSlices(state.payload.state)) {
+      return "sliceNode";
+    }
+    return "finalize";
   };
 
   const graph = new StateGraph(DevelopmentGraphAnnotation)
     .addNode("architect", architectNode)
     .addNode("waitTechPlanGate", waitTechPlanGateNode)
+    .addNode("sliceNode", sliceNode)
+    .addNode("finalize", finalizeNode)
     .addNode("waitSliceFailureGate", waitSliceFailureGateNode)
     .addNode("waitChangeReviewGate", waitChangeReviewGateNode)
     .addEdge(START, "architect")
     .addEdge("architect", "waitTechPlanGate")
-    .addConditionalEdges("waitTechPlanGate", routeAfterTechPlan)
-    .addConditionalEdges("waitSliceFailureGate", routeAfterGateResume)
-    .addConditionalEdges("waitChangeReviewGate", routeAfterGateResume);
+    .addConditionalEdges("waitTechPlanGate", routeByState)
+    .addConditionalEdges("sliceNode", routeAfterSlice)
+    .addEdge("finalize", END)
+    .addConditionalEdges("waitSliceFailureGate", routeByState)
+    .addConditionalEdges("waitChangeReviewGate", routeByState);
 
   return graph.compile({ checkpointer: resolveGraphCheckpointer() });
 }
 
 function graphConfig(projectId: string) {
-  return { configurable: { thread_id: `dev:${projectId}` } };
+  return {
+    configurable: { thread_id: `dev:${projectId}` },
+    recursionLimit: GRAPH_RECURSION_LIMIT,
+  };
 }
 
 export async function startDevelopmentGraph(
@@ -259,7 +323,7 @@ export async function startDevelopmentGraph(
   }
 
   const profile = input.profile ?? "minimal";
-  let payload = createDevSession(
+  const payload = createDevSession(
     deps.db,
     input.projectId,
     input.repoPath,
@@ -287,6 +351,10 @@ export async function resumeDevelopmentAfterGateGraph(
   const payload = loadDevSession(deps.db, input.projectId);
   if (payload.meta.phase !== "awaiting_gate" && payload.meta.phase !== "change_review") {
     throw new Error(`Expected awaiting_gate or change_review, got ${payload.meta.phase}`);
+  }
+
+  if (!(await hasGraphCheckpoint(`dev:${input.projectId}`))) {
+    return resumeDevelopmentAfterGateLegacy(deps, input);
   }
 
   const graph = buildDevelopmentGraph(deps);

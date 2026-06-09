@@ -5,6 +5,7 @@ import {
   startRequirement,
   submitRequirementAnswers,
 } from "./engine.js";
+import { resetGraphCheckpointerForTests } from "../graph/checkpointer.js";
 import { setupWorkflowTest } from "../test-utils.js";
 
 describe("requirement workflow engine — M3", () => {
@@ -74,6 +75,30 @@ describe("requirement workflow engine — M3", () => {
 
       expect(result.phase).toBe("completed");
       expect(result.projectStatus).toBe("PRD Ready");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("falls back to legacy resume when graph checkpoint is missing after restart", async () => {
+    const { deps, projectId, cleanup } = setupWorkflowTest();
+    try {
+      const started = await startRequirement(deps, {
+        projectId,
+        requirement: "做一个应用",
+        profile: "improving",
+      });
+      expect(started.phase).toBe("awaiting_answers");
+
+      resetGraphCheckpointerForTests();
+
+      const resumed = await submitRequirementAnswers(deps, {
+        projectId,
+        answers: ["个人用户", "需要任务管理"],
+      });
+
+      expect(["awaiting_answers", "completed"]).toContain(resumed.phase);
+      expect(resumed.projectStatus).not.toBe("Failed");
     } finally {
       cleanup();
     }

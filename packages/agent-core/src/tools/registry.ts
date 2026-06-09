@@ -1,8 +1,11 @@
 import { z } from "zod";
+import type { AgentDefinition } from "@oc/shared";
 import type { AuthorizeFn } from "../harness/permission-bridge.js";
 import type { ToolContext } from "../tools.js";
 
 export type ToolProtocol = "local" | "mcp" | "skill_pack";
+
+const RISK_RANK = { low: 0, medium: 1, high: 2 } as const;
 
 export type RegisteredTool = {
   id: string;
@@ -41,6 +44,23 @@ export function getTool(idAtVersion: string): RegisteredTool {
 
 export function resolveToolsForAgent(toolIds: string[]): RegisteredTool[] {
   return toolIds.map((id) => getTool(id));
+}
+
+/** Enforce agent allowlist: tool risk and permissions must fit the agent policy. */
+export function assertAgentMayUseTool(agent: AgentDefinition, tool: RegisteredTool): void {
+  if (RISK_RANK[tool.riskLevel] > RISK_RANK[agent.riskLevel]) {
+    throw new Error(
+      `Agent ${agent.id}@${agent.version} cannot use higher-risk tool ${tool.id}@${tool.version}`,
+    );
+  }
+
+  for (const permission of tool.permissions) {
+    if (!agent.permissions.includes(permission)) {
+      throw new Error(
+        `Agent ${agent.id}@${agent.version} lacks permission "${permission}" for tool ${tool.id}@${tool.version}`,
+      );
+    }
+  }
 }
 
 export function listRegisteredTools(): RegisteredTool[] {

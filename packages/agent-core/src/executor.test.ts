@@ -68,4 +68,38 @@ describe("runAgent — M2", () => {
       cleanup();
     }
   });
+
+  it("emits agent.error and run.failed when runner throws", async () => {
+    const { db, cleanup } = setupTestDb();
+    try {
+      const projectId = seedProject(db);
+      registerAgent(db, DUMMY_AGENT);
+
+      const result = await runAgent(
+        {
+          db,
+          runner: async () => {
+            throw new Error("LLM structured output failed");
+          },
+        },
+        { projectId, agentIdAtVersion: "dummy@1.0.0", task: {} },
+      );
+
+      expect(result.failed).toBe(true);
+
+      const eventTypes = db
+        .select()
+        .from(events)
+        .where(eq(events.project_id, projectId))
+        .all()
+        .map((row) => row.type);
+
+      expect(eventTypes).toEqual(["agent.started", "agent.error", "run.failed"]);
+
+      const [run] = db.select().from(agentRuns).all();
+      expect(run?.status).toBe("failed");
+    } finally {
+      cleanup();
+    }
+  });
 });

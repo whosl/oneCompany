@@ -9,7 +9,11 @@ export const AgentReasoningFieldsSchema = z.object({
 export type AgentReasoningFields = z.infer<typeof AgentReasoningFieldsSchema>;
 
 export function withReasoningFields<T extends z.ZodRawShape>(outputSchema: z.ZodObject<T>) {
-  return outputSchema.extend(AgentReasoningFieldsSchema.shape);
+  return outputSchema.extend({
+    plan: z.string().optional(),
+    observation: z.string().optional(),
+    reflection: z.string().optional(),
+  });
 }
 
 const REASONING_KEYS = ["plan", "observation", "reflection"] as const;

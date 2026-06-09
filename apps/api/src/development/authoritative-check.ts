@@ -1,6 +1,7 @@
 import type { FunctionSliceTask } from "@oc/shared";
 import {
   parseVitestJson,
+  readOutputText,
   resolveSliceTestCommand,
   runCommand,
   type ShellDeps,
@@ -19,9 +20,7 @@ export function createRunAuthoritativeCheck(shell: ShellDeps): (
       cwd: shell.repoPath,
     });
 
-    const output =
-      result.outputRef.kind === "inline" ? (result.outputRef.text ?? "") : "";
-    const parsed = parseVitestJson(output);
+    const parsed = parseVitestJson(readOutputText(result.outputRef));
 
     return {
       passed: parsed.passed,

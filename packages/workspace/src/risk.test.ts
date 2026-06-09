@@ -8,6 +8,14 @@ describe("risk classifier — M5", () => {
     expect(classifyCommand("pnpm vitest run src/slice.test.ts --reporter=json")).toBe("medium");
   });
 
+  it("classifies the resolved node vitest.mjs binary as a test command (medium)", () => {
+    expect(
+      classifyCommand(
+        'node "/repo/node_modules/vitest/vitest.mjs" run src/slice.test.ts --reporter=json',
+      ),
+    ).toBe("medium");
+  });
+
   it("classifies file generation as medium", () => {
     expect(classifyCommand("echo hello > foo.ts")).toBe("medium");
   });

@@ -121,7 +121,10 @@ export function classifyCommand(cmd: string, ctx: RiskClassifierContext = {}): R
 
   if (
     /\b(pnpm|npm|npx)\s+(exec\s+)?(vitest|test)\b/i.test(normalized) ||
-    /\bvitest\s+run\b/i.test(normalized)
+    /\bvitest\s+run\b/i.test(normalized) ||
+    // Authoritative checks rewrite `pnpm vitest ...` to `node ".../vitest.mjs" run ...`
+    // (see resolveSliceTestCommand); treat the resolved binary as a test command, not high-risk.
+    /\bvitest\.mjs\b/i.test(normalized)
   ) {
     return "medium";
   }

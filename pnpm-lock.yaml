@@ -240,6 +240,9 @@ importers:
       '@langchain/langgraph':
         specifier: ^0.2.74
         version: 0.2.74(@langchain/core@0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76)))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(zod-to-json-schema@3.25.2(zod@3.25.76))
+      '@langchain/langgraph-checkpoint-sqlite':
+        specifier: ^0.1.5
+        version: 0.1.5(@langchain/core@0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76)))(@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76))))
       '@oc/agent-core':
         specifier: workspace:^
         version: link:../agent-core
@@ -1356,6 +1359,13 @@ packages:
   '@langchain/core@0.3.80':
     resolution: {integrity: sha512-vcJDV2vk1AlCwSh3aBm/urQ1ZrlXFFBocv11bz/NBUfLWD5/UDNMzwPdaAd2dKvNmTWa9FM2lirLU3+JCf4cRA==}
     engines: {node: '>=18'}
+
+  '@langchain/langgraph-checkpoint-sqlite@0.1.5':
+    resolution: {integrity: sha512-Bn8YRbSGacPOEAO1cwAhXcdgEKNjht12sXTd8FnHJAVEhHS8WtFEgwDTsZLbfmQitCB2vwkfLARJRGxjIh9RNg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@langchain/core': '>=0.2.31 <0.4.0'
+      '@langchain/langgraph-checkpoint': ~0.0.15
 
   '@langchain/langgraph-checkpoint@0.0.18':
     resolution: {integrity: sha512-IS7zJj36VgY+4pf8ZjsVuUWef7oTwt1y9ylvwu0aLuOn1d0fg05Om9DLm3v2GZ2Df6bhLV1kfWAM0IAl9O5rQQ==}
@@ -5600,6 +5610,12 @@ snapshots:
       - '@opentelemetry/exporter-trace-otlp-proto'
       - '@opentelemetry/sdk-trace-base'
       - openai
+
+  '@langchain/langgraph-checkpoint-sqlite@0.1.5(@langchain/core@0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76)))(@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76))))':
+    dependencies:
+      '@langchain/core': 0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76))
+      '@langchain/langgraph-checkpoint': 0.0.18(@langchain/core@0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76)))
+      better-sqlite3: 11.10.0
 
   '@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.80(openai@6.42.0(ws@8.21.0)(zod@3.25.76)))':
     dependencies:

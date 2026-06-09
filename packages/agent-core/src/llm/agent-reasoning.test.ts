@@ -35,4 +35,15 @@ describe("agent reasoning fields", () => {
     expect(reasoning.observation).toBe("State loaded");
     expect(reasoning.reflection).toBe("Scored");
   });
+
+  it("applies defaults when reasoning fields are omitted", () => {
+    const schema = withReasoningFields(z.object({ score: z.number() }));
+    const parsed = schema.parse({ score: 1 });
+    expect(parsed.score).toBe(1);
+
+    const { reasoning } = splitReasoningFromOutput(parsed as Record<string, unknown>);
+    expect(reasoning.plan).toBe("Planned next step");
+    expect(reasoning.observation).toBe("Processed structured inputs");
+    expect(reasoning.reflection).toBe("Completed structured output");
+  });
 });

@@ -2,7 +2,11 @@ import { tool } from "@langchain/core/tools";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import type { AgentDefinition } from "@oc/shared";
 import { callTool } from "../tools.js";
-import { resolveToolsForAgent, type ToolExecutionContext } from "./registry.js";
+import {
+  assertAgentMayUseTool,
+  resolveToolsForAgent,
+  type ToolExecutionContext,
+} from "./registry.js";
 import { ensureLocalToolsRegistered } from "./local-tools.js";
 
 export function bindAgentTools(
@@ -15,6 +19,9 @@ export function bindAgentTools(
   }
 
   const definitions = resolveToolsForAgent(agent.tools);
+  for (const definition of definitions) {
+    assertAgentMayUseTool(agent, definition);
+  }
 
   return definitions.map((definition) =>
     tool(

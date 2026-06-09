@@ -103,25 +103,37 @@ export async function runAgent(
   let runnerSummaries: AgentRunnerSummaries | undefined;
 
   if (ctx.runner) {
-    const runnerResult = await ctx.runner(
-      {
+    try {
+      const runnerResult = await ctx.runner(
+        {
+          projectId: input.projectId,
+          db: ctx.db,
+          onEvent: ctx.onEvent,
+          authorize: ctx.authorize,
+          repoPath: ctx.repoPath,
+        },
+        input.agentIdAtVersion,
+        input.task,
+      );
+      output = runnerResult.output;
+      if (runnerResult.summaries) {
+        runnerSummaries = {
+          plan: runnerResult.summaries.plan ?? `Plan for ${agent.role}`,
+          act: runnerResult.summaries.act ?? `Acting with ${modelId}`,
+          observe: runnerResult.summaries.observe ?? "Observed structured output",
+          reflect: runnerResult.summaries.reflect ?? "Reflected on run",
+        };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return failRun(ctx, {
         projectId: input.projectId,
-        db: ctx.db,
-        onEvent: ctx.onEvent,
-        authorize: ctx.authorize,
-        repoPath: ctx.repoPath,
-      },
-      input.agentIdAtVersion,
-      input.task,
-    );
-    output = runnerResult.output;
-    if (runnerResult.summaries) {
-      runnerSummaries = {
-        plan: runnerResult.summaries.plan ?? `Plan for ${agent.role}`,
-        act: runnerResult.summaries.act ?? `Acting with ${modelId}`,
-        observe: runnerResult.summaries.observe ?? "Observed structured output",
-        reflect: runnerResult.summaries.reflect ?? "Reflected on run",
-      };
+        agentId: agent.id,
+        runId,
+        rowId,
+        modelId,
+        message,
+      });
     }
   } else if (input.forceFail) {
     return failRun(ctx, {
