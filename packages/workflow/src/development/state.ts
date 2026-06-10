@@ -131,6 +131,29 @@ export function markSlicePassed(state: DevState, sliceId: string): DevState {
   };
 }
 
+export function markSliceFailed(state: DevState, sliceId: string): DevState {
+  const taskQueue = state.taskQueue.map((task) =>
+    task.id === sliceId ? { ...task, status: "failed" as const } : task,
+  );
+  return {
+    ...state,
+    taskQueue,
+    currentTask: undefined,
+  };
+}
+
+export function resetSliceForRetry(state: DevState, sliceId: string): DevState {
+  const taskQueue = state.taskQueue.map((task) =>
+    task.id === sliceId ? { ...task, status: "pending" as const } : task,
+  );
+  return {
+    ...state,
+    taskQueue,
+    currentTask: undefined,
+    currentSliceAttempts: 0,
+  };
+}
+
 export function markSliceInProgress(state: DevState, slice: FunctionSliceTask): DevState {
   const taskQueue = state.taskQueue.map((task) =>
     task.id === slice.id ? { ...task, status: "in_progress" as const } : task,

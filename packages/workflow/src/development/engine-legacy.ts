@@ -21,15 +21,17 @@ import {
   allSlicesPassed,
   effectiveMaxSliceAttempts,
   getCurrentSlice,
-  hasPendingSlices,
+  hasRunnableSlices,
   shouldRaiseSliceFailureGate,
 } from "./slice-policy.js";
 import {
   createDevSession,
   incrementSliceAttempts,
   loadDevSession,
+  markSliceFailed,
   markSliceInProgress,
   markSlicePassed,
+  resetSliceForRetry,
   resetSliceAttemptsForNewSlice,
   saveDevSession,
   updateDevSessionMeta,
@@ -175,6 +177,7 @@ export async function runSliceIteration(
     }
   }
 
+  state = markSliceFailed(state, slice.id);
   const gate = deps.createGate(state.projectId, SLICE_FAILURE_GATE);
   const nextPayload: DevelopmentSessionPayload = {
     ...payload,
@@ -201,7 +204,7 @@ export async function runSliceLoopUntilHalt(
   };
   saveDevSession(deps.db, current.state.projectId, current);
 
-  while (hasPendingSlices(current.state)) {
+  while (hasRunnableSlices(current.state)) {
     const slice = getCurrentSlice(current.state);
     if (!slice) {
       break;
@@ -347,14 +350,20 @@ async function resumeSliceFailureGate(
 ): Promise<DevelopmentRunResult> {
   switch (decision) {
     case "retry": {
+      const sliceId =
+        payload.meta.currentSliceId ?? payload.state.currentTask?.id ?? getCurrentSlice(payload.state)?.id;
+      if (!sliceId) {
+        throw new Error("No slice to retry after slice failure gate");
+      }
       const next: DevelopmentSessionPayload = {
         ...payload,
-        state: resetSliceAttemptsForNewSlice(payload.state),
+        state: resetSliceForRetry(payload.state, sliceId),
         meta: {
           ...payload.meta,
           phase: "slicing",
           gateId: undefined,
           gateType: undefined,
+          currentSliceId: sliceId,
           sliceRetryBudgetExtension:
             (payload.meta.sliceRetryBudgetExtension ?? 0) + SLICE_RETRY_BUDGET_EXTENSION,
         },

@@ -4,6 +4,7 @@ import {
   allSlicesPassed,
   getCurrentSlice,
   hasPendingSlices,
+  hasRunnableSlices,
   isSliceBudgetExhausted,
   shouldRaiseSliceFailureGate,
 } from "./slice-policy.js";
@@ -42,6 +43,16 @@ describe("slice policy", () => {
     expect(getCurrentSlice(baseState)?.id).toBe("s1");
     expect(hasPendingSlices(baseState)).toBe(true);
     expect(allSlicesPassed(baseState)).toBe(false);
+  });
+
+  it("treats in_progress slices as runnable for the development loop", () => {
+    const stuck = DevStateSchema.parse({
+      ...baseState,
+      taskQueue: [{ ...baseState.taskQueue[0], status: "in_progress" }],
+      currentTask: undefined,
+    });
+    expect(hasPendingSlices(stuck)).toBe(false);
+    expect(hasRunnableSlices(stuck)).toBe(true);
   });
 
   it("detects budget exhaustion and gate trigger", () => {

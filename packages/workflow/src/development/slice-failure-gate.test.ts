@@ -20,16 +20,20 @@ describe("slice failure gate", () => {
     }
   });
 
-  it("retry continues current slice", async () => {
+  it("retry resets the failed slice to pending and reruns it", async () => {
     const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      await reachSliceFailureGate(projectId, deps);
+      const gated = await reachSliceFailureGate(projectId, deps);
+      expect(gated.state.taskQueue[0]?.status).toBe("failed");
+
       const retried = await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "retry",
       });
       expect(retried.projectStatus).toBe("Developing");
-      expect(retried.phase).toBe("slicing");
+      expect(retried.gateType).toBe("slice_failure");
+      expect(retried.state.taskQueue[0]?.status).toBe("failed");
+      expect(retried.state.currentSliceAttempts).toBeGreaterThan(gated.state.currentSliceAttempts);
     } finally {
       cleanup();
     }

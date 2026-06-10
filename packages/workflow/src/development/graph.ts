@@ -9,11 +9,12 @@ import {
 } from "./change-review.js";
 import { resumeDevelopmentAfterGateLegacy, runSliceIteration } from "./engine-legacy.js";
 import { runPlanner } from "./planner.js";
-import { allSlicesPassed, getCurrentSlice, hasPendingSlices } from "./slice-policy.js";
+import { allSlicesPassed, getCurrentSlice, hasRunnableSlices } from "./slice-policy.js";
 import {
   createDevSession,
   loadDevSession,
   resetSliceAttemptsForNewSlice,
+  resetSliceForRetry,
   saveDevSession,
   updateDevSessionMeta,
 } from "./state.js";
@@ -186,14 +187,22 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
     const payload = { ...state.payload };
     switch (decision) {
       case "retry": {
+        const sliceId =
+          payload.meta.currentSliceId ??
+          payload.state.currentTask?.id ??
+          getCurrentSlice(payload.state)?.id;
+        if (!sliceId) {
+          throw new Error("No slice to retry after slice failure gate");
+        }
         const next: DevelopmentSessionPayload = {
           ...payload,
-          state: resetSliceAttemptsForNewSlice(payload.state),
+          state: resetSliceForRetry(payload.state, sliceId),
           meta: {
             ...payload.meta,
             phase: "slicing",
             gateId: undefined,
             gateType: undefined,
+            currentSliceId: sliceId,
             sliceRetryBudgetExtension:
               (payload.meta.sliceRetryBudgetExtension ?? 0) + SLICE_RETRY_BUDGET_EXTENSION,
           },
@@ -275,10 +284,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
       return "waitChangeReviewGate";
     }
     if (state.payload.meta.phase === "slicing") {
-      // Match legacy runSliceLoopUntilHalt: the loop is gated on pending slices.
-      // A failed slice stays in_progress (not pending), so retry with no pending
-      // slices falls through to finalize (phase stays "slicing") rather than rerun.
-      return hasPendingSlices(state.payload.state) ? "sliceNode" : "finalize";
+      return hasRunnableSlices(state.payload.state) ? "sliceNode" : "finalize";
     }
     return END;
   };
@@ -287,7 +293,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
     if (state.payload.meta.gateType === SLICE_FAILURE_GATE) {
       return "waitSliceFailureGate";
     }
-    if (hasPendingSlices(state.payload.state)) {
+    if (hasRunnableSlices(state.payload.state)) {
       return "sliceNode";
     }
     return "finalize";

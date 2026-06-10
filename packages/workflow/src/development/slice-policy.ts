@@ -11,6 +11,13 @@ export function hasPendingSlices(state: DevState): boolean {
   return state.taskQueue.some((task) => (task.status ?? "pending") === "pending");
 }
 
+export function hasRunnableSlices(state: DevState): boolean {
+  return state.taskQueue.some((task) => {
+    const status = task.status ?? "pending";
+    return status === "pending" || status === "in_progress";
+  });
+}
+
 export function allSlicesPassed(state: DevState): boolean {
   return (
     state.taskQueue.length > 0 &&
