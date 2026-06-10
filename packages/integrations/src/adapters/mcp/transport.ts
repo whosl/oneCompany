@@ -7,6 +7,7 @@ import {
   resolveGatewaySpawnEnv,
   resolveTemplateString,
 } from "./config.js";
+import { resolveMcpToolCall } from "./tool-mapping.js";
 
 type CachedClient = {
   client: Client;
@@ -84,9 +85,10 @@ export function createMcpTransportAdapter(
     integrationId,
     async callTool(toolName, context) {
       const client = await getMcpClient(integrationId, spec);
+      const { mcpTool, mcpArgs } = resolveMcpToolCall(integrationId, toolName, context.args);
       const result = await client.callTool({
-        name: toolName,
-        arguments: (context.args ?? {}) as Record<string, unknown>,
+        name: mcpTool,
+        arguments: mcpArgs,
       });
       return formatToolResult(result);
     },

@@ -25,8 +25,8 @@
       "envFromSecretRefs": { "SUPABASE_ACCESS_TOKEN": "SUPABASE_ACCESS_TOKEN" }
     },
     "vercel": {
-      "transport": "native_planned",
-      "notes": "HTTP native adapter only (PR-E/F)."
+      "transport": "native",
+      "notes": "HTTP native adapter via adapters/native/vercel.ts (PR-E/F)."
     },
     "cloudflare": {
       "transport": "mcp_stdio",

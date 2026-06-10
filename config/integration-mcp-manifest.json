@@ -46,7 +46,7 @@
     {
       "id": "vercel",
       "priority": "P1",
-      "transport": "native_planned",
+      "transport": "native",
       "displayName": "Vercel",
       "secretRefs": ["VERCEL_TOKEN"],
       "offlineFallbackSkillPackId": "vercel-offline",

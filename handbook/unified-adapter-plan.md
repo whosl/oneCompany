@@ -1,6 +1,6 @@
 # Unified Integration Adapter Plan
 
-Status: **In progress** (PR-A+/B+/C1/D done, PR-E/F next)
+Status: **In progress** (PR-A+/B+/C1/D/E-F done, PR-G next)
 
 ## Goal
 
@@ -53,8 +53,28 @@ Integrations UI   ──►  API routes
 | **PR-C1** | Workflow injects integration results into QA `testingContext`; auto-enable with id normalization | Done |
 | **PR-C2** | QA langchain executor + dynamic integration tools | Optional |
 | **PR-D** | MCP transport + `oc-gateway-mcp` + opencode config + permission bridge | Done |
-| **PR-E/F** | Figma, GitHub, Supabase, Vercel real adapters | Parallel after B |
+| **PR-E/F** | Figma, GitHub, Supabase, Vercel real adapters | Done |
 | **PR-G** | Stream gate metadata, Settings summary, E2E | Planned |
+
+## PR-E/F (completed)
+
+### Deliverables
+
+1. **`adapters/mcp/tool-mapping.ts`** — maps allowlist tool names to upstream MCP tool names (figma/github/supabase)
+2. **`adapters/mcp/transport.ts`** — applies mapping before `client.callTool`
+3. **`adapters/native/vercel.ts`** — Vercel REST adapter (`list_projects`, `create_preview_deploy`, `read_logs`)
+4. **`register-native.ts`** — registers Vercel alongside Playwright
+
+### Tool mapping (allowlist → MCP)
+
+| Integration | Allowlist | MCP server tool |
+|-------------|-----------|-----------------|
+| figma | `get_design_context` | `get_figma_data` |
+| figma | `export_screenshot` | `download_figma_images` |
+| github | `list_repos` | `search_repositories` |
+| github | `open_pr` | `create_pull_request` |
+| github | `read_issues` | `list_issues` |
+| supabase | `seed_sql` | `execute_sql` |
 
 ## PR-D (completed)
 
@@ -166,4 +186,4 @@ oc_{integrationId}__{toolName}
 - [x] PR-B+: Testing auto-screenshot visible in Stream
 - [x] PR-C1: QA notes cite integration artifacts
 - [x] PR-D: Opencode can call allowlisted tools via oc-gateway-mcp
-- [ ] All five P1 connectors have real or MCP adapter behind resolver
+- [x] All five P1 connectors have real or MCP adapter behind resolver
