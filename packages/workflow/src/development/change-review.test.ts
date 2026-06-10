@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { acceptanceCriteriaVersions, changeRequests } from "@oc/shared";
+import { acceptanceCriteriaVersions, changeRequests, projects } from "@oc/shared";
+import { eq } from "drizzle-orm";
+import { handleChangeReviewDecision, startRequirementChangeReview } from "./change-review.js";
 import { startDevelopment, resumeDevelopmentAfterGate } from "./engine.js";
+import { loadDevSession, saveDevSession } from "./state.js";
 import { setupDevelopmentTest } from "../test-utils.js";
 
 async function reachChangeReview(projectId: string, deps: ReturnType<typeof setupDevelopmentTest>["deps"]) {
@@ -41,7 +44,7 @@ describe("change review", () => {
     }
   });
 
-  it("reject returns to Developing and clears pending change request", async () => {
+  it("reject from skip_slice reopens the slice_failure gate", async () => {
     const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
       await reachChangeReview(projectId, deps);
@@ -49,10 +52,53 @@ describe("change review", () => {
         projectId,
         decision: "reject",
       });
-      expect(result.phase).toBe("slicing");
       expect(result.projectStatus).toBe("Developing");
-      expect(result.gateId).toBeUndefined();
+      expect(result.phase).toBe("awaiting_gate");
+      expect(result.gateType).toBe("slice_failure");
+      expect(result.gateId).toBeTruthy();
       expect(result.state.risks.some((risk) => risk.includes("rejected"))).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("reject from requirement_change resets the active slice to pending", async () => {
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest();
+    try {
+      await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
+      await resumeDevelopmentAfterGate(deps, { projectId, decision: "approve" });
+
+      const developing = loadDevSession(db, projectId);
+      const activeSlice = developing.state.taskQueue[0];
+      saveDevSession(db, projectId, {
+        ...developing,
+        state: {
+          ...developing.state,
+          taskQueue: developing.state.taskQueue.map((task) =>
+            task.id === activeSlice?.id
+              ? { ...task, status: "in_progress" as const }
+              : task,
+          ),
+          currentTask: activeSlice ? { ...activeSlice, status: "in_progress" } : undefined,
+        },
+        meta: { ...developing.meta, phase: "slicing" },
+      });
+      db.update(projects)
+        .set({ status: "Developing" })
+        .where(eq(projects.id, projectId))
+        .run();
+
+      startRequirementChangeReview(deps, {
+        projectId,
+        summary: "Add export to CSV",
+      });
+
+      const reviewPayload = loadDevSession(db, projectId);
+      const rejected = handleChangeReviewDecision(deps, reviewPayload, "reject");
+      expect(rejected.meta.phase).toBe("slicing");
+      expect(rejected.gateId).toBeUndefined();
+      expect(rejected.state.taskQueue[0]?.status).toBe("pending");
+      expect(db.select().from(changeRequests).all()[0]?.status).toBe("resolved");
     } finally {
       cleanup();
     }

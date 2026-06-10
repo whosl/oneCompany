@@ -410,7 +410,7 @@ async function resumeChangeReviewGate(
   decision: string,
 ): Promise<DevelopmentRunResult> {
   const next = handleChangeReviewDecision(deps, payload, decision);
-  if (decision === "update_plan") {
+  if (decision === "update_plan" || (decision === "reject" && next.meta.phase === "slicing")) {
     return runSliceLoopUntilHalt(deps, next);
   }
   if (decision === "revise_tech_plan") {

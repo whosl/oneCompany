@@ -12,8 +12,9 @@ import {
 } from "@oc/shared";
 import { analyzeChangeImpact } from "./change-request-impact.js";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
-import { loadDevSession, saveDevSession, skipSlice } from "./state.js";
+import { loadDevSession, resetSliceForRetry, saveDevSession, skipSlice } from "./state.js";
 import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./types.js";
+import { SLICE_FAILURE_GATE } from "./types.js";
 
 function insertChangeRequest(
   db: Db,
@@ -331,10 +332,43 @@ export function handleChangeReviewDecision(
     }
     case "reject": {
       deps.setStatus(payload.state.projectId, "Developing", "change_review_rejected");
+
+      if (kind === "skip_slice" && sliceId) {
+        const gate = deps.createGate(payload.state.projectId, SLICE_FAILURE_GATE);
+        const next: DevelopmentSessionPayload = {
+          ...payload,
+          state: {
+            ...payload.state,
+            risks: [
+              ...payload.state.risks,
+              "Skip-slice request rejected; slice failure gate reopened",
+            ],
+          },
+          meta: {
+            ...payload.meta,
+            phase: "awaiting_gate",
+            gateId: gate.id,
+            gateType: SLICE_FAILURE_GATE,
+            currentSliceId: sliceId,
+            pendingChangeRequestId: undefined,
+            pendingChangeRequestKind: undefined,
+          },
+        };
+        saveDevSession(deps.db, payload.state.projectId, next);
+        return next;
+      }
+
+      const retrySliceId =
+        sliceId ??
+        payload.state.taskQueue.find(
+          (task) => task.status === "in_progress" || task.status === "failed",
+        )?.id;
       const next: DevelopmentSessionPayload = {
         ...payload,
         state: {
-          ...payload.state,
+          ...(retrySliceId
+            ? resetSliceForRetry(payload.state, retrySliceId)
+            : payload.state),
           risks: [
             ...payload.state.risks,
             "Change request rejected via Change Review",
@@ -345,6 +379,7 @@ export function handleChangeReviewDecision(
           phase: "slicing",
           gateId: undefined,
           gateType: undefined,
+          currentSliceId: retrySliceId,
           pendingChangeRequestId: undefined,
           pendingChangeRequestKind: undefined,
         },

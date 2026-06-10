@@ -252,7 +252,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
     }) as string;
 
     const next = handleChangeReviewDecision(deps, state.payload, decision);
-    if (decision === "update_plan") {
+    if (decision === "update_plan" || (decision === "reject" && next.meta.phase === "slicing")) {
       return { payload: next };
     }
     if (decision === "revise_tech_plan") {
