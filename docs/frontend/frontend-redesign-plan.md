@@ -53,18 +53,15 @@ Scope: OneCompany web frontend UI v2
 - Stream / Swimlane 共享 adapter 后的同一 view model，切换时保留 selected run。
 - Stream 已拆分为 Requirement Snapshot、Current Work、分组 Run History 和严格 `seq` Event History。
 - 历史 run 默认折叠并按 group 汇总，长历史使用分批展开；Stream / Swimlane 各自恢复滚动位置。
+- Swimlane 已按 Requirement / Development 分组，支持 marker、workspace deep link、事件引用和两行短摘要。
 - Right Workspace 保持五个 tab，并复用真实 Files / Preview / Terminal / Tests / Report API 组件。
 - 真实 Developing 项目已完成桌面和 390px 移动端冒烟；无横向溢出，修复重复 React key 后 reload 无新增 console error。
-- Web 验证通过：lint、typecheck、23 个测试文件、48 个测试。
+- Web 验证通过：lint、typecheck、27 个测试文件、66 个测试。
 
 仍未完成：
 
-- 12 个 project status 和所有 gate type 的独立 projection scenario fixtures。
-- Swimlane 的 group 折叠、retrying、paused、interrupted marker 和完整 chip deep link。
-- Paused 状态下所有 mutating actions 的统一禁用审计。
-- UI v2 Top Nav 中 Settings / Project Hub 入口和 Deploy disabled reason。
-- Right Workspace 的 UI v2 视觉统一；当前真实模式复用了旧 tab 内容组件。
-- Project Hub、Settings、Integrations 的 UI v2 改造。
+- 后端尚未提供 `retrying` attempt/retry 信号和 Agent 原生 `displaySummary`。
+- Project Hub、Settings、Integrations 的 UI v2 内容改造。
 - 默认路由切换、旧 console fallback 窗口和视觉回归基线。
 
 详细实施状态和下一执行队列见 `implementation-status.md`。
@@ -542,13 +539,13 @@ Integrations：
 | Milestone                      | Status      | Notes                                                                                           |
 | ------------------------------ | ----------- | ----------------------------------------------------------------------------------------------- |
 | M0 Planning And Audit          | Partial     | 核心文档和 UI v2 QA surface 已有，独立 `audit.md` 与完整截图集未完成                            |
-| M1 Projection Contract         | Partial     | 游标、事件 taxonomy、composer mode 已完成；全状态 scenario fixtures 未完成                      |
-| M2 Component Foundation        | Partial     | UI v2 已形成局部组件语言，尚未沉淀到完整 shared primitives                                      |
+| M1 Projection Contract         | Complete    | 游标、事件 taxonomy、composer mode、12 状态和 8 gate scenario matrix 已完成                     |
+| M2 Component Foundation        | Complete    | local shared primitives、派生 token、GateCard 和 Workspace 基础组件已统一                       |
 | M3 UI v2 Real Data Adapter     | Complete    | adapter、真实路由、fixture 路由和真实项目验证已完成                                             |
 | M4 Stream And Composer         | Complete    | Current Work、严格 event timeline、分组历史和 state-driven composer 已接入                      |
-| M5 Swimlane                    | Partial     | 同源 view model、cell selection 和 selected run detail 已有；group/marker/virtualization 未完成 |
-| M6 Right Workspace             | Partial     | 五个真实 API tab 已接入；视觉统一和完整 deep link 尚未完成                                      |
-| M7 Hub, Settings, Integrations | Not started | 仍使用现有页面                                                                                  |
+| M5 Swimlane                    | Complete    | 分组、marker、deep link、event refs、interrupted 和短摘要已完成；retrying 等待后端信号          |
+| M6 Right Workspace             | Complete    | 五个真实 API tab、empty/code/log/status 视觉、deep link 和 API gate options 已统一               |
+| M7 Hub, Settings, Integrations | Partial     | UI v2 顶栏入口已接通；内容布局仍需完整重构                                                       |
 | M8 Replace Default Console     | Not started | 当前仅 query flag / environment flag opt-in                                                     |
 | M9 Cleanup And Governance      | Not started | legacy cleanup、AGENTS 和 lint governance 尚未执行                                              |
 
@@ -766,35 +763,57 @@ Completed:
 7. Added adapter and shell tests for boundaries, ordering, incremental loading and mode restoration.
 8. Verified the real project on desktop and 390px mobile without horizontal overflow.
 
-## 12. Next Implementation Slices
-
 ### Slice 4: Scenario Matrix And State Safety
 
-Priority: next.
+Completed:
 
-1. Add fixtures for all 12 statuses.
-2. Add fixtures for all gate types and multi-gate blocking behavior.
-3. Audit Paused so every mutating action except Resume is disabled.
-4. Verify Delivered / Failed read-only behavior.
-5. Add retrying and interrupted slice projection states.
-6. Add route-level tests for query flag and environment flag.
+1. Added valid projection fixtures for all 12 project statuses.
+2. Added all 8 gate fixtures using registry-defined options and a multiple-open-gates scenario.
+3. Added `/dev/ui-v2?scenario=...` rendering for regression and visual QA.
+4. Added a global Paused banner and disabled composer, gate and deploy mutations while paused.
+5. Projected the active Paused run as `interrupted` instead of running, gated or failed.
+6. Limited Deploy to Testing and disabled Pause for Draft, Delivered and Failed.
+7. Added Delivered/Failed read-only, query flag and environment flag tests.
+8. Fixed duplicate React keys in repeated test result rows.
+
+Deferred contract item:
+
+- `retrying` requires an authoritative attempt/retry field or event from the backend. It is not inferred from `run.failed` because that would misrepresent terminal failures as retries.
 
 ### Slice 5: Swimlane Completion
 
-1. Group rows by Orchestrator / Requirement / Development / Testing and Delivery.
-2. Collapse historical groups and expand the active group.
-3. Add user, gate, retry, paused and interrupted markers.
-4. Add tool, diff, test and report chip deep links.
-5. Add selected run detail with event references.
+Completed:
+
+1. Grouped Swimlane rows by Requirement and Development ownership with collapsible group headers.
+2. Expanded active, gated, interrupted and failed groups while keeping completed history compact.
+3. Added user and gate timeline markers that return to the source Stream.
+4. Added tool, diff, test and report icon deep links to the five-tab workspace.
+5. Added selected-run event sequence references and expandable full P/A/O/R summaries.
+6. Added deterministic two-line cell summaries capped for dense desktop and mobile scanning.
+7. Fixed Requirement Agent classification for completeness scorer and PRD acceptance runs.
+8. Added the Agent-native / small-model summary evolution contract in `swimlane-summary-contract.md`.
+
+Deferred contract item:
+
+- `retrying` remains blocked on a backend attempt/retry signal.
+
+## 12. Next Implementation Slices
 
 ### Slice 6: UI Foundation And Workspace Polish
 
-1. Extract repeated buttons, pills, tabs, panels and code/log blocks into shared primitives.
-2. Re-skin the five existing Right Workspace contents to the UI v2 component language.
-3. Add Deploy disabled reason, Settings entry, Project Hub entry and Paused banner.
-4. Remove remaining hardcoded or duplicated style patterns.
+Completed:
+
+1. Added shared UI v2 primitives for buttons, icon buttons, tabs, panels, status pills, inputs, empty states and code/log blocks.
+2. Added derived `--oc-*` tokens for code surfaces, active borders, info state and modal overlay.
+3. Re-skinned Files, Preview, Terminal, Tests and Report without changing their backend data contracts.
+4. Re-skinned the shared GateCard and removed hardcoded palette/tracking patterns from UI v2 Workspace components.
+5. Changed Terminal gate handling to fetch authoritative options from the open-gates API by `gateId`.
+6. Added Project Hub and Settings top-nav entries, preserved the UI v2 query when switching projects, and retained Deploy disabled reasons and the Paused banner.
+7. Added primitive, top-nav and terminal gate-option regression tests.
 
 ### Slice 7: Hub, Settings, Integrations And Rollout
+
+Priority: next.
 
 1. Redesign Project Hub, Settings and Integrations.
 2. Add visual regression scenarios for status/gate/mobile/long-output states.

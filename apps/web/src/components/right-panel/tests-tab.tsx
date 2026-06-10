@@ -2,16 +2,23 @@
 
 import { useEffect, useState } from "react";
 import type { TestsResultsResponse } from "@oc/shared";
+import { FlaskConical } from "lucide-react";
 import { panelApi } from "@/lib/api";
+import {
+  UiEmptyState,
+  UiSectionHeading,
+  UiStatusPill,
+  type UiStatusTone,
+} from "@/components/ui-v2/primitives";
 
-function statusClass(status: string): string {
+function statusTone(status: string): UiStatusTone {
   if (status === "passed") {
-    return "oc-chip-success";
+    return "success";
   }
   if (status === "failed") {
-    return "oc-chip-danger";
+    return "danger";
   }
-  return "oc-chip-muted";
+  return "neutral";
 }
 
 function SuiteSection({
@@ -22,26 +29,27 @@ function SuiteSection({
   rows: TestsResultsResponse["slice"];
 }) {
   return (
-    <section>
-      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+    <section className="space-y-3">
+      <UiSectionHeading title={title} description={`${rows.length} result${rows.length === 1 ? "" : "s"}`} />
       {rows.length === 0 ? (
-        <p className="text-sm text-[var(--oc-text-muted)]">No results yet.</p>
+        <UiEmptyState
+          className="min-h-32 rounded-md border border-dashed border-[var(--oc-border-muted)]"
+          title="No results yet"
+          icon={<FlaskConical className="size-5" />}
+        />
       ) : (
-        <ul className="space-y-2">
-          {rows.map((row) => (
-            <li
-              key={row.suite}
-              className="rounded-md border border-[var(--oc-border-muted)] px-3 py-2 text-sm"
-            >
+        <ul className="divide-y divide-[var(--oc-border-muted)] rounded-md border border-[var(--oc-border-muted)]">
+          {rows.map((row, index) => (
+            <li key={`${row.suite}-${index}`} className="px-3 py-3 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-xs">{row.suite}</span>
-                <span className={statusClass(row.status)}>{row.status}</span>
+                <UiStatusPill tone={statusTone(row.status)} label={row.status} />
               </div>
               {row.details ? <p className="mt-1 text-xs text-[var(--oc-text-muted)]">{row.details}</p> : null}
               {row.artifacts && row.artifacts.length > 0 ? (
                 <ul className="mt-2 space-y-1 text-xs">
-                  {row.artifacts.map((artifact) => (
-                    <li key={artifact.artifactId}>
+                  {row.artifacts.map((artifact, artifactIndex) => (
+                    <li key={`${artifact.artifactId}-${artifactIndex}`}>
                       <span className="text-[var(--oc-text-muted)]">{artifact.kind}:</span>{" "}
                       <code>{artifact.path}</code>
                     </li>
@@ -64,7 +72,7 @@ export function TestsTab({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   return (
-    <div className="space-y-6" data-testid="tests-tab">
+    <div className="space-y-8" data-testid="tests-tab">
       <SuiteSection title="Per-slice checks" rows={results?.slice ?? []} />
       <SuiteSection title="Final acceptance suite" rows={results?.final ?? []} />
     </div>

@@ -149,6 +149,40 @@ describe("adaptConsoleProjection", () => {
     expect(viewModel.terminalItems[0]?.title).toBe("shell.run");
   });
 
+  it("assigns requirement agents to the Requirement Group", () => {
+    const snapshot: ConsoleSnapshot = {
+      ...baseSnapshot,
+      openGates: [],
+      events: [
+        event(
+          1,
+          {
+            type: "agent.started",
+            projectId: "project-1",
+            agentId: "completeness-scorer@1",
+            runId: "requirement-run",
+          },
+          { agentId: "completeness-scorer@1", runId: "requirement-run" },
+        ),
+        event(
+          2,
+          {
+            type: "agent.plan",
+            projectId: "project-1",
+            agentId: "completeness-scorer@1",
+            summary: "Score requirement completeness",
+          },
+          { agentId: "completeness-scorer@1", runId: "requirement-run" },
+        ),
+      ],
+      lastSeq: 2,
+    };
+
+    const viewModel = adaptConsoleProjection(createProjectionFromSnapshot(snapshot));
+    expect(viewModel.runs[0]?.groupId).toBe("requirement");
+    expect(viewModel.swimlaneRows[0]?.groupId).toBe("requirement");
+  });
+
   it("supports an initial project with no runs or gates", () => {
     const snapshot: ConsoleSnapshot = {
       ...baseSnapshot,

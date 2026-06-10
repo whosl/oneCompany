@@ -40,6 +40,11 @@ UI v2 会重做界面和组件语言。后续所有共享 UI 组件应逐步沉�
 --oc-status-success
 --oc-status-warning
 --oc-status-danger
+--oc-status-info
+--oc-surface-code
+--oc-text-on-code
+--oc-border-active
+--oc-overlay
 ```
 
 ## 颜色语义
@@ -95,7 +100,21 @@ UI v2 会重做界面和组件语言。后续所有共享 UI 组件应逐步沉�
 
 ## 核心组件
 
-优先沉淀到 `packages/ui`：
+优先沉淀到 `packages/ui`。在该 package 补齐 React/Tailwind 构建契约前，UI v2 可先使用
+`apps/web/src/components/ui-v2/primitives.tsx` 作为共享实现，业务组件不得复制其基础样式。
+
+当前已落地：
+
+- `UiButton` / `UiIconButton`
+- `UiTabs`
+- `UiPanel`
+- `UiStatusPill`
+- `UiEmptyState`
+- `UiCodeBlock` / `UiLogBlock`
+- `UiInput`
+- `UiSectionHeading`
+
+后续继续沉淀：
 
 - `Button`
 - `IconButton`

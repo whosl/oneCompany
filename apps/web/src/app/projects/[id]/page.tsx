@@ -1,5 +1,6 @@
 import { ConsoleLayout } from "@/components/console/console-layout";
 import { UiV2Console } from "@/components/ui-v2/ui-v2-console";
+import { shouldUseUiV2 } from "./route-mode";
 
 export default async function ProjectConsolePage({
   params,
@@ -10,7 +11,7 @@ export default async function ProjectConsolePage({
 }) {
   const { id } = await params;
   const { ui } = await searchParams;
-  const useUiV2 = ui === "v2" || process.env.NEXT_PUBLIC_OC_UI_V2 === "1";
+  const useUiV2 = shouldUseUiV2(ui, process.env.NEXT_PUBLIC_OC_UI_V2);
 
   if (useUiV2) {
     return <UiV2Console projectId={id} />;

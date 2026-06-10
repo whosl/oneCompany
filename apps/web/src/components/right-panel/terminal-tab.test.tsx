@@ -7,11 +7,13 @@ import { TerminalTab } from "./terminal-tab";
 
 const runCommand = vi.fn();
 const resolveGate = vi.fn();
+const listOpenGates = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   panelApi: {
     runCommand: (...args: unknown[]) => runCommand(...args),
     resolveGate: (...args: unknown[]) => resolveGate(...args),
+    listOpenGates: (...args: unknown[]) => listOpenGates(...args),
   },
 }));
 
@@ -38,6 +40,15 @@ describe("TerminalTab — M8", () => {
   });
 
   it("surfaces gate card when high-risk command is rejected", async () => {
+    listOpenGates.mockResolvedValue({
+      gates: [
+        {
+          id: "gate-123",
+          gateType: "dangerous_operation",
+          options: ["approve", "reject", "custom"],
+        },
+      ],
+    });
     const error = new Error("Command rejected by gate: npm install lodash") as Error & {
       gateId?: string;
       gateType?: string;
@@ -56,5 +67,6 @@ describe("TerminalTab — M8", () => {
       expect(screen.getByText("Command blocked by gate")).toBeTruthy();
     });
     expect(screen.getByRole("button", { name: "approve" })).toBeTruthy();
+    expect(listOpenGates).toHaveBeenCalledWith("p1");
   });
 });

@@ -13,6 +13,7 @@ import type {
   UiV2Projection,
   WorkspaceTabId,
 } from "./types";
+import { compactDisplaySummary } from "./display-summary";
 
 const STEP_NAMES: AgentStepName[] = ["Plan", "Act", "Observe", "Reflect"];
 
@@ -36,7 +37,10 @@ function groupForAgent(agentId?: string): AgentGroupId {
     normalized.includes("requirement") ||
     normalized.includes("intake") ||
     normalized.includes("analyst") ||
-    normalized.includes("question")
+    normalized.includes("question") ||
+    normalized.includes("scorer") ||
+    normalized.includes("completeness") ||
+    normalized.includes("prd")
   ) {
     return "requirement";
   }
@@ -165,6 +169,12 @@ function activateCurrentRun(run: AgentRun, gated: boolean): void {
   if (currentStep) currentStep.status = gated ? "gated" : "running";
 }
 
+function interruptCurrentRun(run: AgentRun): void {
+  run.status = "interrupted";
+  const currentStep = run.steps.find((step) => step.name === run.currentStep);
+  if (currentStep) currentStep.status = "interrupted";
+}
+
 function buildRunGroups(
   groups: UiV2Projection["groups"],
   runs: AgentRun[],
@@ -265,23 +275,43 @@ function buildSwimlaneRows(runs: AgentRun[]): SwimlaneRow[] {
     agentName: run.agentName.replace(/ Agent$/, ""),
     role: run.groupLabel,
     status: run.status,
-    cells: run.steps.map((step) => ({
-      agentId: run.agentId,
-      step: step.name,
-      summary: step.summary,
-      status: step.status,
-      runId: run.id,
-      chips: [
-        ...(run.tools.length && step.name === run.currentStep ? ["tool"] : []),
-        ...(run.status === "gated" && step.name === run.currentStep ? ["gate"] : []),
-      ],
-    })),
+    cells: run.steps.map((step) => {
+      const current = step.name === run.currentStep;
+      const links: WorkspaceTabId[] = current
+        ? [
+            ...(run.tools.length ? (["Terminal"] as const) : []),
+            ...(run.diffs.length ? (["Files"] as const) : []),
+            ...(run.tests.length ? (["Tests"] as const) : []),
+            ...(run.artifacts.length ? (["Report"] as const) : []),
+          ]
+        : [];
+      return {
+        agentId: run.agentId,
+        step: step.name,
+        summary: compactDisplaySummary(step.summary),
+        fullSummary: step.summary,
+        status: step.status,
+        runId: run.id,
+        chips: [
+          ...(run.tools.length && current ? ["tool"] : []),
+          ...(run.diffs.length && current ? ["diff"] : []),
+          ...(run.tests.length && current ? ["test"] : []),
+          ...(run.artifacts.length && current ? ["report"] : []),
+          ...(run.status === "gated" && current ? ["gate"] : []),
+          ...(run.status === "interrupted" && current ? ["paused"] : []),
+        ],
+        links: [...new Set(links)],
+        firstSeq: run.firstSeq,
+        lastSeq: run.lastSeq,
+      };
+    }),
   }));
 }
 
 export function adaptConsoleProjection(projection: ConsoleProjection): UiV2Projection {
   const runs = projection.streamGroups.map((group) => buildRun(group, projection.events));
   const openGate = buildOpenGate(projection);
+  const projectPaused = projection.snapshot.project.status === "Paused";
   const projectCanRun = !["Delivered", "Failed", "Paused"].includes(
     projection.snapshot.project.status,
   );
@@ -295,6 +325,8 @@ export function adaptConsoleProjection(projection: ConsoleProjection): UiV2Proje
   }
   if (activeRun && projectCanRun) {
     activateCurrentRun(activeRun, Boolean(openGate));
+  } else if (activeRun && projectPaused) {
+    interruptCurrentRun(activeRun);
   }
 
   const groupStatuses = new Map<AgentGroupId, AgentRunStatus>();
@@ -302,6 +334,7 @@ export function adaptConsoleProjection(projection: ConsoleProjection): UiV2Proje
     const groupRuns = runs.filter((run) => run.groupId === groupId);
     const status =
       groupRuns.find((run) => run.status === "gated")?.status ??
+      groupRuns.find((run) => run.status === "interrupted")?.status ??
       groupRuns.find((run) => run.status === "failed")?.status ??
       groupRuns.find((run) => run.status === "running")?.status ??
       (groupRuns.length ? "completed" : "pending");
@@ -374,12 +407,17 @@ export function adaptConsoleProjection(projection: ConsoleProjection): UiV2Proje
       name: projection.snapshot.project.name,
       slug: projection.snapshot.project.slug,
       status: projection.snapshot.project.status,
+      pausedFrom: projection.snapshot.pausedFrom,
       activeGroup: projection.snapshot.phase.activeGroup,
       progress: projection.snapshot.phase.progressLabel ?? projection.snapshot.phase.label,
     },
     composer: { ...projection.composer },
     orchestration: {
-      orchestratorStatus: openGate ? "gated" : (activeRun?.status ?? "pending"),
+      orchestratorStatus: projectPaused
+        ? "interrupted"
+        : openGate
+          ? "gated"
+          : (activeRun?.status ?? "pending"),
       activeGroup: projection.snapshot.phase.activeGroup,
       activeAgent: activeRun?.agentName ?? "Orchestrator Agent",
       unit:
@@ -405,7 +443,11 @@ export function adaptConsoleProjection(projection: ConsoleProjection): UiV2Proje
       primaryRunId: activeRun?.id,
       relatedRunIds: currentRunIds,
       gateId: openGate?.id,
-      status: openGate ? "gated" : (activeRun?.status ?? "pending"),
+      status: projectPaused
+        ? "interrupted"
+        : openGate
+          ? "gated"
+          : (activeRun?.status ?? "pending"),
       summary: projection.composer.reason,
     },
     runGroups: buildRunGroups(groups, runs, currentRunIdSet),

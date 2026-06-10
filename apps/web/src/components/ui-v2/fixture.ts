@@ -371,9 +371,14 @@ export const uiV2Fixture: UiV2Projection = {
           agentId: "coding",
           step: "Act",
           summary: "permission",
+          fullSummary:
+            "Requests package installation permission before writing generated UI files and continuing the active implementation slice.",
           status: "gated",
           runId: "coding-slice-2",
           chips: ["tool", "gate"],
+          links: ["Terminal", "Files", "Tests"],
+          firstSeq: 25,
+          lastSeq: 32,
         },
         {
           agentId: "coding",

@@ -59,5 +59,8 @@ describe("ProjectHub — M9", () => {
     });
     expect(screen.getByText("Delivered")).toBeTruthy();
     expect(screen.getAllByText("Developing").length).toBeGreaterThan(0);
+    expect(screen.getByText("Open gates")).toBeTruthy();
+    expect(screen.getByText("Risks")).toBeTruthy();
+    expect(screen.queryByText("Environment checks")).toBeNull();
   });
 });

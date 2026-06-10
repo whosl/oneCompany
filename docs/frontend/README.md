@@ -7,7 +7,7 @@
 当前入口：
 
 - `/dev/ui-v2`：完整 fixture 和视觉 QA。
-- `/projects/[id]?ui=v2`：真实 snapshot、SSE、gate、composer 和五个 workspace tab。
+- `/projects/[id]?ui=v2`：真实 snapshot、SSE、gate、composer、统一后的五个 workspace tab，以及 Project Hub / Settings 入口。
 - `/projects/[id]`：默认仍为 legacy console，直到 rollout 验收完成。
 
 ## UI v2 决策
@@ -38,10 +38,11 @@ Claude/Fable 产出的 `business-flow-handbook.md` 已被吸收到本目录作�
 5. [information-architecture.md](information-architecture.md) - 页面结构和核心区域职责。
 6. [agent-orchestration-ui.md](agent-orchestration-ui.md) - 主 agent、子 agent、agent run、gate 和状态语义。
 7. [stream-and-swimlane-contract.md](stream-and-swimlane-contract.md) - 信息流和泳道如何共享同一投影。
-8. [design-system.md](design-system.md) - tokens、组件、布局和交互规范。
-9. [frontend-redesign-plan.md](frontend-redesign-plan.md) - 完整前端改造执行计划、里程碑和验收门。
-10. [implementation-status.md](implementation-status.md) - 当前已完成内容、验证证据、已知缺口和下一执行队列。
-11. [migration-plan.md](migration-plan.md) - 从当前实现迁移到新设计的阶段纲要。
+8. [swimlane-summary-contract.md](swimlane-summary-contract.md) - 泳道短摘要、Agent 原生摘要与低成本模型异步补全策略。
+9. [design-system.md](design-system.md) - tokens、组件、布局和交互规范。
+10. [frontend-redesign-plan.md](frontend-redesign-plan.md) - 完整前端改造执行计划、里程碑和验收门。
+11. [implementation-status.md](implementation-status.md) - 当前已完成内容、验证证据、已知缺口和下一执行队列。
+12. [migration-plan.md](migration-plan.md) - 从当前实现迁移到新设计的阶段纲要。
 
 ## 来源
 

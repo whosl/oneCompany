@@ -42,7 +42,9 @@ describe("SettingsModal — M9", () => {
       expect(screen.getByTestId("engine-degraded-notice")).toBeTruthy();
     });
     expect(screen.getByText(/mock data/i)).toBeTruthy();
-    expect(screen.getByText(/Workflow LLM: Missing/)).toBeTruthy();
-    expect(screen.getByText(/Opencode model: Missing/)).toBeTruthy();
+    expect(screen.getByText("Workflow LLM")).toBeTruthy();
+    expect(screen.getByText("Opencode model")).toBeTruthy();
+    expect(screen.getAllByText("Missing").length).toBeGreaterThan(0);
+    expect(screen.queryByText("New project")).toBeNull();
   });
 });

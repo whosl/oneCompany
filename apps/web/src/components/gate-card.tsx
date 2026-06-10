@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "./ui/button";
 import { formatGateOptionLabel } from "../lib/gates";
+import { UiButton, UiPanel } from "./ui-v2/primitives";
 
 export type GateCardProps = {
   gateId: string;
@@ -32,11 +32,11 @@ export function GateCard({
 
   if (status === "resolved") {
     return (
-      <article className="rounded-md border bg-muted/40 p-4" data-gate-id={gateId}>
+      <UiPanel className="p-4" data-gate-id={gateId}>
         <h2 className="font-medium">{title}</h2>
-        <p className="text-sm text-muted-foreground">{gateType}</p>
+        <p className="text-sm text-[var(--oc-text-muted)]">{gateType}</p>
         <p className="mt-2 text-sm">Resolved: {decision}</p>
-      </article>
+      </UiPanel>
     );
   }
 
@@ -56,24 +56,28 @@ export function GateCard({
   }
 
   return (
-    <article className="rounded-md border bg-card p-4 shadow-sm" data-gate-id={gateId}>
-      <h2 className="text-lg font-semibold">{title}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{gateType}</p>
+    <UiPanel
+      className="border-[var(--oc-status-warning)]/50 bg-[var(--oc-status-warning)]/10 p-4"
+      data-gate-id={gateId}
+    >
+      <h2 className="text-sm font-semibold text-[var(--oc-text-primary)]">{title}</h2>
+      <p className="mt-1 text-sm text-[var(--oc-text-muted)]">{description}</p>
+      <p className="mt-1 text-xs text-[var(--oc-status-warning)]">{gateType}</p>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {options
           .filter((option) => option !== "custom")
           .map((option) => (
-            <Button
+            <UiButton
               key={option}
               type="button"
-              variant="outline"
+              variant={option === "reject" ? "danger" : "secondary"}
+              size="sm"
               disabled={pending}
               onClick={() => void handleResolve(option)}
             >
               {formatGateOptionLabel(option)}
-            </Button>
+            </UiButton>
           ))}
       </div>
 
@@ -84,22 +88,23 @@ export function GateCard({
           </label>
           <textarea
             id={`${gateId}-custom`}
-            className="min-h-20 rounded-md border px-3 py-2 text-sm"
+            className="min-h-20 rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] px-3 py-2 text-sm outline-none focus:border-[var(--oc-border-active)] focus:ring-2 focus:ring-[var(--oc-border-active)]/20"
             value={customText}
             onChange={(event) => setCustomText(event.target.value)}
             placeholder="Attach custom text to an allowed gate decision"
           />
-          <Button
+          <UiButton
             type="button"
+            variant="primary"
             disabled={pending || customText.trim().length === 0}
             onClick={() => void handleResolve("custom")}
           >
             Submit custom
-          </Button>
+          </UiButton>
         </div>
       ) : null}
 
-      {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-    </article>
+      {error ? <p className="mt-3 text-sm text-[var(--oc-status-danger)]">{error}</p> : null}
+    </UiPanel>
   );
 }

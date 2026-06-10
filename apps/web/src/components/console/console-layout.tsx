@@ -174,7 +174,12 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
         onClose={() => setSettingsOpen(false)}
         projectId={projectId}
       />
-      <ProjectHub open={hubOpen} currentProjectId={projectId} onClose={() => setHubOpen(false)} />
+      <ProjectHub
+        open={hubOpen}
+        currentProjectId={projectId}
+        onClose={() => setHubOpen(false)}
+        projectQuery="ui=legacy"
+      />
     </div>
   );
 }

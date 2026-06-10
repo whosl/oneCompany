@@ -15,7 +15,14 @@ export type AgentGroupId = "orchestrator" | "requirement" | "development";
 
 export type AgentStepName = "Plan" | "Act" | "Observe" | "Reflect";
 
-export type AgentRunStatus = "completed" | "running" | "waiting" | "gated" | "failed" | "pending";
+export type AgentRunStatus =
+  | "completed"
+  | "running"
+  | "waiting"
+  | "gated"
+  | "failed"
+  | "interrupted"
+  | "pending";
 
 export type AgentGroup = {
   id: AgentGroupId;
@@ -108,9 +115,13 @@ export type SwimlaneCell = {
   agentId: string;
   step: AgentStepName;
   summary: string;
+  fullSummary?: string;
   status: AgentRunStatus;
   runId?: string;
   chips?: string[];
+  links?: WorkspaceTabId[];
+  firstSeq?: number;
+  lastSeq?: number;
 };
 
 export type SwimlaneRow = {
@@ -135,6 +146,7 @@ export type UiV2Projection = {
     name: string;
     slug: string;
     status: string;
+    pausedFrom?: string;
     activeGroup: string;
     progress: string;
   };

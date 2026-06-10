@@ -180,7 +180,7 @@ Swimlane 使用同一 projection 的 `runs` 和 `groups`。
 
 cell：
 
-- 展示最新 step summary。
+- 展示最新 step 的短 `displaySummary`；完整 `summary` 保留在 run detail 和事件审计中。
 - active cell 强调。
 - completed cell compact。
 - failed cell danger。
@@ -189,6 +189,8 @@ cell：
 - user messages 和 gates 作为 markers，不能丢失。
 - 如果项目处于 `Paused`，所有 active cell 进入 paused/disabled 表达，并保留 pausedFrom。
 - `interrupted` slice 应区别于 failed，使用中性 warning/muted 表达。
+
+摘要生成与 cheap-model backfill 规则见 `swimlane-summary-contract.md`。二次模型调用不得阻塞实时 projection 或 SSE 渲染。
 
 ## Gate Projection Rules
 

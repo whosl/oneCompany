@@ -1,8 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { Terminal } from "lucide-react";
 import { panelApi } from "@/lib/api";
 import { GateCard } from "../gate-card";
+import {
+  UiButton,
+  UiInput,
+  UiLogBlock,
+  UiSectionHeading,
+} from "@/components/ui-v2/primitives";
 
 type TranscriptLine = {
   kind: "input" | "output" | "error";
@@ -44,14 +51,12 @@ export function TerminalTab({ projectId }: { projectId: string }) {
       const gateType = (error as Error & { gateType?: string }).gateType;
       setLines((current) => [...current, { kind: "error", text: message }]);
       if (gateId && gateType) {
-        const optionsByType: Record<string, string[]> = {
-          dangerous_operation: ["approve", "skip_risk_and_continue", "reject", "custom"],
-          deployment: ["approve", "reject", "custom"],
-        };
+        const openGates = await panelApi.listOpenGates(projectId);
+        const gateRecord = openGates.gates.find((item) => item.id === gateId);
         setGate({
           gateId,
           gateType,
-          options: optionsByType[gateType] ?? ["reject"],
+          options: gateRecord?.options ?? [],
         });
       }
     } finally {
@@ -61,22 +66,34 @@ export function TerminalTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex h-full min-h-[420px] flex-col gap-3" data-testid="terminal-tab">
-      <div className="min-h-[280px] flex-1 overflow-auto rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] p-3 font-mono text-xs">
-        {lines.map((line, index) => (
-          <p
-            key={`${line.kind}-${index}`}
-            className={
-              line.kind === "error"
-                ? "text-[var(--oc-status-danger)]"
-                : line.kind === "input"
-                  ? "text-[var(--oc-accent-primary)]"
-                  : undefined
-            }
-          >
-            {line.text}
-          </p>
-        ))}
-      </div>
+      <UiSectionHeading
+        title="Governed terminal"
+        description="Commands remain subject to project risk policy and human gates."
+      />
+      <UiLogBlock className="min-h-[280px] flex-1">
+        {lines.length === 0 ? (
+          <div className="flex min-h-[250px] flex-col items-center justify-center gap-2 text-center text-[var(--oc-text-on-code)]/70">
+            <Terminal className="size-5" />
+            <p className="text-sm font-medium">No command output yet</p>
+            <p className="text-xs">Run a governed command to start a transcript.</p>
+          </div>
+        ) : (
+          lines.map((line, index) => (
+            <div
+              key={`${line.kind}-${index}`}
+              className={
+                line.kind === "error"
+                  ? "text-[var(--oc-status-danger)]"
+                  : line.kind === "input"
+                    ? "text-[var(--oc-status-warning)]"
+                    : undefined
+              }
+            >
+              {line.text}
+            </div>
+          ))
+        )}
+      </UiLogBlock>
 
       {gate ? (
         <GateCard
@@ -94,20 +111,20 @@ export function TerminalTab({ projectId }: { projectId: string }) {
       ) : null}
 
       <form onSubmit={(event) => void handleSubmit(event)} className="flex gap-2">
-        <input
-          className="flex-1 rounded-md border border-[var(--oc-border-muted)] px-3 py-2 text-sm"
+        <UiInput
+          className="flex-1"
           value={cmd}
           onChange={(event) => setCmd(event.target.value)}
           placeholder="Run a governed command (e.g. ls)"
           aria-label="Terminal command"
         />
-        <button
+        <UiButton
           type="submit"
           disabled={pending}
-          className="rounded-md bg-[var(--oc-accent-primary)] px-4 py-2 text-sm text-white"
+          variant="primary"
         >
-          Run
-        </button>
+          {pending ? "Running" : "Run"}
+        </UiButton>
       </form>
     </div>
   );

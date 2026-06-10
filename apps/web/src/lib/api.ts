@@ -5,6 +5,7 @@ import type {
   EnvironmentReadiness,
   FileContentResponse,
   FilesListResponse,
+  IntegrationConnection,
   IntegrationDefinition,
   IntegrationStatusSnapshot,
   PreviewStatus,
@@ -204,6 +205,30 @@ export const integrationsApi = {
     return requestJson<{ integrations: IntegrationStatusSnapshot[] }>(
       `/projects/${projectId}/integrations`,
     );
+  },
+
+  enable(projectId: string, integrationId: string, scopes: string[]) {
+    return requestJson<IntegrationConnection>(
+      `/projects/${projectId}/integrations/${integrationId}/enable`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scopes }),
+      },
+    );
+  },
+
+  callTool(projectId: string, integrationId: string, toolName: string, args?: unknown) {
+    return requestJson<{
+      mode: "remote" | "offline";
+      output: unknown;
+      artifactPath?: string;
+      integrationToolCallId: string;
+    }>(`/projects/${projectId}/integrations/${integrationId}/call`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolName, args }),
+    });
   },
 };
 

@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ExternalLink, MonitorPlay } from "lucide-react";
 import { panelApi } from "@/lib/api";
+import {
+  UiEmptyState,
+  UiSectionHeading,
+  UiStatusPill,
+} from "@/components/ui-v2/primitives";
 
 export function PreviewTab({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof panelApi.getPreviewStatus>> | null>(
@@ -26,27 +32,50 @@ export function PreviewTab({ projectId }: { projectId: string }) {
 
   if (!status?.previewUrl) {
     return (
-      <div className="flex h-full min-h-[420px] items-center justify-center" data-testid="preview-tab">
-        <p className="text-sm text-[var(--oc-text-muted)]">No preview yet. Start preview from testing.</p>
+      <div className="h-full min-h-[420px]" data-testid="preview-tab">
+        <UiEmptyState
+          title="No preview yet"
+          description="Start the preview from Testing to inspect the generated application."
+          icon={<MonitorPlay className="size-5" />}
+        />
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-h-[420px] flex-col" data-testid="preview-tab">
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-        <span className="font-mono">{status.previewUrl}</span>
-        <span className={status.health.reachable ? "oc-chip-success" : "oc-chip-muted"}>
-          {status.health.reachable ? "Reachable" : "Unreachable"}
-        </span>
-        <span className={status.health.playwrightReady ? "oc-chip-success" : "oc-chip-muted"}>
-          Playwright {status.health.playwrightReady ? "ready" : "pending"}
-        </span>
+      <div className="mb-3 space-y-3">
+        <UiSectionHeading
+          title="Application preview"
+          description={status.previewUrl}
+          action={
+            <a
+              href={status.previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open preview in a new tab"
+              title="Open preview in a new tab"
+              className="inline-flex size-8 items-center justify-center rounded-md border border-[var(--oc-border-muted)] text-[var(--oc-text-muted)] hover:bg-[var(--oc-surface-raised)] hover:text-[var(--oc-text-primary)]"
+            >
+              <ExternalLink className="size-4" />
+            </a>
+          }
+        />
+        <div className="flex flex-wrap gap-2">
+          <UiStatusPill
+            tone={status.health.reachable ? "success" : "danger"}
+            label={status.health.reachable ? "Reachable" : "Unreachable"}
+          />
+          <UiStatusPill
+            tone={status.health.playwrightReady ? "success" : "warning"}
+            label={`Playwright ${status.health.playwrightReady ? "ready" : "pending"}`}
+          />
+        </div>
       </div>
       <iframe
         title="App preview"
         src={status.previewUrl}
-        className="min-h-[360px] flex-1 border border-[var(--oc-border-muted)] bg-white"
+        className="min-h-[360px] flex-1 rounded-md border border-[var(--oc-border-muted)] bg-white"
         data-testid="preview-iframe"
       />
     </div>

@@ -6,10 +6,13 @@ import {
   ChevronRight,
   CircleDot,
   FileCode2,
+  FileText,
+  FolderKanban,
   MonitorPlay,
   Pause,
   Play,
   Send,
+  Settings,
   ShieldAlert,
   Terminal,
 } from "lucide-react";
@@ -18,51 +21,52 @@ import { uiV2Fixture } from "./fixture";
 import type {
   AgentRun,
   AgentRunGroup,
+  AgentGroup,
   AgentRunStatus,
   AgentStepName,
   ConsoleMode,
   StreamItem,
   SwimlaneCell,
+  SwimlaneRow,
   UiV2Projection,
   UiV2ComposerMode,
   WorkspaceTabId,
 } from "./types";
+import { compactDisplaySummary } from "./display-summary";
+import {
+  UiButton,
+  UiCodeBlock,
+  UiEmptyState,
+  UiIconButton,
+  UiPanel,
+  UiStatusPill,
+  UiTabs,
+  uiStatusClass,
+  type UiStatusTone,
+} from "./primitives";
 
 const WORKSPACE_TABS: WorkspaceTabId[] = ["Files", "Preview", "Terminal", "Tests", "Report"];
 const STEPS: AgentStepName[] = ["Plan", "Act", "Observe", "Reflect"];
 
-const statusClass: Record<AgentRunStatus, string> = {
-  completed:
-    "border-[var(--oc-status-success)]/45 bg-[var(--oc-status-success)]/10 text-[var(--oc-status-success)]",
-  running:
-    "border-[var(--oc-accent-primary)]/55 bg-[var(--oc-accent-soft)] text-[var(--oc-accent-primary)]",
-  waiting:
-    "border-[var(--oc-status-warning)]/45 bg-[var(--oc-status-warning)]/10 text-[var(--oc-status-warning)]",
-  gated:
-    "border-[var(--oc-status-warning)]/65 bg-[var(--oc-status-warning)]/15 text-[var(--oc-status-warning)]",
-  failed:
-    "border-[var(--oc-status-danger)]/55 bg-[var(--oc-status-danger)]/10 text-[var(--oc-status-danger)]",
-  pending:
-    "border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] text-[var(--oc-text-muted)]",
+const statusTone: Record<AgentRunStatus, UiStatusTone> = {
+  completed: "success",
+  running: "accent",
+  waiting: "warning",
+  gated: "warning",
+  failed: "danger",
+  interrupted: "neutral",
+  pending: "neutral",
 };
 
 function StatusPill({ status, label = status }: { status: AgentRunStatus; label?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
-        statusClass[status],
-      )}
-    >
-      <span className="size-1.5 rounded-full bg-current" />
-      {label}
-    </span>
-  );
+  return <UiStatusPill tone={statusTone[status]} label={label} />;
 }
 
 export type UiV2Actions = {
   onPauseResume?: () => void;
   onDeploy?: () => void;
+  onOpenProjectHub?: () => void;
+  onOpenSettings?: () => void;
   onComposerSubmit?: (mode: UiV2ComposerMode, text: string) => Promise<void> | void;
   onResolveGate?: (decision: string, customText?: string) => Promise<void> | void;
 };
@@ -75,6 +79,16 @@ function TopNavigation({
   actions?: UiV2Actions;
 }) {
   const paused = projection.project.status === "Paused";
+  const terminal = projection.project.status === "Delivered" || projection.project.status === "Failed";
+  const pauseAvailable = paused || (!terminal && projection.project.status !== "Draft Requirement");
+  const deployAvailable = projection.project.status === "Testing";
+  const deployReason = deployAvailable
+    ? "Run final tests and continue to deployment"
+    : paused
+      ? "Resume the project before deploying"
+      : terminal
+        ? "Terminal projects are read-only"
+        : "Deploy is only available during Testing";
   return (
     <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] px-4 py-3 lg:h-16 lg:flex-nowrap lg:px-5 lg:py-0">
       <div className="flex min-w-0 items-center gap-3">
@@ -87,13 +101,21 @@ function TopNavigation({
         </div>
       </div>
 
-      <button
+      <UiButton
         type="button"
-        className="flex h-9 w-full min-w-0 items-center justify-between rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] px-3 text-sm sm:w-72 lg:ml-8"
+        variant="secondary"
+        className="w-full min-w-0 justify-between sm:w-72 lg:ml-8"
+        onClick={actions?.onOpenProjectHub}
+        disabled={!actions?.onOpenProjectHub}
+        title="Open Project Hub"
+        data-testid="ui-v2-project-hub"
       >
-        <span className="truncate">{projection.project.name}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <FolderKanban className="size-4 text-[var(--oc-text-muted)]" />
+          <span className="truncate">{projection.project.name}</span>
+        </span>
         <ChevronRight className="size-4 text-[var(--oc-text-muted)]" />
-      </button>
+      </UiButton>
 
       <div className="flex min-w-0 flex-wrap items-center gap-2 lg:ml-5">
         <span className="rounded-full border border-[var(--oc-border-muted)] px-3 py-1 text-xs text-[var(--oc-text-primary)]">
@@ -111,32 +133,54 @@ function TopNavigation({
       </div>
 
       <div className="ml-0 flex items-center gap-2 lg:ml-auto">
-        <button
+        <UiButton
           type="button"
-          className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--oc-border-muted)] px-3 text-sm"
+          variant="secondary"
           onClick={actions?.onPauseResume}
-          disabled={!actions?.onPauseResume}
+          disabled={!actions?.onPauseResume || !pauseAvailable}
+          data-testid="ui-v2-pause-resume"
         >
           {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
           {paused ? "Resume" : "Pause"}
-        </button>
-        <button
+        </UiButton>
+        <UiButton
           type="button"
-          className="inline-flex h-9 items-center gap-2 rounded-md bg-[var(--oc-accent-primary)] px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+          variant="primary"
           onClick={actions?.onDeploy}
-          disabled={!actions?.onDeploy || projection.project.status === "Paused"}
+          disabled={!actions?.onDeploy || !deployAvailable}
+          title={deployReason}
+          data-testid="ui-v2-deploy"
         >
           <Play className="size-4" />
           Deploy
-        </button>
-        <button
+        </UiButton>
+        <UiIconButton
           type="button"
-          className="ml-2 flex size-9 items-center justify-center rounded-full border border-[var(--oc-border-muted)] bg-[var(--oc-surface-warm)] text-sm font-semibold"
+          label="Open settings"
+          className="ml-1"
+          onClick={actions?.onOpenSettings}
+          disabled={!actions?.onOpenSettings}
+          data-testid="ui-v2-settings"
         >
-          W
-        </button>
+          <Settings />
+        </UiIconButton>
       </div>
     </header>
+  );
+}
+
+function PausedBanner({ projection }: { projection: UiV2Projection }) {
+  if (projection.project.status !== "Paused") return null;
+  return (
+    <section
+      className="flex items-center gap-3 border-b border-[var(--oc-status-warning)]/45 bg-[var(--oc-status-warning)]/10 px-4 py-3 text-sm text-[var(--oc-text-primary)]"
+      data-testid="ui-v2-paused-banner"
+    >
+      <Pause className="size-4 shrink-0 text-[var(--oc-status-warning)]" />
+      <span>
+        Project paused. Resume continues from {projection.project.pausedFrom ?? "the previous stage"}.
+      </span>
+    </section>
   );
 }
 
@@ -303,7 +347,7 @@ function RunCard({
             className={cn(
               "min-h-20 rounded-md border p-2 text-xs",
               step.status === "gated" || step.status === "failed"
-                ? statusClass[step.status]
+                ? uiStatusClass(statusTone[step.status])
                 : step.name === run.currentStep
                   ? "border-[var(--oc-accent-primary)]/50 bg-[var(--oc-accent-soft)] text-[var(--oc-text-primary)]"
                   : "border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] text-[var(--oc-text-muted)]",
@@ -460,7 +504,7 @@ function HistoricalRunRow({
               className={cn(
                 "rounded-md border p-2 text-xs",
                 step.status === "failed"
-                  ? statusClass.failed
+                  ? uiStatusClass("danger")
                   : "border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] text-[var(--oc-text-muted)]",
               )}
             >
@@ -573,6 +617,7 @@ function GateCard({
 }) {
   const gate = projection.openGate;
   const [customText, setCustomText] = useState("");
+  const disabled = projection.composer.disabled || projection.composer.readOnly;
 
   if (!gate) return null;
 
@@ -608,6 +653,7 @@ function GateCard({
           onChange={(event) => setCustomText(event.target.value)}
           placeholder="Optional note attached to the selected decision"
           aria-label="Gate decision note"
+          disabled={disabled}
         />
       ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
@@ -624,7 +670,7 @@ function GateCard({
                   : "border border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] text-[var(--oc-text-primary)]",
             )}
             onClick={() => void onResolveGate?.(option.id, customText.trim() || undefined)}
-            disabled={!onResolveGate}
+            disabled={!onResolveGate || disabled}
           >
             {option.label}
           </button>
@@ -771,10 +817,12 @@ function SwimlaneCellButton({
   cell,
   selected,
   onSelect,
+  onOpenTab,
 }: {
   cell?: SwimlaneCell;
   selected: boolean;
   onSelect: () => void;
+  onOpenTab: (tab: WorkspaceTabId) => void;
 }) {
   if (!cell) {
     return (
@@ -784,22 +832,30 @@ function SwimlaneCellButton({
     );
   }
 
+  const fullSummary = cell.fullSummary ?? cell.summary;
   return (
-    <button
-      type="button"
+    <div
       className={cn(
-        "min-h-16 w-full rounded-md border p-2 text-left text-xs transition",
+        "min-h-[72px] rounded-md border p-2 text-xs transition",
         selected
           ? "border-[var(--oc-accent-primary)] bg-[var(--oc-accent-soft)]"
-          : cell.status === "failed" || cell.status === "gated"
-            ? statusClass[cell.status]
+          : cell.status === "failed" ||
+              cell.status === "gated" ||
+              cell.status === "interrupted"
+            ? uiStatusClass(statusTone[cell.status])
             : "border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] text-[var(--oc-text-primary)]",
       )}
-      onClick={onSelect}
     >
-      <div className="font-semibold">{cell.summary}</div>
+      <button
+        type="button"
+        className="line-clamp-2 min-h-8 w-full text-left font-semibold"
+        onClick={onSelect}
+        title={fullSummary}
+      >
+        {compactDisplaySummary(cell.summary)}
+      </button>
       {cell.chips?.length ? (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap items-center gap-1">
           {cell.chips.map((chip, index) => (
             <span
               key={`${chip}-${index}`}
@@ -810,7 +866,33 @@ function SwimlaneCellButton({
           ))}
         </div>
       ) : null}
-    </button>
+      {cell.links?.length ? (
+        <div className="mt-2 flex items-center gap-1 border-t border-[var(--oc-border-muted)] pt-2">
+          {cell.links.map((tab) => {
+            const Icon =
+              tab === "Terminal"
+                ? Terminal
+                : tab === "Files"
+                  ? FileCode2
+                  : tab === "Tests"
+                    ? MonitorPlay
+                    : FileText;
+            return (
+              <button
+                key={tab}
+                type="button"
+                className="inline-flex size-6 items-center justify-center rounded border border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] text-[var(--oc-text-muted)] hover:text-[var(--oc-accent-primary)]"
+                onClick={() => onOpenTab(tab)}
+                aria-label={`Open ${tab.toLowerCase()} for ${cell.runId ?? cell.agentId}`}
+                title={`Open ${tab}`}
+              >
+                <Icon className="size-3.5" />
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -845,82 +927,113 @@ function SelectedRunDetail({
         <StatusPill status={run.status} />
       </div>
       <p className="mt-3 text-sm text-[var(--oc-text-primary)]">{run.summary}</p>
+      <p className="mt-2 font-mono text-xs text-[var(--oc-text-muted)]">
+        Events #{run.firstSeq} to #{run.lastSeq}
+      </p>
+      <details className="mt-3 rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)]">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-[var(--oc-text-primary)]">
+          View full P/A/O/R summaries
+        </summary>
+        <div className="space-y-2 border-t border-[var(--oc-border-muted)] p-3">
+          {run.steps.map((step) => (
+            <div key={step.name} className="text-xs">
+              <div className="font-semibold text-[var(--oc-text-muted)]">{step.name}</div>
+              <p className="mt-0.5 text-[var(--oc-text-primary)]">{step.summary}</p>
+            </div>
+          ))}
+        </div>
+      </details>
       {run.risk ? (
         <div className="mt-3 rounded-md border border-[var(--oc-status-warning)]/45 bg-[var(--oc-status-warning)]/10 px-3 py-2 text-xs text-[var(--oc-text-primary)]">
           {run.risk}
         </div>
       ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
+        {run.tools.length ? <button
           type="button"
           className="rounded-md border border-[var(--oc-border-muted)] px-3 py-1.5 text-xs"
           onClick={() => onOpenTab("Terminal")}
         >
           Open tools
-        </button>
-        <button
+        </button> : null}
+        {run.diffs.length ? <button
           type="button"
           className="rounded-md border border-[var(--oc-border-muted)] px-3 py-1.5 text-xs"
           onClick={() => onOpenTab("Files")}
         >
           Open diffs
-        </button>
-        <button
+        </button> : null}
+        {run.tests.length ? <button
           type="button"
           className="rounded-md border border-[var(--oc-border-muted)] px-3 py-1.5 text-xs"
           onClick={() => onOpenTab("Tests")}
         >
           Open tests
-        </button>
+        </button> : null}
+        {run.artifacts.length ? <button
+          type="button"
+          className="rounded-md border border-[var(--oc-border-muted)] px-3 py-1.5 text-xs"
+          onClick={() => onOpenTab("Report")}
+        >
+          Open artifacts
+        </button> : null}
       </div>
     </aside>
   );
 }
 
-function SwimlaneModeView({
-  projection,
+function SwimlaneGroupSection({
+  group,
+  rows,
+  active,
+  failedCount,
   selectedRunId,
   onSelectRun,
   onOpenTab,
-  initialScrollTop,
-  onScrollPositionChange,
 }: {
-  projection: UiV2Projection;
+  group: AgentGroup;
+  rows: SwimlaneRow[];
+  active: boolean;
+  failedCount: number;
   selectedRunId: string;
   onSelectRun: (id: string) => void;
   onOpenTab: (tab: WorkspaceTabId) => void;
-  initialScrollTop: number;
-  onScrollPositionChange: (scrollTop: number) => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const selectedRun = projection.runs.find((run) => run.id === selectedRunId);
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = initialScrollTop;
-  }, [initialScrollTop]);
+  const [expanded, setExpanded] = useState(
+    active ||
+      failedCount > 0 ||
+      group.status === "running" ||
+      group.status === "gated" ||
+      group.status === "interrupted",
+  );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="ui-v2-swimlane">
-      <div
-        ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto p-4"
-        onScroll={(event) => onScrollPositionChange(event.currentTarget.scrollTop)}
-        data-testid="ui-v2-swimlane-scroll"
+    <section
+      className="border-b border-[var(--oc-border-muted)] last:border-b-0"
+      data-testid={`ui-v2-swimlane-group-${group.id}`}
+    >
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 bg-[var(--oc-surface-base)] px-3 py-2 text-left"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
       >
-        <div className="min-w-[660px] rounded-lg border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)]">
-          <div className="grid grid-cols-[126px_repeat(4,minmax(100px,1fr))_90px] border-b border-[var(--oc-border-muted)] text-xs font-semibold uppercase text-[var(--oc-text-muted)]">
-            <div className="p-3">Agent</div>
-            {STEPS.map((step) => (
-              <div key={step} className="border-l border-[var(--oc-border-muted)] p-3">
-                {step}
-              </div>
-            ))}
-            <div className="border-l border-[var(--oc-border-muted)] p-3">Status</div>
-          </div>
-          {projection.swimlaneRows.map((row) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <ChevronRight className={cn("size-4 shrink-0 transition", expanded && "rotate-90")} />
+          <span className="truncate text-sm font-semibold">{group.label}</span>
+          <span className="text-xs text-[var(--oc-text-muted)]">{rows.length} runs</span>
+          {failedCount ? (
+            <span className="text-xs text-[var(--oc-status-danger)]">{failedCount} failed</span>
+          ) : null}
+        </span>
+        <StatusPill status={group.status} />
+      </button>
+      {expanded ? (
+        <div>
+          {rows.map((row) => (
             <div
               key={row.id}
-              className="grid grid-cols-[126px_repeat(4,minmax(100px,1fr))_90px] border-b border-[var(--oc-border-muted)] last:border-b-0"
+              className="grid grid-cols-[126px_repeat(4,minmax(100px,1fr))_90px] border-t border-[var(--oc-border-muted)]"
             >
               <div className="p-3">
                 <div className="font-semibold text-[var(--oc-text-primary)]">{row.agentName}</div>
@@ -939,6 +1052,7 @@ function SwimlaneModeView({
                       onSelect={() => {
                         if (cell?.runId) onSelectRun(cell.runId);
                       }}
+                      onOpenTab={onOpenTab}
                     />
                   </div>
                 );
@@ -948,6 +1062,100 @@ function SwimlaneModeView({
               </div>
             </div>
           ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SwimlaneModeView({
+  projection,
+  selectedRunId,
+  onSelectRun,
+  onOpenTab,
+  initialScrollTop,
+  onScrollPositionChange,
+  onOpenStream,
+}: {
+  projection: UiV2Projection;
+  selectedRunId: string;
+  onSelectRun: (id: string) => void;
+  onOpenTab: (tab: WorkspaceTabId) => void;
+  initialScrollTop: number;
+  onScrollPositionChange: (scrollTop: number) => void;
+  onOpenStream: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const selectedRun = projection.runs.find((run) => run.id === selectedRunId);
+  const markers = projection.streamItems
+    .filter((item) => item.type === "user" || item.type === "gate")
+    .slice(-8);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = initialScrollTop;
+  }, [initialScrollTop]);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="ui-v2-swimlane">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto p-4"
+        onScroll={(event) => onScrollPositionChange(event.currentTarget.scrollTop)}
+        data-testid="ui-v2-swimlane-scroll"
+      >
+        {markers.length ? (
+          <div
+            className="mb-3 flex min-w-max items-center gap-2"
+            data-testid="ui-v2-swimlane-markers"
+          >
+            <span className="text-xs font-semibold uppercase text-[var(--oc-text-muted)]">
+              Timeline markers
+            </span>
+            {markers.map((marker) => (
+              <button
+                key={marker.id}
+                type="button"
+                className={cn(
+                  "rounded-full border px-2 py-1 text-xs",
+                  marker.type === "gate"
+                    ? "border-[var(--oc-status-warning)]/45 bg-[var(--oc-status-warning)]/10 text-[var(--oc-status-warning)]"
+                    : "border-[var(--oc-accent-primary)]/35 bg-[var(--oc-accent-soft)] text-[var(--oc-accent-primary)]",
+                )}
+                onClick={onOpenStream}
+                title={marker.summary}
+              >
+                #{marker.seq} {marker.type}: {compactDisplaySummary(marker.summary, 38)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="min-w-[660px] rounded-lg border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)]">
+          <div className="grid grid-cols-[126px_repeat(4,minmax(100px,1fr))_90px] border-b border-[var(--oc-border-muted)] text-xs font-semibold uppercase text-[var(--oc-text-muted)]">
+            <div className="p-3">Agent</div>
+            {STEPS.map((step) => (
+              <div key={step} className="border-l border-[var(--oc-border-muted)] p-3">
+                {step}
+              </div>
+            ))}
+            <div className="border-l border-[var(--oc-border-muted)] p-3">Status</div>
+          </div>
+          {projection.groups.map((group) => {
+            const rows = projection.swimlaneRows.filter((row) => row.groupId === group.id);
+            if (!rows.length) return null;
+            const runGroup = projection.runGroups.find((candidate) => candidate.id === group.id);
+            return (
+              <SwimlaneGroupSection
+                key={group.id}
+                group={group}
+                rows={rows}
+                active={runGroup?.active ?? false}
+                failedCount={runGroup?.failedCount ?? 0}
+                selectedRunId={selectedRunId}
+                onSelectRun={onSelectRun}
+                onOpenTab={onOpenTab}
+              />
+            );
+          })}
         </div>
       </div>
       <SelectedRunDetail run={selectedRun} onOpenTab={onOpenTab} />
@@ -1031,11 +1239,11 @@ function WorkspacePanel({
   renderWorkspaceTab?: (tab: WorkspaceTabId) => ReactNode;
 }) {
   return (
-    <section
-      className="flex h-full min-w-0 flex-col rounded-lg border border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)]"
+    <UiPanel
+      className="flex h-full min-w-0 flex-col"
       data-testid="ui-v2-workspace"
     >
-      <header className="flex items-start justify-between gap-4 border-b border-[var(--oc-border-muted)] p-4">
+      <header className="flex flex-col items-stretch justify-between gap-4 border-b border-[var(--oc-border-muted)] p-4 sm:flex-row sm:items-start">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-[var(--oc-text-primary)]">
             Project Workspace
@@ -1047,25 +1255,13 @@ function WorkspacePanel({
             </p>
           ) : null}
         </div>
-        <div className="grid grid-cols-5 gap-1 rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] p-1">
-          {WORKSPACE_TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab}
-              className={cn(
-                "h-8 rounded px-2 text-xs font-medium",
-                activeTab === tab
-                  ? "bg-[var(--oc-accent-soft)] text-[var(--oc-accent-primary)]"
-                  : "text-[var(--oc-text-muted)]",
-              )}
-              onClick={() => onTabChange(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+        <UiTabs
+          tabs={WORKSPACE_TABS}
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+          ariaLabel="Project workspace tabs"
+          className="w-full sm:min-w-[310px] sm:w-auto"
+        />
       </header>
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {renderWorkspaceTab ? (
@@ -1080,16 +1276,18 @@ function WorkspacePanel({
           </>
         )}
       </div>
-    </section>
+    </UiPanel>
   );
 }
 
 function FilesWorkspace({ projection }: { projection: UiV2Projection }) {
   if (projection.files.length === 0) {
     return (
-      <div className="flex min-h-64 items-center justify-center text-sm text-[var(--oc-text-muted)]">
-        No file or artifact events yet.
-      </div>
+      <UiEmptyState
+        title="No file or artifact events yet"
+        description="File changes and generated artifacts will appear here as agents work."
+        icon={<FileCode2 className="size-5" />}
+      />
     );
   }
 
@@ -1119,7 +1317,7 @@ function FilesWorkspace({ projection }: { projection: UiV2Projection }) {
             <FileCode2 className="size-4 text-[var(--oc-accent-primary)]" />
             apps/generated/tasks/page.tsx
           </div>
-          <pre className="overflow-auto rounded-lg bg-[var(--oc-text-primary)] p-4 font-mono text-xs leading-6 text-[var(--oc-surface-base)]">
+          <UiCodeBlock className="p-4 leading-6">
             {`+ export function TaskBoard() {
 +   return <Board columns={columns} onMoveTask={moveTask} />
 + }
@@ -1127,7 +1325,7 @@ function FilesWorkspace({ projection }: { projection: UiV2Projection }) {
 + test("moves a task from todo to review", async () => {
 +   await page.getByRole("button", { name: "Move to review" }).click()
 + })`}
-          </pre>
+          </UiCodeBlock>
         </section>
       ) : (
         <section className="rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] p-4 text-sm text-[var(--oc-text-muted)]">
@@ -1141,9 +1339,11 @@ function FilesWorkspace({ projection }: { projection: UiV2Projection }) {
 function PreviewWorkspace({ projection }: { projection: UiV2Projection }) {
   if (projection.source === "live" && !projection.previewUrl) {
     return (
-      <div className="flex min-h-64 items-center justify-center text-sm text-[var(--oc-text-muted)]">
-        Preview is not available for the current workflow state.
-      </div>
+      <UiEmptyState
+        title="Preview is not available"
+        description="A preview URL will appear after the development workflow starts one."
+        icon={<MonitorPlay className="size-5" />}
+      />
     );
   }
 
@@ -1226,9 +1426,11 @@ function TerminalWorkspace({ projection }: { projection: UiV2Projection }) {
             </section>
           ))
         ) : (
-          <div className="flex min-h-64 items-center justify-center text-sm text-[var(--oc-text-muted)]">
-            No tool call events yet.
-          </div>
+          <UiEmptyState
+            title="No tool call events yet"
+            description="Governed command activity will be listed here."
+            icon={<Terminal className="size-5" />}
+          />
         )}
       </div>
     );
@@ -1240,7 +1442,7 @@ function TerminalWorkspace({ projection }: { projection: UiV2Projection }) {
         <Terminal className="size-4 text-[var(--oc-accent-primary)]" />
         Governed terminal
       </div>
-      <pre className="min-h-96 overflow-auto rounded-lg bg-[var(--oc-text-primary)] p-4 font-mono text-xs leading-6 text-[var(--oc-surface-base)]">
+      <UiCodeBlock className="min-h-96 p-4 leading-6">
         {`$ npm install @dnd-kit/core
 risk: high external download
 status: waiting for dangerous_operation gate
@@ -1248,7 +1450,7 @@ status: waiting for dangerous_operation gate
 permission.ask -> routed through OneCompany risk policy
 redaction: enabled
 log chunk: artifacts/logs/tool-call-482.txt`}
-      </pre>
+      </UiCodeBlock>
     </div>
   );
 }
@@ -1263,9 +1465,10 @@ function TestsWorkspace({ projection }: { projection: UiV2Projection }) {
         </p>
       </div>
       {projection.tests.length === 0 ? (
-        <div className="flex min-h-48 items-center justify-center text-sm text-[var(--oc-text-muted)]">
-          No test result events yet.
-        </div>
+        <UiEmptyState
+          title="No test result events yet"
+          description="Per-slice checks and final acceptance results will appear here."
+        />
       ) : (
         projection.tests.map((test, index) => (
           <div
@@ -1290,12 +1493,12 @@ function TestsWorkspace({ projection }: { projection: UiV2Projection }) {
         ))
       )}
       {projection.source === "fixture" ? (
-        <pre className="mt-4 overflow-auto rounded-lg bg-[var(--oc-text-primary)] p-4 font-mono text-xs leading-6 text-[var(--oc-surface-base)]">
+        <UiCodeBlock className="mt-4 p-4 leading-6">
           {`trace: mobile-button-overflow.spec.ts
 expect(locator("button[name=Create]")).toBeVisible()
 Element overlaps with status footer at 390px width.
 Suggested fix: reduce toolbar gap and wrap action label.`}
-        </pre>
+        </UiCodeBlock>
       ) : null}
     </div>
   );
@@ -1315,9 +1518,11 @@ function ReportWorkspace({ projection }: { projection: UiV2Projection }) {
           </section>
         ))
       ) : (
-        <div className="flex min-h-64 items-center justify-center text-sm text-[var(--oc-text-muted)]">
-          No delivery report has been generated yet.
-        </div>
+        <UiEmptyState
+          title="No delivery report yet"
+          description="The generated delivery report and supporting artifacts will appear here."
+          icon={<FileText className="size-5" />}
+        />
       )}
     </div>
   );
@@ -1361,6 +1566,7 @@ export function UiV2Shell({
       style={{ fontFamily: "var(--font-geist-sans)" }}
     >
       <TopNavigation projection={projection} actions={actions} />
+      <PausedBanner projection={projection} />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section className="flex min-h-[820px] min-w-0 flex-col border-b border-[var(--oc-border-muted)] bg-[var(--oc-surface-raised)] lg:min-h-0 lg:basis-[48%] lg:border-b-0 lg:border-r">
           <OrchestrationStrip projection={projection} />
@@ -1388,6 +1594,7 @@ export function UiV2Shell({
               onScrollPositionChange={(scrollTop) => {
                 swimlaneScrollTopRef.current = scrollTop;
               }}
+              onOpenStream={() => setMode("stream")}
             />
           )}
           <ComposerBar projection={projection} onSubmit={actions?.onComposerSubmit} />

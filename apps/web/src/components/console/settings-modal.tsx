@@ -3,10 +3,44 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { EnvironmentReadiness } from "@oc/shared";
+import {
+  Check,
+  CircleAlert,
+  Database,
+  FolderCog,
+  KeyRound,
+  Network,
+  PlugZap,
+  ShieldCheck,
+  TerminalSquare,
+  TestTube2,
+  X,
+} from "lucide-react";
 import { consoleApi } from "@/lib/api";
+import {
+  UiDialog,
+  UiEmptyState,
+  UiStatusPill,
+} from "@/components/ui-v2/primitives";
 
-function engineLabel(ready: boolean): string {
-  return ready ? "Ready" : "Missing";
+function ReadinessRow({
+  label,
+  ready,
+  detail,
+}: {
+  label: string;
+  ready: boolean;
+  detail?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5">
+      <div className="min-w-0">
+        <div className="text-sm text-[var(--oc-text-primary)]">{label}</div>
+        {detail ? <div className="truncate text-xs text-[var(--oc-text-muted)]">{detail}</div> : null}
+      </div>
+      <UiStatusPill tone={ready ? "success" : "danger"} label={ready ? "Ready" : "Missing"} />
+    </div>
+  );
 }
 
 export function SettingsModal({
@@ -19,139 +53,247 @@ export function SettingsModal({
   projectId?: string;
 }) {
   const [readiness, setReadiness] = useState<EnvironmentReadiness | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-    void consoleApi.getEnvironmentReadiness().then(setReadiness);
+    if (!open) return;
+    let active = true;
+    setLoading(true);
+    setError(null);
+    void consoleApi
+      .getEnvironmentReadiness()
+      .then((nextReadiness) => {
+        if (active) setReadiness(nextReadiness);
+      })
+      .catch((loadError: unknown) =>
+        active
+          ? setError(
+              loadError instanceof Error ? loadError.message : "Failed to load environment readiness",
+            )
+          : undefined,
+      )
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [open]);
-
-  if (!open) {
-    return null;
-  }
 
   const engine = readiness?.engine;
   const workflowMissing = engine ? !engine.workflowLlmReady : !readiness?.apiKeyReady;
   const opencodeCliMissing = engine ? !engine.opencodeCliReady : false;
   const opencodeModelMissing = engine ? !engine.opencodeModelReady : false;
   const stubModes = readiness?.degradedModes ?? [];
-  const showDegradedNotice =
-    workflowMissing || opencodeCliMissing || opencodeModelMissing || stubModes.length > 0;
+  const engineDegraded = workflowMissing || opencodeCliMissing || opencodeModelMissing;
+  const mockModeActive = stubModes.includes("stub_engine") || stubModes.includes("testing_fixture");
+  const readyCheckCount = readiness
+    ? Object.values(readiness.checks).filter(Boolean).length
+    : 0;
+  const totalCheckCount = readiness ? Object.keys(readiness.checks).length : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" data-testid="settings-modal">
-      <div className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-lg border bg-[var(--oc-surface-base)] p-6 shadow-lg">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Settings</h2>
-          <button type="button" onClick={onClose} className="text-sm">
-            Close
-          </button>
-        </div>
+    <UiDialog
+      open={open}
+      onClose={onClose}
+      title="Settings"
+      description="Global environment readiness and runtime policy"
+      className="max-w-4xl"
+      testId="settings-modal"
+    >
+      <div className="min-h-0 flex-1 overflow-auto">
+        {loading ? <UiEmptyState title="Loading environment readiness" /> : null}
+        {error ? (
+          <div className="m-4 border border-[var(--oc-status-danger)]/45 bg-[var(--oc-status-danger)]/10 p-3 text-sm text-[var(--oc-status-danger)] sm:m-5">
+            {error}
+          </div>
+        ) : null}
 
-        {readiness ? (
-          <div className="space-y-4 text-sm">
-            {showDegradedNotice ? (
+        {!loading && readiness ? (
+          <div className="divide-y divide-[var(--oc-border-muted)]">
+            {engineDegraded ? (
               <section
-                className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3"
+                className="flex items-start gap-3 bg-[var(--oc-status-warning)]/10 px-4 py-4 sm:px-5"
                 data-testid="engine-degraded-notice"
               >
-                <h3 className="font-medium text-amber-200">Engine degraded (§12)</h3>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--oc-text-muted)]">
-                  {workflowMissing ? (
-                    <li>
-                      Workflow agents need <code>OC_LLM_API_KEY</code> or <code>OPENAI_API_KEY</code> in the API
-                      server <code>.env</code>. Until configured, requirement and planning steps use mock data and
-                      will prompt you — they will not silently pass.
-                    </li>
-                  ) : null}
-                  {opencodeCliMissing ? (
-                    <li>
-                      Slice development needs the <code>opencode</code> CLI on PATH, or set{" "}
-                      <code>OC_USE_STUB_ENGINE=1</code> for local stub mode only.
-                    </li>
-                  ) : null}
-                  {opencodeModelMissing ? (
-                    <li>
-                      Opencode model auth is missing. Configure <code>~/.local/share/opencode/auth.json</code> (or your
-                      provider credentials) so governed slices can run.
-                    </li>
-                  ) : null}
-                  {stubModes.includes("stub_engine") ? (
-                    <li>
-                      <code>OC_USE_STUB_ENGINE=1</code> is active. Authoritative checks and permission gates are
-                      bypassed — results are not production-safe.
-                    </li>
-                  ) : null}
-                  {stubModes.includes("testing_fixture") ? (
-                    <li>
-                      <code>OC_TESTING_FIXTURE=1</code> is active. Final test suites are being faked as passed.
-                    </li>
-                  ) : null}
-                </ul>
+                <CircleAlert className="mt-0.5 size-4 shrink-0 text-[var(--oc-status-warning)]" />
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--oc-text-primary)]">
+                    Engine degraded (§12)
+                  </h3>
+                  <ul className="mt-2 space-y-1.5 text-xs text-[var(--oc-text-muted)]">
+                    {workflowMissing ? (
+                      <li>
+                        Workflow agents need <code>OC_LLM_API_KEY</code> or <code>OPENAI_API_KEY</code>.
+                        Requirement and planning steps use mock data until configured; they never silently pass.
+                      </li>
+                    ) : null}
+                    {opencodeCliMissing ? (
+                      <li>
+                        Slice development needs the <code>opencode</code> CLI on PATH.
+                      </li>
+                    ) : null}
+                    {opencodeModelMissing ? (
+                      <li>
+                        Opencode model authentication is missing from the local provider configuration.
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
               </section>
             ) : null}
 
-            <section>
-              <h3 className="font-medium">Workspace paths</h3>
-              <p className="text-[var(--oc-text-muted)]">{readiness.workspaceRoot}</p>
-              <p className="text-[var(--oc-text-muted)]">{readiness.generatedProjectsRoot}</p>
+            {mockModeActive ? (
+              <section
+                className="flex items-start gap-3 bg-[var(--oc-status-danger)]/10 px-4 py-4 sm:px-5"
+                data-testid="mock-mode-notice"
+              >
+                <TestTube2 className="mt-0.5 size-4 shrink-0 text-[var(--oc-status-danger)]" />
+                <div>
+                  <h3 className="text-sm font-semibold">Mock or fixture mode active</h3>
+                  <ul className="mt-2 space-y-1 text-xs text-[var(--oc-text-muted)]">
+                    {stubModes.includes("stub_engine") ? (
+                      <li>
+                        <code>OC_USE_STUB_ENGINE=1</code> bypasses authoritative checks and permission gates.
+                      </li>
+                    ) : null}
+                    {stubModes.includes("testing_fixture") ? (
+                      <li>
+                        <code>OC_TESTING_FIXTURE=1</code> simulates final test suite success.
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="grid grid-cols-1 lg:grid-cols-2">
+              <div className="border-b border-[var(--oc-border-muted)] p-4 sm:p-5 lg:border-b-0 lg:border-r">
+                <div className="mb-3 flex items-center gap-2">
+                  <TerminalSquare className="size-4 text-[var(--oc-accent-primary)]" />
+                  <h3 className="text-sm font-semibold">Engine readiness</h3>
+                </div>
+                <div className="divide-y divide-[var(--oc-border-muted)] border-y border-[var(--oc-border-muted)]">
+                  {engine ? (
+                    <>
+                      <ReadinessRow label="Workflow LLM" ready={engine.workflowLlmReady} />
+                      <ReadinessRow label="Opencode CLI" ready={engine.opencodeCliReady} />
+                      <ReadinessRow label="Opencode model" ready={engine.opencodeModelReady} />
+                    </>
+                  ) : (
+                    <ReadinessRow label="API key" ready={readiness.apiKeyReady} />
+                  )}
+                  <ReadinessRow
+                    label="Tunnel"
+                    ready={readiness.tunnelConfigured}
+                    detail={readiness.tunnelConfigured ? "Configured" : "Not configured"}
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="size-4 text-[var(--oc-status-success)]" />
+                    <h3 className="text-sm font-semibold">Environment checks</h3>
+                  </div>
+                  <UiStatusPill
+                    tone={readyCheckCount === totalCheckCount ? "success" : "warning"}
+                    label={`${readyCheckCount} / ${totalCheckCount}`}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-[var(--oc-border-muted)] bg-[var(--oc-border-muted)] sm:grid-cols-3">
+                  {Object.entries(readiness.checks).map(([name, ok]) => (
+                    <div
+                      key={name}
+                      className="flex items-center gap-2 bg-[var(--oc-surface-base)] px-3 py-2.5 text-sm"
+                    >
+                      {ok ? (
+                        <Check className="size-4 text-[var(--oc-status-success)]" />
+                      ) : (
+                        <X className="size-4 text-[var(--oc-status-danger)]" />
+                      )}
+                      <span>
+                        {name}: {ok ? "ok" : "missing"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </section>
 
-            <section>
-              <h3 className="font-medium">Engine readiness</h3>
-              {engine ? (
-                <ul>
-                  <li>Workflow LLM: {engineLabel(engine.workflowLlmReady)}</li>
-                  <li>Opencode CLI: {engineLabel(engine.opencodeCliReady)}</li>
-                  <li>Opencode model: {engineLabel(engine.opencodeModelReady)}</li>
+            <section className="grid grid-cols-1 lg:grid-cols-2">
+              <div className="border-b border-[var(--oc-border-muted)] p-4 sm:p-5 lg:border-b-0 lg:border-r">
+                <div className="mb-3 flex items-center gap-2">
+                  <FolderCog className="size-4 text-[var(--oc-status-info)]" />
+                  <h3 className="text-sm font-semibold">Workspace paths</h3>
+                </div>
+                <dl className="space-y-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-[var(--oc-text-muted)]">Workspace root</dt>
+                    <dd className="mt-1 break-all rounded-md bg-[var(--oc-surface-raised)] p-2 font-mono text-xs">
+                      {readiness.workspaceRoot}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--oc-text-muted)]">Generated projects</dt>
+                    <dd className="mt-1 break-all rounded-md bg-[var(--oc-surface-raised)] p-2 font-mono text-xs">
+                      {readiness.generatedProjectsRoot}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="flex items-center gap-1 text-xs text-[var(--oc-text-muted)]">
+                      <Database className="size-3" /> Database
+                    </dt>
+                    <dd className="mt-1 break-all rounded-md bg-[var(--oc-surface-raised)] p-2 font-mono text-xs">
+                      {readiness.databasePath}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <KeyRound className="size-4 text-[var(--oc-status-warning)]" />
+                  <h3 className="text-sm font-semibold">Runtime policies</h3>
+                </div>
+                <ul className="divide-y divide-[var(--oc-border-muted)] border-y border-[var(--oc-border-muted)]">
+                  {readiness.policies.map((policy) => (
+                    <li key={policy} className="flex items-start gap-2 py-2.5 text-sm">
+                      <ShieldCheck className="mt-0.5 size-4 shrink-0 text-[var(--oc-status-success)]" />
+                      <span>{policy}</span>
+                    </li>
+                  ))}
                 </ul>
-              ) : (
-                <p className="text-[var(--oc-text-muted)]">API key: {readiness.apiKeyReady ? "Ready" : "Missing"}</p>
-              )}
-              <p className="mt-1 text-[var(--oc-text-muted)]">
-                Tunnel: {readiness.tunnelConfigured ? "Configured" : "Not configured"}
-              </p>
+              </div>
             </section>
 
-            <section>
-              <h3 className="font-medium">Environment checks</h3>
-              <ul>
-                {Object.entries(readiness.checks).map(([name, ok]) => (
-                  <li key={name}>
-                    {name}: {ok ? "ok" : "missing"}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section>
-              <h3 className="font-medium">Policy chips</h3>
-              <ul>
-                {readiness.policies.map((policy) => (
-                  <li key={policy}>{policy}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section data-testid="settings-integrations-link">
-              <h3 className="font-medium">Integrations</h3>
-              <p className="text-[var(--oc-text-muted)]">
-                View connector readiness, offline fallback packs, and secret readiness (names only).
-              </p>
+            <section
+              className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+              data-testid="settings-integrations-link"
+            >
+              <div className="flex items-start gap-3">
+                <PlugZap className="mt-0.5 size-4 shrink-0 text-[var(--oc-accent-primary)]" />
+                <div>
+                  <h3 className="text-sm font-semibold">Integrations</h3>
+                  <p className="mt-1 text-xs text-[var(--oc-text-muted)]">
+                    Connector readiness, project scopes, offline Skill Packs and secret names only.
+                  </p>
+                </div>
+              </div>
               <Link
                 href={projectId ? `/integrations?projectId=${projectId}` : "/integrations"}
-                className="mt-2 inline-block text-sm underline"
+                className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-[var(--oc-accent-primary)] bg-[var(--oc-accent-primary)] px-3 text-sm font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--oc-border-active)]/35"
                 onClick={onClose}
               >
-                Open Integrations
+                <Network className="size-4" />
+                Open integrations
               </Link>
             </section>
           </div>
-        ) : (
-          <p>Loading environment readiness…</p>
-        )}
+        ) : null}
       </div>
-    </div>
+    </UiDialog>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { consoleApi } from "@/lib/api";
 import { useConsoleProjection } from "@/lib/projection/use-console-projection";
+import { ProjectHub } from "@/components/console/project-hub";
+import { SettingsModal } from "@/components/console/settings-modal";
 import { FilesTab } from "@/components/right-panel/files-tab";
 import { PreviewTab } from "@/components/right-panel/preview-tab";
 import { ReportTab } from "@/components/right-panel/report-tab";
@@ -20,6 +22,8 @@ function splitAnswers(text: string): string[] {
 }
 
 export function UiV2Console({ projectId }: { projectId: string }) {
+  const [projectHubOpen, setProjectHubOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { projection, status, refresh } = useConsoleProjection(projectId);
   const viewModel = useMemo(
     () => (projection ? adaptConsoleProjection(projection) : undefined),
@@ -59,7 +63,11 @@ export function UiV2Console({ projectId }: { projectId: string }) {
 
   const actions: UiV2Actions = {
     onPauseResume: async () => {
-      if (projection.snapshot.project.status === "Paused") {
+      const projectStatus = projection.snapshot.project.status;
+      if (projectStatus === "Delivered" || projectStatus === "Failed" || projectStatus === "Draft Requirement") {
+        return;
+      }
+      if (projectStatus === "Paused") {
         await consoleApi.resumeProject(projectId);
       } else {
         await consoleApi.pauseProject(projectId);
@@ -67,11 +75,15 @@ export function UiV2Console({ projectId }: { projectId: string }) {
       await refresh();
     },
     onDeploy: async () => {
+      if (projection.snapshot.project.status !== "Testing") return;
       await consoleApi.startTesting(projectId, true);
       await refresh();
     },
+    onOpenProjectHub: () => setProjectHubOpen(true),
+    onOpenSettings: () => setSettingsOpen(true),
     onComposerSubmit: submitComposer,
     onResolveGate: async (decision, customText) => {
+      if (projection.composer.disabled || projection.composer.readOnly) return;
       const gateId = projection.blockingGateId;
       if (!gateId) return;
       await consoleApi.resolveGate(gateId, decision, customText);
@@ -88,6 +100,18 @@ export function UiV2Console({ projectId }: { projectId: string }) {
   }
 
   return (
-    <UiV2Shell projection={viewModel} actions={actions} renderWorkspaceTab={renderWorkspaceTab} />
+    <>
+      <UiV2Shell projection={viewModel} actions={actions} renderWorkspaceTab={renderWorkspaceTab} />
+      <ProjectHub
+        open={projectHubOpen}
+        currentProjectId={projectId}
+        onClose={() => setProjectHubOpen(false)}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        projectId={projectId}
+      />
+    </>
   );
 }

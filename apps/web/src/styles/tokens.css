@@ -11,6 +11,11 @@
   --oc-status-success: oklch(0.62 0.14 145);
   --oc-status-warning: oklch(0.75 0.12 80);
   --oc-status-danger: oklch(0.58 0.18 25);
+  --oc-status-info: oklch(0.58 0.1 235);
+  --oc-surface-code: oklch(0.22 0.02 50);
+  --oc-text-on-code: oklch(0.96 0.01 85);
+  --oc-border-active: var(--oc-accent-primary);
+  --oc-overlay: color-mix(in oklch, var(--oc-text-primary) 34%, transparent);
 }
 
 .oc-panel {

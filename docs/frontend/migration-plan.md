@@ -115,9 +115,9 @@
 
 ## Phase 4: Projection Store
 
-状态：部分完成。
+状态：核心契约完成。
 
-已完成 SSE no-rollback、事件去重排序、主要 event taxonomy、composer mode，以及 UI v2 adapter 的 Current Work / strict event history 边界。未完成全状态 fixtures；scenario matrix 阶段需要决定是否把 `CurrentWork` 上移到 canonical `ConsoleProjection`。
+已完成 SSE no-rollback、事件去重排序、主要 event taxonomy、composer mode、UI v2 adapter 的 Current Work / strict event history 边界，以及 12 状态、8 gate、多 gate scenario matrix。`CurrentWork` 继续作为 UI v2 adapter contract；如果后端未来提供正式 current-work snapshot，再上移到 canonical `ConsoleProjection`。
 
 任务：
 
@@ -155,9 +155,9 @@
 
 ## Phase 6: Agent Console
 
-状态：核心 Stream 完成，其余部分完成。
+状态：核心 Stream 和状态安全完成，其余部分完成。
 
-已完成真实 Orchestration Strip、Current Work、严格 `seq` Event History、分组折叠 Run History、分批展开、gate、projection-driven composer 和 live API actions。下一步是 Paused 全局禁用、全状态 scenario matrix 和 Top Nav 完整入口。
+已完成真实 Orchestration Strip、Current Work、严格 `seq` Event History、分组折叠 Run History、分批展开、gate、projection-driven composer、live API actions、Paused 全局禁用、终态只读和 Testing-only Deploy。下一步是 Swimlane 完整化和 Top Nav 的 Hub / Settings 入口。
 
 任务：
 
@@ -186,9 +186,9 @@
 
 ## Phase 7: Swimlane
 
-状态：部分完成。
+状态：核心完成，retrying 契约待后端。
 
-已完成同源 view model、P/A/O/R cells、selected run detail 和模式切换保留。group hierarchy、marker、retry/paused/interrupted 和完整 deep link 未完成。
+已完成同源 view model、P/A/O/R cells、Requirement / Development group hierarchy、user/gate markers、paused/interrupted、workspace deep links、selected run event refs、短摘要和完整文本展开。`retrying` 等待后端提供 attempt/retry 权威信号。
 
 任务：
 
@@ -204,9 +204,9 @@
 
 ## Phase 8: Right Workspace Polishing
 
-状态：部分完成。
+状态：完成。
 
-五个真实 API-backed tab 已嵌入 UI v2；内容组件仍需按 UI v2 设计系统统一视觉和交互。
+五个真实 API-backed tab 已嵌入 UI v2，并统一使用 shared primitives、`--oc-*` 派生 token、empty/code/log/status 表现。Terminal 403 gate 会按 `gateId` 从 open-gates API 读取权威 options。
 
 任务：
 
@@ -223,6 +223,10 @@
 - 每个 tab 都能从 Stream/Swimlane deep link 进入。
 
 ## Phase 9: Project Hub And Settings
+
+状态：部分完成。
+
+UI v2 顶栏已接通 Project Hub 和 Settings，跨项目打开会保留 `?ui=v2`。下一阶段重构两者内容布局与信息层级。
 
 任务：
 
