@@ -39,6 +39,9 @@ export function createCallIntegrationToolDeps(
     authorizeIntegrationWrite: async (authInput) => {
       const gate = input.gates.createGate(input.projectId, "dangerous_operation", {
         riskLevel: "high",
+        integrationId: authInput.integrationId,
+        toolName: authInput.toolName,
+        caller: input.caller ?? "ui",
       });
       const metadata = { riskLevel: "high" as const };
 

@@ -2,10 +2,17 @@
 
 import React from "react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsModal } from "./settings-modal";
 
+const listDefinitions = vi.fn();
+const listProjectStatus = vi.fn();
+
 vi.mock("@/lib/api", () => ({
+  integrationsApi: {
+    listDefinitions: (...args: unknown[]) => listDefinitions(...args),
+    listProjectStatus: (...args: unknown[]) => listProjectStatus(...args),
+  },
   consoleApi: {
     getEnvironmentReadiness: vi.fn(async () => ({
       workspaceRoot: "/tmp/oc",
@@ -24,7 +31,23 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  listDefinitions.mockResolvedValue({
+    integrations: [],
+    gateway: { adapterMode: "mock", gateMode: "sync", skillPacksRoot: "/skill-packs" },
+  });
+  listProjectStatus.mockResolvedValue({ integrations: [] });
+});
+
+beforeEach(() => {
+  listDefinitions.mockResolvedValue({
+    integrations: [],
+    gateway: { adapterMode: "mock", gateMode: "sync", skillPacksRoot: "/skill-packs" },
+  });
+  listProjectStatus.mockResolvedValue({ integrations: [] });
+});
 
 describe("SettingsModal — M9", () => {
   it("shows environment checks and excludes model routing controls", async () => {
@@ -46,5 +69,45 @@ describe("SettingsModal — M9", () => {
     expect(screen.getByText("Opencode model")).toBeTruthy();
     expect(screen.getAllByText("Missing").length).toBeGreaterThan(0);
     expect(screen.queryByText("New project")).toBeNull();
+  });
+
+  it("shows integration gateway summary and project connector counts", async () => {
+    listDefinitions.mockResolvedValue({
+      integrations: [],
+      gateway: { adapterMode: "real", gateMode: "async", skillPacksRoot: "/skill-packs" },
+    });
+    listProjectStatus.mockResolvedValue({
+      integrations: [
+        {
+          integrationId: "github",
+          displayName: "GitHub",
+          version: "1.0.0",
+          status: "connected",
+          secretReadiness: [],
+          offlineFallbackSkillPackId: "github-offline",
+          scopes: ["read"],
+        },
+        {
+          integrationId: "figma",
+          displayName: "Figma",
+          version: "1.0.0",
+          status: "offline_fallback",
+          secretReadiness: [],
+          offlineFallbackSkillPackId: "figma-offline",
+          scopes: [],
+        },
+      ],
+    });
+
+    render(<SettingsModal open onClose={vi.fn()} projectId="p1" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-integration-gateway")).toBeTruthy();
+    });
+    expect(screen.getByText("Real adapters")).toBeTruthy();
+    expect(screen.getByText("async")).toBeTruthy();
+    expect(screen.getByText("Connected")).toBeTruthy();
+    const gateway = screen.getByTestId("settings-integration-gateway");
+    expect(gateway.textContent).toContain("1");
+    expect(gateway.textContent).toContain("Offline");
   });
 });

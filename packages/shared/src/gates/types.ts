@@ -13,8 +13,13 @@ export type GateTypeId = (typeof GATE_TYPES)[number];
 
 export type GateRiskLevel = "low" | "medium" | "high";
 
+export type IntegrationCaller = "ui" | "workflow" | "agent" | "opencode";
+
 export type GateMetadata = {
   riskLevel?: GateRiskLevel;
+  integrationId?: string;
+  toolName?: string;
+  caller?: IntegrationCaller;
 };
 
 export type GateDefinition = {

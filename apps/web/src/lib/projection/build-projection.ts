@@ -5,6 +5,12 @@ import type {
   StreamItem,
   SwimlaneCell,
 } from "@oc/shared";
+import {
+  formatIntegrationGateReason,
+  formatIntegrationGateSummary,
+  formatIntegrationToolLabel,
+  getGatePresentation,
+} from "../gate-presentations.js";
 import { attachParorSegments } from "./stream-paror";
 import { groupStreamItems } from "./stream-grouping";
 import type { AgentProjection, ComposerProjection, ConsoleProjection } from "./types";
@@ -120,7 +126,9 @@ export function deriveComposer(
       blockingGateId,
       disabled: false,
       readOnly: false,
-      reason: `Resolve ${blockingGate.gateType} to continue.`,
+      reason:
+        formatIntegrationGateReason(blockingGate.metadata) ??
+        `Resolve ${blockingGate.gateType} to continue.`,
     };
   }
 
@@ -249,14 +257,27 @@ export function deriveStreamItems(projection: ConsoleProjection): StreamItem[] {
     const payload = event.payload;
     if (payload.type === "human_gate.created") {
       const gate = projection.openGates.find((g) => g.id === payload.gateId);
+      const presentation = getGatePresentation(payload.gateType);
+      const integrationLabel = formatIntegrationToolLabel(gate?.metadata);
       items.push({
         id: event.eventId,
         origin: "gate",
         kind: payload.type,
-        title: `Gate: ${payload.gateType}`,
-        summary: gate ? "Awaiting decision" : "Gate resolved",
+        title: integrationLabel
+          ? `Gate: ${integrationLabel}`
+          : `Gate: ${presentation.title}`,
+        summary: gate
+          ? formatIntegrationGateSummary(gate.metadata)
+          : "Gate resolved",
         timestamp: event.timestamp,
-        metadata: { gateId: payload.gateId, gateType: payload.gateType },
+        metadata: {
+          gateId: payload.gateId,
+          gateType: payload.gateType,
+          integrationId: gate?.metadata?.integrationId,
+          toolName: gate?.metadata?.toolName,
+          caller: gate?.metadata?.caller,
+          gateTitle: presentation.title,
+        },
         expanded: projection.blockingGateId === payload.gateId,
       });
       continue;

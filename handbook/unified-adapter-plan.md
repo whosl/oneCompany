@@ -1,6 +1,6 @@
 # Unified Integration Adapter Plan
 
-Status: **In progress** (PR-A+/B+/C1/D/E-F done, PR-G next)
+Status: **Complete** (PR-A+ through PR-G done; PR-C2 optional)
 
 ## Goal
 
@@ -54,7 +54,17 @@ Integrations UI   ──►  API routes
 | **PR-C2** | QA langchain executor + dynamic integration tools | Optional |
 | **PR-D** | MCP transport + `oc-gateway-mcp` + opencode config + permission bridge | Done |
 | **PR-E/F** | Figma, GitHub, Supabase, Vercel real adapters | Done |
-| **PR-G** | Stream gate metadata, Settings summary, E2E | Planned |
+| **PR-G** | Stream gate metadata, Settings summary, E2E | Done |
+
+## PR-G (completed)
+
+### Deliverables
+
+1. **`GateMetadata`** — `integrationId`, `toolName`, `caller` on `dangerous_operation` gates
+2. **Console snapshot** — open gate metadata flows to Stream / GateCard / composer reason
+3. **Settings modal** — Integration gateway section (`adapterMode`, `gateMode`, project connector counts)
+4. **E2E** — `integrations-baseline.spec.ts` adapter mode badge check
+5. **API test** — async high-risk call persists integration metadata on gate record
 
 ## PR-E/F (completed)
 

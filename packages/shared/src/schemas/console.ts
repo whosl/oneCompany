@@ -31,6 +31,13 @@ export const ConsoleDevSnapshotSchema = z.object({
   previewUrl: z.string().optional(),
 });
 
+export const ConsoleGateMetadataSchema = z.object({
+  riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  integrationId: z.string().optional(),
+  toolName: z.string().optional(),
+  caller: z.enum(["ui", "workflow", "agent", "opencode"]).optional(),
+});
+
 export const ConsoleGateSnapshotSchema = z.object({
   id: z.string(),
   gateType: z.string(),
@@ -38,6 +45,7 @@ export const ConsoleGateSnapshotSchema = z.object({
   options: z.array(z.string()),
   decision: z.string().nullable().optional(),
   createdAt: z.string(),
+  metadata: ConsoleGateMetadataSchema.optional(),
 });
 
 export const ConsoleSnapshotSchema = z.object({

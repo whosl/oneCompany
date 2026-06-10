@@ -14,6 +14,11 @@ import type {
   WorkspaceTabId,
 } from "./types";
 import { compactDisplaySummary } from "./display-summary";
+import {
+  formatIntegrationGateReason,
+  formatIntegrationToolLabel,
+  getGatePresentation,
+} from "@/lib/gate-presentations";
 
 const STEP_NAMES: AgentStepName[] = ["Plan", "Act", "Observe", "Reflect"];
 
@@ -248,13 +253,19 @@ function buildOpenGate(projection: ConsoleProjection): OpenGate | undefined {
   const gate = projection.openGates.find((candidate) => candidate.id === projection.blockingGateId);
   if (!gate) return undefined;
 
+  const integrationLabel = formatIntegrationToolLabel(gate.metadata);
+  const presentation = getGatePresentation(gate.gateType);
+
   return {
     id: gate.id,
     type: gate.gateType,
-    title: titleCase(gate.gateType),
-    description: projection.composer.reason,
-    risk: gate.gateType === "dangerous_operation" ? "high" : "medium",
-    command: "",
+    title: integrationLabel ?? presentation.title,
+    description:
+      formatIntegrationGateReason(gate.metadata) ??
+      projection.composer.reason ??
+      presentation.description,
+    risk: gate.metadata?.riskLevel ?? (gate.gateType === "dangerous_operation" ? "high" : "medium"),
+    command: integrationLabel ?? "",
     options: gate.options.map((option, index) => ({
       id: option,
       label: titleCase(option),

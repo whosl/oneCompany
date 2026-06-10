@@ -112,6 +112,49 @@ describe("console projection — M9", () => {
     expect(projection.streamItems.some((item) => item.origin === "gate")).toBe(true);
   });
 
+  it("surfaces integration gate metadata in stream and composer", () => {
+    const projection = createProjectionFromSnapshot({
+      ...baseSnapshot,
+      openGates: [
+        {
+          id: "gate-1",
+          gateType: "dangerous_operation",
+          status: "open",
+          options: ["continue", "custom"],
+          decision: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          metadata: {
+            integrationId: "vercel",
+            toolName: "create_preview_deploy",
+            caller: "ui",
+            riskLevel: "high",
+          },
+        },
+      ],
+      events: [
+        event(1, {
+          type: "human_gate.created",
+          projectId: "p1",
+          gateId: "gate-1",
+          gateType: "dangerous_operation",
+        }),
+      ],
+      lastSeq: 1,
+    });
+
+    const gateItem = projection.streamItems.find((item) => item.origin === "gate");
+    expect(gateItem?.title).toBe("Gate: vercel:create_preview_deploy");
+    expect(gateItem?.summary).toBe("Awaiting approval for vercel:create_preview_deploy");
+    expect(gateItem?.metadata).toMatchObject({
+      integrationId: "vercel",
+      toolName: "create_preview_deploy",
+      caller: "ui",
+    });
+    expect(deriveComposer(projection.snapshot, projection.blockingGateId).reason).toBe(
+      "Approve vercel:create_preview_deploy to continue.",
+    );
+  });
+
   it("clears the blocking gate once it resolves", () => {
     let projection = createProjectionFromSnapshot(baseSnapshot);
     projection = applyEvent(projection, {

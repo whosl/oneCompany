@@ -46,6 +46,35 @@ const GATE_PRESENTATIONS: Record<
   },
 };
 
+export type IntegrationGateMetadata = {
+  integrationId?: string;
+  toolName?: string;
+  caller?: string;
+};
+
+export function formatIntegrationToolLabel(metadata?: IntegrationGateMetadata): string | undefined {
+  if (!metadata?.integrationId || !metadata.toolName) {
+    return undefined;
+  }
+  return `${metadata.integrationId}:${metadata.toolName}`;
+}
+
+export function formatIntegrationGateReason(metadata?: IntegrationGateMetadata): string | undefined {
+  const label = formatIntegrationToolLabel(metadata);
+  if (!label) {
+    return undefined;
+  }
+  return `Approve ${label} to continue.`;
+}
+
+export function formatIntegrationGateSummary(metadata?: IntegrationGateMetadata): string {
+  const label = formatIntegrationToolLabel(metadata);
+  if (!label) {
+    return "Awaiting decision";
+  }
+  return `Awaiting approval for ${label}`;
+}
+
 export function getGatePresentation(gateType: string) {
   const presentation = GATE_PRESENTATIONS[gateType];
   if (!presentation) {

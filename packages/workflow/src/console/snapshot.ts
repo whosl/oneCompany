@@ -137,6 +137,7 @@ export function buildConsoleSnapshot(
       options: gate.options,
       decision: gate.decision,
       createdAt: gate.createdAt,
+      metadata: gate.metadata,
     })),
     pausedFrom,
     events,

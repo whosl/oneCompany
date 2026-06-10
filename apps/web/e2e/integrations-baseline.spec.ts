@@ -14,4 +14,10 @@ test.describe("integrations baseline — M12", () => {
     await expect(page.getByText(/sk-[a-zA-Z0-9]/)).toHaveCount(0);
     await expect(page.getByText(/ghp_/)).toHaveCount(0);
   });
+
+  test("shows honest adapter mode badge on connector cards", async ({ page }) => {
+    await page.goto(`/integrations?projectId=${projectId}`);
+    await expect(page.getByTestId("integrations-page")).toBeVisible();
+    await expect(page.getByText("Simulated adapter")).toBeVisible();
+  });
 });
