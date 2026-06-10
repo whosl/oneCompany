@@ -53,7 +53,7 @@ export function createWorkspaceService(
         const gate = gates.createGate(projectId, gateType, metadata);
         return { id: gate.id, projectId: gate.projectId, gateType: gate.gateType };
       },
-      waitForGate: (gateId) => gates.waitForGate(gateId),
+      waitForGate: (gateId) => gates.waitForGate(gateId, { timeoutMs: 0 }),
       runLocal: runLocalCommand,
       runSandbox: (cmd, projectPath) => runInSandbox(projectPath, cmd),
       isDockerAvailable,

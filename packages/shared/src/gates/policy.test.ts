@@ -3,7 +3,10 @@ import {
   assertAllowedDecision,
   getAllowedOptions,
   isAllowedDecision,
+  isApprovalDecision,
   normalizeDecision,
+  parseDecision,
+  resolveGateDecision,
 } from "./policy.js";
 
 describe("gate policy — M4", () => {
@@ -38,5 +41,44 @@ describe("gate policy — M4", () => {
     expect(
       normalizeDecision({ decision: "custom", customText: "ship with known gaps" }),
     ).toBe("custom:ship with known gaps");
+  });
+
+  it("parses custom decisions", () => {
+    expect(parseDecision("custom:note")).toEqual({
+      raw: "custom:note",
+      kind: "custom",
+      customText: "note",
+      isCustom: true,
+    });
+  });
+
+  it("maps custom to approve for requirement_confirm", () => {
+    expect(resolveGateDecision("requirement_confirm", "custom:note")).toEqual({
+      effective: "approve",
+      customText: "note",
+    });
+  });
+
+  it("maps custom to accept for final_acceptance", () => {
+    expect(resolveGateDecision("final_acceptance", "custom:note")).toEqual({
+      effective: "accept",
+      customText: "note",
+    });
+  });
+
+  it("rejects skip_risk_and_continue on high-risk dangerous_operation at execution layer", () => {
+    expect(
+      isApprovalDecision("dangerous_operation", { riskLevel: "high" }, "skip_risk_and_continue"),
+    ).toBe(false);
+  });
+
+  it("rejects skip_risk_and_continue on deployment at execution layer", () => {
+    expect(isApprovalDecision("deployment", {}, "skip_risk_and_continue")).toBe(false);
+  });
+
+  it("treats custom as approval for dangerous_operation execution", () => {
+    expect(isApprovalDecision("dangerous_operation", { riskLevel: "high" }, "custom:ok")).toBe(
+      true,
+    );
   });
 });

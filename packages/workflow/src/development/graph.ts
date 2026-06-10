@@ -1,4 +1,4 @@
-import { getAllowedOptions } from "@oc/shared";
+import { appendCustomGateNote, getAllowedOptions, resolveGateDecision } from "@oc/shared";
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
 import type { DevFixtureProfile } from "@oc/agent-core";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
@@ -84,8 +84,18 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
     }) as string;
 
     let payload = { ...state.payload };
-    switch (decision) {
+    const { effective, customText } = resolveGateDecision(TECH_PLAN_CONFIRM_GATE, decision);
+    switch (effective) {
       case "approve": {
+        if (customText) {
+          payload = {
+            ...payload,
+            state: {
+              ...payload.state,
+              risks: appendCustomGateNote(payload.state.risks, TECH_PLAN_CONFIRM_GATE, customText),
+            },
+          };
+        }
         payload = await runPlanner(deps, payload);
         deps.setStatus(payload.state.projectId, "Developing", "tech_plan_approved");
         payload = {

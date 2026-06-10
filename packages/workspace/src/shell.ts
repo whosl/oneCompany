@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { emit, toolCalls, type Db, type EventEnvelope, type GateMetadata } from "@oc/shared";
+import { isApprovalDecision } from "@oc/shared";
 import { classifyCommand } from "./risk.js";
 import type { RiskLevel } from "./risk.js";
 import { persistOutput, type OutputRef } from "./log-pipeline.js";
@@ -80,10 +81,6 @@ function riskMetadata(risk: RiskLevel): GateMetadata | undefined {
   return undefined;
 }
 
-function isApproval(decision: string): boolean {
-  return decision === "approve" || decision === "skip_risk_and_continue";
-}
-
 async function ensureGateApproval(
   deps: ShellDeps,
   risk: RiskLevel,
@@ -94,9 +91,10 @@ async function ensureGateApproval(
     return;
   }
 
-  const gate = deps.createGate(deps.projectId, gateType, riskMetadata(risk));
+  const metadata = riskMetadata(risk);
+  const gate = deps.createGate(deps.projectId, gateType, metadata);
   const decision = await deps.waitForGate(gate.id);
-  if (!isApproval(decision)) {
+  if (!isApprovalDecision(gateType, metadata, decision)) {
     throw new CommandRejectedError(`Command rejected by gate: ${cmd}`, {
       id: gate.id,
       gateType: gate.gateType,

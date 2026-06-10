@@ -4,7 +4,9 @@ import {
   PrdAcceptanceOutputSchema,
   QuestionPlannerOutputSchema,
   ScorerOutputSchema,
+  appendCustomGateNote,
   getAllowedOptions,
+  resolveGateDecision,
 } from "@oc/shared";
 import {
   REQUIREMENT_AGENT_IDS,
@@ -451,19 +453,35 @@ export async function resumeRequirementAfterGateGraph(
   }
 
   if (existing.meta.gateType === REQUIREMENT_CONFIRM_GATE_TYPE) {
-    switch (input.decision) {
+    const { effective, customText } = resolveGateDecision(
+      REQUIREMENT_CONFIRM_GATE_TYPE,
+      input.decision,
+    );
+    switch (effective) {
       case "approve": {
-        const completed = updateSessionMeta(existing, {
-          phase: "completed",
-          gateId: undefined,
-          gateType: undefined,
-        });
+        const completed = updateSessionMeta(
+          {
+            ...existing,
+            state: {
+              ...existing.state,
+              risks: appendCustomGateNote(
+                existing.state.risks,
+                REQUIREMENT_CONFIRM_GATE_TYPE,
+                customText,
+              ),
+            },
+          },
+          {
+            phase: "completed",
+            gateId: undefined,
+            gateType: undefined,
+          },
+        );
         saveRequirementSession(deps.db, input.projectId, completed);
         return toResult(deps, completed);
       }
       case "revise_then_approve":
-      case "reject_and_redo":
-      case "custom": {
+      case "reject_and_redo": {
         const revised = updateSessionMeta(existing, {
           phase: "awaiting_answers",
           gateId: undefined,

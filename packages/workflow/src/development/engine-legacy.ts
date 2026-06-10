@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { commitSlice, ensureDevRepoScaffold, initRepo } from "@oc/workspace";
-import { emit, getAllowedOptions } from "@oc/shared";
+import { appendCustomGateNote, emit, getAllowedOptions, resolveGateDecision } from "@oc/shared";
 import { DEVELOPMENT_AGENT_IDS } from "@oc/agent-core";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
 import {
@@ -297,9 +297,20 @@ async function resumeTechPlanGate(
   payload: DevelopmentSessionPayload,
   decision: string,
 ): Promise<DevelopmentRunResult> {
-  switch (decision) {
+  const { effective, customText } = resolveGateDecision(TECH_PLAN_CONFIRM_GATE, decision);
+  switch (effective) {
     case "approve": {
-      let next = await runPlanner(deps, payload);
+      let working = payload;
+      if (customText) {
+        working = {
+          ...working,
+          state: {
+            ...working.state,
+            risks: appendCustomGateNote(working.state.risks, TECH_PLAN_CONFIRM_GATE, customText),
+          },
+        };
+      }
+      let next = await runPlanner(deps, working);
       deps.setStatus(next.state.projectId, "Developing", "tech_plan_approved");
       next = {
         ...next,

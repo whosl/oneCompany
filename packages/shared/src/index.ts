@@ -25,12 +25,17 @@ export { validRequirementState } from "./test-fixtures/m0-baseline.js";
 export * from "./gates/types.js";
 export { GATE_DEFINITIONS, getGateDefinition } from "./gates/registry.js";
 export {
+  appendCustomGateNote,
   assertAllowedDecision,
   gateTypeForbidsSkipRisk,
   getAllowedOptions,
   isAllowedDecision,
+  isApprovalDecision,
   normalizeDecision,
+  parseDecision,
+  resolveGateDecision,
 } from "./gates/policy.js";
+export { GateResumeConflictError, GateResumeFailedError } from "./gates/errors.js";
 export { parseGatePayload, serializeGatePayload } from "./gates/storage.js";
 export {
   assertTransition,

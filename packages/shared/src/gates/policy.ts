@@ -66,3 +66,79 @@ export function assertAllowedDecision(
 export function gateTypeForbidsSkipRisk(gateType: string): boolean {
   return SKIP_FORBIDDEN_GATE_TYPES.includes(gateType as GateTypeId);
 }
+
+export type ParsedDecision = {
+  raw: string;
+  kind: string;
+  customText?: string;
+  isCustom: boolean;
+};
+
+export function parseDecision(decision: string): ParsedDecision {
+  if (decision.startsWith("custom:")) {
+    const customText = decision.slice("custom:".length);
+    return { raw: decision, kind: "custom", customText, isCustom: true };
+  }
+  return { raw: decision, kind: decision, isCustom: false };
+}
+
+/** Maps custom:* decisions to the approve-like option for a gate type. */
+export function resolveGateDecision(
+  gateType: string,
+  decision: string,
+): { effective: string; customText?: string } {
+  const parsed = parseDecision(decision);
+  if (!parsed.isCustom) {
+    return { effective: parsed.kind };
+  }
+
+  switch (gateType) {
+    case "requirement_confirm":
+    case "tech_plan_confirm":
+    case "deployment":
+    case "dangerous_operation":
+      return { effective: "approve", customText: parsed.customText };
+    case "final_acceptance":
+      return { effective: "accept", customText: parsed.customText };
+    default:
+      throw new Error(`Custom decision not supported for gate type: ${gateType}`);
+  }
+}
+
+export function appendCustomGateNote(
+  notes: string[],
+  gateType: string,
+  customText?: string,
+): string[] {
+  if (!customText?.trim()) {
+    return notes;
+  }
+  return [...notes, `Human gate note (${gateType}): ${customText.trim()}`];
+}
+
+/** Single source of truth for whether a gate decision permits execution to proceed. */
+export function isApprovalDecision(
+  gateType: string,
+  metadata: GateMetadata = {},
+  decision: string,
+): boolean {
+  const { effective } = resolveGateDecision(gateType, decision);
+
+  if (effective === "approve") {
+    return true;
+  }
+
+  if (effective !== "skip_risk_and_continue") {
+    return false;
+  }
+
+  if (gateTypeForbidsSkipRisk(gateType)) {
+    return false;
+  }
+
+  if (gateType === "dangerous_operation" && metadata.riskLevel === "high") {
+    return false;
+  }
+
+  return true;
+}

@@ -1,9 +1,11 @@
 import {
   AnalystOutputSchema,
+  appendCustomGateNote,
   getAllowedOptions,
   IntakeOutputSchema,
   PrdAcceptanceOutputSchema,
   QuestionPlannerOutputSchema,
+  resolveGateDecision,
   ScorerOutputSchema,
   type RequirementState,
 } from "@oc/shared";
@@ -283,19 +285,35 @@ export async function resumeRequirementAfterGateLegacy(
   }
 
   if (payload.meta.gateType === REQUIREMENT_CONFIRM_GATE_TYPE) {
-    switch (input.decision) {
+    const { effective, customText } = resolveGateDecision(
+      REQUIREMENT_CONFIRM_GATE_TYPE,
+      input.decision,
+    );
+    switch (effective) {
       case "approve": {
-        const completed = updateSessionMeta(payload, {
-          phase: "completed",
-          gateId: undefined,
-          gateType: undefined,
-        });
+        const completed = updateSessionMeta(
+          {
+            ...payload,
+            state: {
+              ...payload.state,
+              risks: appendCustomGateNote(
+                payload.state.risks,
+                REQUIREMENT_CONFIRM_GATE_TYPE,
+                customText,
+              ),
+            },
+          },
+          {
+            phase: "completed",
+            gateId: undefined,
+            gateType: undefined,
+          },
+        );
         saveRequirementSession(deps.db, input.projectId, completed);
         return toResult(deps, completed);
       }
       case "revise_then_approve":
-      case "reject_and_redo":
-      case "custom": {
+      case "reject_and_redo": {
         const revised = updateSessionMeta(payload, {
           phase: "awaiting_answers",
           gateId: undefined,

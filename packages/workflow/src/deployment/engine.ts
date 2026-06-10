@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { deployments, emit } from "@oc/shared";
+import { appendCustomGateNote, deployments, emit, resolveGateDecision } from "@oc/shared";
 import { loadDevSession, saveDevSession } from "../development/state.js";
 import type { DeploymentRunResult, DeploymentWorkflowDeps } from "./types.js";
 
@@ -72,7 +72,9 @@ export async function handleDeploymentGateDecision(
     throw new Error("No deployment gate awaiting decision");
   }
 
-  if (input.decision === "reject") {
+  const { effective, customText } = resolveGateDecision("deployment", input.decision);
+
+  if (effective === "reject") {
     const next = {
       ...payload,
       state: {
@@ -85,7 +87,7 @@ export async function handleDeploymentGateDecision(
     return toResult(deps, next);
   }
 
-  if (input.decision !== "approve" && input.decision !== "custom") {
+  if (effective !== "approve") {
     throw new Error(`Unsupported deployment decision: ${input.decision}`);
   }
 
@@ -122,7 +124,11 @@ export async function handleDeploymentGateDecision(
     state: {
       ...payload.state,
       deploymentUrl: url,
-      risks: [...payload.state.risks, `Deployment URL confirmed: ${url}`],
+      risks: appendCustomGateNote(
+        [...payload.state.risks, `Deployment URL confirmed: ${url}`],
+        "deployment",
+        customText,
+      ),
     },
     deployment: { phase: "completed" as const },
   };

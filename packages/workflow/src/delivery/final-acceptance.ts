@@ -1,4 +1,10 @@
-import type { Db, EventEnvelope, ProjectStatus } from "@oc/shared";
+import {
+  appendCustomGateNote,
+  resolveGateDecision,
+  type Db,
+  type EventEnvelope,
+  type ProjectStatus,
+} from "@oc/shared";
 import type { DevelopmentSessionPayload } from "../development/types.js";
 import type { DeliveryReportDeps, GenerateDeliveryReportInput } from "./report-generator.js";
 import { generateDeliveryReport } from "./report-generator.js";
@@ -69,17 +75,23 @@ export function handleFinalAcceptanceDecision(
     throw new Error("No final acceptance gate awaiting decision");
   }
 
-  if (input.decision === "accept") {
+  const { effective, customText } = resolveGateDecision("final_acceptance", input.decision);
+
+  if (effective === "accept") {
     deps.setStatus(input.projectId, "Delivered", "final_acceptance_accepted");
     const next: DevelopmentSessionPayload = {
       ...payload,
+      state: {
+        ...payload.state,
+        risks: appendCustomGateNote(payload.state.risks, "final_acceptance", customText),
+      },
       delivery: { phase: "completed", reportGenerated: true },
     };
     deps.saveSession(input.projectId, next);
     return toResult(deps, next);
   }
 
-  if (input.decision === "reject_and_redo") {
+  if (effective === "reject_and_redo") {
     deps.setStatus(input.projectId, "Developing", "final_acceptance_rejected");
     const next: DevelopmentSessionPayload = {
       ...payload,

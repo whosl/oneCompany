@@ -7,7 +7,9 @@ describe("project gates list — M4", () => {
     try {
       const project = projects.createProject("Gate List");
       const openGate = gates.createGate(project.id, "requirement_stuck");
-      const resolvedGate = gates.createGate(project.id, "requirement_confirm");
+      const resolvedGate = gates.createGate(project.id, "dangerous_operation", {
+        riskLevel: "high",
+      });
       await gates.resolveGate(resolvedGate.id, { decision: "approve" });
 
       const response = await app.request(`/projects/${project.id}/gates`);

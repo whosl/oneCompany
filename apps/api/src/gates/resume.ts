@@ -1,3 +1,4 @@
+import { GateResumeConflictError } from "@oc/shared";
 import type { GateRecord } from "./service.js";
 import type { DevelopmentService } from "../development/service.js";
 import type { RequirementService } from "../requirement/service.js";
@@ -10,6 +11,38 @@ const DEVELOPMENT_GATE_TYPES = new Set([
   "change_review",
 ]);
 
+function isStaleGateError(error: unknown): error is Error {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return (
+    error.message.includes("Expected awaiting_gate") ||
+    error.message.includes("Expected awaiting_gate or change_review") ||
+    error.message.includes("session not found") ||
+    error.message.includes("Requirement session not found") ||
+    error.message.includes("Development session not found") ||
+    error.message.includes("Deployment session not found") ||
+    error.message.includes("Delivery session not found") ||
+    error.message.includes("No deployment gate awaiting decision") ||
+    error.message.includes("No final acceptance gate awaiting decision") ||
+    error.message.includes("Change review session missing")
+  );
+}
+
+async function invokeResume(fn: () => Promise<void> | void): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    if (error instanceof GateResumeConflictError) {
+      throw error;
+    }
+    if (isStaleGateError(error)) {
+      throw new GateResumeConflictError("stale_gate", error.message);
+    }
+    throw error;
+  }
+}
+
 export function createGateResumeHandler(services: {
   requirement?: RequirementService;
   development?: DevelopmentService;
@@ -21,61 +54,24 @@ export function createGateResumeHandler(services: {
       (gate.gateType === "requirement_stuck" || gate.gateType === "requirement_confirm") &&
       services.requirement
     ) {
-      try {
-        await services.requirement.resumeAfterGate(gate.projectId, decision);
-      } catch (error) {
-        if (isBenignResumeError(error, "Requirement session not found")) {
-          return;
-        }
-        throw error;
-      }
+      await invokeResume(() => services.requirement!.resumeAfterGate(gate.projectId, decision));
       return;
     }
 
     if (gate.gateType === "deployment" && services.deployment) {
-      try {
-        await services.deployment.resumeAfterGate(gate.projectId, decision);
-      } catch (error) {
-        if (isBenignResumeError(error, "Deployment session not found")) {
-          return;
-        }
-        throw error;
-      }
+      await invokeResume(() => services.deployment!.resumeAfterGate(gate.projectId, decision));
       return;
     }
 
     if (gate.gateType === "final_acceptance" && services.delivery) {
-      try {
-        services.delivery.resumeFinalAcceptance(gate.projectId, decision);
-      } catch (error) {
-        if (isBenignResumeError(error, "Delivery session not found")) {
-          return;
-        }
-        throw error;
-      }
+      await invokeResume(() => {
+        services.delivery!.resumeFinalAcceptance(gate.projectId, decision);
+      });
       return;
     }
 
     if (DEVELOPMENT_GATE_TYPES.has(gate.gateType) && services.development) {
-      try {
-        await services.development.resumeAfterGate(gate.projectId, decision);
-      } catch (error) {
-        if (isBenignResumeError(error, "Development session not found")) {
-          return;
-        }
-        throw error;
-      }
+      await invokeResume(() => services.development!.resumeAfterGate(gate.projectId, decision));
     }
   };
-}
-
-function isBenignResumeError(error: unknown, notFoundMessage: string): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  return (
-    error.message.includes("Expected awaiting_gate") ||
-    error.message.includes("Expected awaiting_gate or change_review") ||
-    error.message.includes(notFoundMessage)
-  );
 }

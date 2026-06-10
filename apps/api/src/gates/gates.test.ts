@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import { events, humanGates } from "@oc/shared";
 import { describe, expect, it } from "vitest";
+import { resetBroadcasts } from "../events/broadcast.js";
 import { setupTestApp } from "../test-utils.js";
+import { createGateService } from "./service.js";
 
 describe("gates API — M1", () => {
   it("createGate persists an open row and emits human_gate.created", () => {
@@ -29,7 +31,7 @@ describe("gates API — M1", () => {
     const { app, projects, gates, db, cleanup } = setupTestApp();
     try {
       const project = projects.createProject("Resolve Demo");
-      const gate = gates.createGate(project.id, "requirement_confirm");
+      const gate = gates.createGate(project.id, "dangerous_operation", { riskLevel: "high" });
 
       const response = await app.request(`/gates/${gate.id}/resolve`, {
         method: "POST",
@@ -55,9 +57,11 @@ describe("gates API — M1", () => {
   });
 
   it("waitForGate returns after resolveGate is called", async () => {
-    const { projects, gates, cleanup } = setupTestApp();
+    const { db, projects, cleanup } = setupTestApp();
+    resetBroadcasts();
     try {
       const project = projects.createProject("Wait Demo");
+      const gates = createGateService(db, () => undefined);
       const gate = gates.createGate(project.id, "requirement_stuck");
 
       const waitPromise = gates.waitForGate(gate.id, { pollMs: 20, timeoutMs: 2000 });

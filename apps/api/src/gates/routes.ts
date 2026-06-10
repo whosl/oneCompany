@@ -1,3 +1,4 @@
+import { GateResumeConflictError, GateResumeFailedError } from "@oc/shared";
 import { Hono } from "hono";
 import type { GateService } from "./service.js";
 
@@ -17,6 +18,12 @@ export function createGateRoutes(gates: GateService) {
       });
       return c.json(gate);
     } catch (error) {
+      if (error instanceof GateResumeConflictError) {
+        return c.json({ error: error.message, reason: error.reason }, 409);
+      }
+      if (error instanceof GateResumeFailedError) {
+        return c.json({ error: error.message, gateId: error.gateId }, 500);
+      }
       const message = error instanceof Error ? error.message : "failed to resolve gate";
       if (message.includes("not found")) {
         return c.json({ error: message }, 404);

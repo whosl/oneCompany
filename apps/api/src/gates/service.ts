@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import {
   assertAllowedDecision,
   emit,
+  GateResumeConflictError,
+  GateResumeFailedError,
   getAllowedOptions,
   getGateDefinition,
   humanGates,
@@ -115,12 +117,38 @@ export function createGateService(
     if (!gate) {
       throw new Error(`Gate not found: ${gateId}`);
     }
-    if (gate.status !== "open") {
-      throw new Error(`Gate is not open: ${gateId}`);
-    }
 
     const decision = normalizeDecision(input);
+
+    if (gate.status === "resolved") {
+      if (gate.decision === decision) {
+        return gate;
+      }
+      throw new GateResumeConflictError(
+        "gate_already_resolved",
+        `Gate already resolved with a different decision: ${gateId}`,
+      );
+    }
+
+    if (gate.status !== "open") {
+      throw new GateResumeConflictError("gate_not_open", `Gate is not open: ${gateId}`);
+    }
+
     assertAllowedDecision(gate.gateType, decision, gate.metadata);
+
+    if (options.onGateResolved) {
+      try {
+        await options.onGateResolved(gate, decision);
+      } catch (error) {
+        if (error instanceof GateResumeConflictError) {
+          throw error;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        throw new GateResumeFailedError(gateId, `Gate resume failed (${gate.gateType}): ${message}`, {
+          cause: error,
+        });
+      }
+    }
 
     const now = new Date().toISOString();
     db.update(humanGates)
@@ -144,36 +172,12 @@ export function createGateService(
     });
     onEvent(envelope);
 
-    const resolvedGate: GateRecord = {
+    return {
       ...gate,
       status: "resolved",
       decision,
       resolvedAt: now,
     };
-
-    if (options.onGateResolved) {
-      try {
-        await options.onGateResolved(resolvedGate, decision);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`gate resume failed for ${gateId}:`, error);
-        const failedEnvelope = emit(db, {
-          projectId: gate.projectId,
-          runId: gateId,
-          agentId: "workflow:gate-resume",
-          payload: {
-            type: "run.failed",
-            projectId: gate.projectId,
-            agentId: "workflow:gate-resume",
-            runId: gateId,
-            reason: `Gate resume failed (${gate.gateType}): ${message}`,
-          },
-        });
-        onEvent(failedEnvelope);
-      }
-    }
-
-    return resolvedGate;
   };
 
   const waitForGate = async (
@@ -183,7 +187,7 @@ export function createGateService(
     const pollMs = waitOptions.pollMs ?? 100;
     const timeoutMs =
       waitOptions.timeoutMs ??
-      Number(process.env.OC_GATE_WAIT_TIMEOUT_MS ?? 10_000);
+      Number(process.env.OC_GATE_WAIT_TIMEOUT_MS ?? 0);
     const waitForever = timeoutMs <= 0;
     const started = Date.now();
 

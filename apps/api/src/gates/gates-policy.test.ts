@@ -25,12 +25,36 @@ describe("gate policy enforcement — M4", () => {
   });
 
   it("accepts force_continue on requirement_stuck gates", async () => {
-    const { app, projects, gates, cleanup } = setupTestApp();
+    const { app, projects, cleanup } = setupTestApp();
     try {
       const project = projects.createProject("Stuck Gate");
-      const gate = gates.createGate(project.id, "requirement_stuck");
+      await app.request(`/projects/${project.id}/requirement/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requirement: "模糊需求", profile: "stuck" }),
+      });
 
-      const response = await app.request(`/gates/${gate.id}/resolve`, {
+      let stuck = (await (
+        await app.request(`/projects/${project.id}/requirement/answers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers: ["a1"] }),
+        })
+      ).json()) as { phase: string; gateId?: string };
+
+      if (stuck.phase === "awaiting_answers") {
+        stuck = (await (
+          await app.request(`/projects/${project.id}/requirement/answers`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: ["a2"] }),
+          })
+        ).json()) as { phase: string; gateId?: string };
+      }
+
+      expect(stuck.gateId).toBeTruthy();
+
+      const response = await app.request(`/gates/${stuck.gateId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision: "force_continue" }),

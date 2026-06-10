@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { AuthDecision, ToolOp } from "@oc/agent-core";
+import { isApprovalDecision } from "@oc/shared";
 import { classifyToolOp } from "./risk.js";
 import type { GateRecord, ShellDeps } from "./shell.js";
 import { CommandRejectedError } from "./shell.js";
@@ -26,10 +27,6 @@ export type AuthorizeDeps = {
   createGate: ShellDeps["createGate"];
   waitForGate: ShellDeps["waitForGate"];
 };
-
-function isApproval(decision: string): boolean {
-  return decision === "approve" || decision === "skip_risk_and_continue";
-}
 
 function gateTypeForTool(risk: ReturnType<typeof classifyToolOp>): "dangerous_operation" | "deployment" | null {
   if (risk === "high") {
@@ -63,11 +60,14 @@ export function createAuthorize(
 
     let gate: GateRecord;
     try {
-      gate = deps.createGate(projectId, gateType, {
-        riskLevel: risk === "high_deploy" ? "high" : risk === "high" ? "high" : "medium",
-      });
+      const metadata = {
+        riskLevel: (risk === "high_deploy" ? "high" : risk === "high" ? "high" : "medium") as
+          | "high"
+          | "medium",
+      };
+      gate = deps.createGate(projectId, gateType, metadata);
       const decision = await deps.waitForGate(gate.id);
-      if (!isApproval(decision)) {
+      if (!isApprovalDecision(gateType, metadata, decision)) {
         return { allow: false, reason: `Gate rejected: ${decision}` };
       }
       return { allow: true };
