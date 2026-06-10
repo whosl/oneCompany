@@ -125,6 +125,12 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     message: z.string(),
   }),
   z.object({
+    type: z.literal("redaction.incident"),
+    ...base,
+    label: z.string(),
+    field: z.string().optional(),
+  }),
+  z.object({
     type: z.literal("change_request.resolved"),
     ...base,
     changeRequestId: z.string(),

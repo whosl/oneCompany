@@ -70,7 +70,11 @@ export function createDeliveryService(
 
     generateReport(projectId: string) {
       const deps = buildDeps(projectId);
-      return generateDeliveryReport(deps, reportInput(projectId));
+      const status = deps.getProjectStatus(projectId);
+      return generateDeliveryReport(deps, {
+        ...reportInput(projectId),
+        projectStatus: status,
+      });
     },
 
     resumeFinalAcceptance(projectId: string, decision: string): FinalAcceptanceResult {

@@ -53,3 +53,39 @@ export function redact(
 
   return { text: output, incidents };
 }
+
+function mergeIncidents(
+  target: RedactionIncident[],
+  incoming: RedactionIncident[],
+): void {
+  for (const incident of incoming) {
+    if (!target.some((existing) => existing.label === incident.label && existing.kind === incident.kind)) {
+      target.push(incident);
+    }
+  }
+}
+
+export function redactDeep<T>(value: T): { value: T; incidents: RedactionIncident[] } {
+  const incidents: RedactionIncident[] = [];
+
+  function walk(current: unknown): unknown {
+    if (typeof current === "string") {
+      const result = redact(current);
+      mergeIncidents(incidents, result.incidents);
+      return result.text;
+    }
+    if (Array.isArray(current)) {
+      return current.map((entry) => walk(entry));
+    }
+    if (current && typeof current === "object") {
+      const next: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(current)) {
+        next[key] = walk(entry);
+      }
+      return next;
+    }
+    return current;
+  }
+
+  return { value: walk(value) as T, incidents };
+}

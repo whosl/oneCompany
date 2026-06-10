@@ -1,5 +1,9 @@
+import fs from "node:fs";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { eq } from "drizzle-orm";
-import { REDACTED, events, toolCalls } from "@oc/shared";
+import { artifacts, REDACTED, events, toolCalls } from "@oc/shared";
 import { describe, expect, it } from "vitest";
 import { callTool } from "./tools.js";
 import { seedProject, setupTestDb } from "./test-utils.js";
@@ -70,6 +74,31 @@ describe("callTool — M2", () => {
       expect(row?.status).toBe("failed");
     } finally {
       cleanup();
+    }
+  });
+
+  it("chunks large tool output to artifacts when logsPath is provided", async () => {
+    const { db, cleanup } = setupTestDb();
+    const logsPath = mkdtempSync(path.join(tmpdir(), "oc-tool-logs-"));
+    try {
+      const projectId = seedProject(db);
+      const largeOutput = "x".repeat(9000);
+      await callTool(
+        { db, projectId, logsPath },
+        {
+          toolName: "echo",
+          args: {},
+          impl: async () => largeOutput,
+        },
+      );
+
+      const [row] = db.select().from(toolCalls).all();
+      expect(row?.output_ref).toContain('"kind":"chunk"');
+      expect(db.select().from(artifacts).all().length).toBeGreaterThan(0);
+      expect(fs.existsSync(path.join(logsPath, `tool-${row?.tool_call_id}.log`))).toBe(true);
+    } finally {
+      cleanup();
+      fs.rmSync(logsPath, { recursive: true, force: true });
     }
   });
 

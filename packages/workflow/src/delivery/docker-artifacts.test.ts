@@ -25,6 +25,7 @@ describe("delivery docker artifacts — M11", () => {
       expect(fs.existsSync(path.join(repoPath, "Dockerfile"))).toBe(true);
       expect(fs.existsSync(path.join(repoPath, "docker-compose.yml"))).toBe(true);
       expect(fs.existsSync(path.join(repoPath, "RUN.md"))).toBe(true);
+      expect(fs.readFileSync(path.join(repoPath, "Dockerfile"), "utf8")).not.toContain("|| true");
       expect(db.select().from(artifacts).all().map((row) => row.path)).toEqual(
         expect.arrayContaining(["Dockerfile", "docker-compose.yml", "RUN.md"]),
       );

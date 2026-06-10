@@ -1,10 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { eq } from "drizzle-orm";
-import { emit, redact, toolCalls, type Db, type EventEnvelope } from "@oc/shared";
+import { artifacts, emit, redact, toolCalls, type Db, type EventEnvelope } from "@oc/shared";
 
 export type ToolContext = {
   db: Db;
   projectId: string;
+  logsPath?: string;
   onEvent?: (envelope: EventEnvelope) => void;
 };
 
@@ -18,13 +21,70 @@ export type CallToolResult =
   | { ok: true; output: unknown; toolCallId: string }
   | { ok: false; error: string; toolCallId: string };
 
+const INLINE_OUTPUT_MAX_BYTES = 8192;
+
 function notify(ctx: ToolContext, envelope: EventEnvelope): void {
   ctx.onEvent?.(envelope);
 }
 
+function hashText(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
 function formatToolText(value: unknown): string {
   const raw = typeof value === "string" ? value : JSON.stringify(value);
-  return redact(raw).text.slice(0, 500);
+  return redact(raw).text;
+}
+
+function persistToolOutput(
+  ctx: ToolContext,
+  toolCallId: string,
+  raw: string,
+): { summary: string; outputRef: string } {
+  const { text } = redact(raw);
+  const byteLength = Buffer.byteLength(text, "utf8");
+
+  if (!ctx.logsPath || byteLength <= INLINE_OUTPUT_MAX_BYTES) {
+    const summary = text.slice(0, 500);
+    return {
+      summary,
+      outputRef: JSON.stringify({
+        kind: "inline",
+        text,
+        byteLength,
+        hash: hashText(text),
+      }),
+    };
+  }
+
+  fs.mkdirSync(ctx.logsPath, { recursive: true });
+  const filePath = path.join(ctx.logsPath, `tool-${toolCallId}.log`);
+  fs.writeFileSync(filePath, text, "utf8");
+  const summary = `${text.slice(0, 240)}…`;
+  const artifactId = randomUUID();
+  const now = new Date().toISOString();
+
+  ctx.db
+    .insert(artifacts)
+    .values({
+      id: randomUUID(),
+      project_id: ctx.projectId,
+      artifact_id: artifactId,
+      path: filePath,
+      kind: "tool_output",
+      created_at: now,
+    })
+    .run();
+
+  const outputRef = JSON.stringify({
+    kind: "chunk",
+    path: filePath,
+    byteLength,
+    hash: hashText(text),
+    summary,
+  });
+
+  return { summary, outputRef };
 }
 
 export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<CallToolResult> {
@@ -54,7 +114,8 @@ export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<
 
   try {
     const output = await input.impl();
-    const summary = formatToolText(output);
+    const raw = typeof output === "string" ? output : JSON.stringify(output);
+    const { summary, outputRef } = persistToolOutput(ctx, toolCallId, raw);
 
     const completed = emit(ctx.db, {
       projectId: ctx.projectId,
@@ -67,7 +128,7 @@ export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<
     });
     notify(ctx, completed);
 
-    dbUpdateToolCallStatus(ctx.db, rowId, "completed", summary);
+    dbUpdateToolCallStatus(ctx.db, rowId, "completed", outputRef);
 
     return { ok: true, output, toolCallId };
   } catch (error) {

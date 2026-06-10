@@ -13,6 +13,12 @@ export {
   type GenerateDeliveryReportInput,
 } from "./report-generator.js";
 export {
+  DeliveryReportStatusError,
+  assertDeliveryReportAllowed,
+  collectHonestyRisks,
+  scanRepoMockMarkers,
+} from "./report-honesty.js";
+export {
   enterAwaitingAcceptance,
   handleFinalAcceptanceDecision,
   getFinalAcceptanceStatus,

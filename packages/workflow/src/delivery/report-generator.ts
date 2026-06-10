@@ -14,6 +14,7 @@ import {
 import { loadLatestAcceptance, loadLatestPrd } from "../development/artifacts.js";
 import { loadTestResults } from "../testing/results.js";
 import { collectProjectRisks } from "./collect-risks.js";
+import { assertDeliveryReportAllowed, collectHonestyRisks } from "./report-honesty.js";
 import { buildIntegrationReportNotes } from "./report-integrations.js";
 import {
   DELIVERY_REPORT_SECTION_IDS,
@@ -34,6 +35,7 @@ export type GenerateDeliveryReportInput = {
   deploymentUrl?: string;
   stateRisks?: string[];
   taskTitles?: string[];
+  projectStatus?: string;
 };
 
 function readRepoFile(repoPath: string, candidates: string[]): string | null {
@@ -115,6 +117,7 @@ export function buildDeliveryReportSections(
   const testRows = loadTestResults(deps.db, input.projectId);
   const risks = [
     ...collectProjectRisks(deps.db, input.projectId, input.stateRisks ?? []),
+    ...collectHonestyRisks(deps.db, input.projectId, input.repoPath),
     ...buildIntegrationReportNotes(deps.db, input.projectId),
   ];
   const deploymentUrl = input.deploymentUrl ?? input.previewUrl ?? "No deployment URL (preview only)";
@@ -190,6 +193,10 @@ export function generateDeliveryReport(
   deps: DeliveryReportDeps,
   input: GenerateDeliveryReportInput,
 ): { relativePath: string; content: string } {
+  if (input.projectStatus) {
+    assertDeliveryReportAllowed(input.projectStatus);
+  }
+
   const sections = buildDeliveryReportSections(deps, input);
   const content = renderDeliveryReportMarkdown(sections);
   const relativePath = "delivery-report.md";

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { DeliveryReportStatusError } from "@oc/workflow";
 import type { DeliveryService } from "./service.js";
 
 export function createDeliveryRoutes(delivery: DeliveryService) {
@@ -11,6 +12,9 @@ export function createDeliveryRoutes(delivery: DeliveryService) {
       return c.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "failed to generate delivery report";
+      if (error instanceof DeliveryReportStatusError) {
+        return c.json({ error: message }, 409);
+      }
       return c.json({ error: message }, 400);
     }
   });

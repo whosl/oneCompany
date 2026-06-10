@@ -41,6 +41,7 @@ export function enterAwaitingAcceptance(
     });
     generateDeliveryReport(deps, {
       ...input,
+      projectStatus: status,
       stateRisks: input.stateRisks ?? payload.state.risks,
       taskTitles: input.taskTitles ?? payload.state.taskQueue.map((task) => task.title),
     });
@@ -95,7 +96,7 @@ export function handleFinalAcceptanceDecision(
     deps.setStatus(input.projectId, "Developing", "final_acceptance_rejected");
     const next: DevelopmentSessionPayload = {
       ...payload,
-      delivery: { phase: "idle", reportGenerated: payload.delivery.reportGenerated },
+      delivery: { phase: "idle", reportGenerated: false },
       meta: { ...payload.meta, phase: "slicing" },
     };
     deps.saveSession(input.projectId, next);

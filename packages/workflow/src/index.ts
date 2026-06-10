@@ -83,6 +83,7 @@ export {
   getFinalAcceptanceStatus,
   collectProjectRisks,
   assertReportComplete,
+  DeliveryReportStatusError,
   type FinalAcceptanceDeps,
   type FinalAcceptanceResult,
 } from "./delivery/index.js";
