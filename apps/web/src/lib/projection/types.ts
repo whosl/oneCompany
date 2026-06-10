@@ -37,10 +37,29 @@ export type ConsoleProjection = {
   events: EventEnvelope[];
   openGates: ConsoleSnapshot["openGates"];
   blockingGateId?: string;
+  composer: ComposerProjection;
+  timeline: StreamItem[];
   agents: Record<string, AgentProjection>;
   streamItems: StreamItem[];
   streamGroups: StreamRunGroup[];
   ungroupedStreamItems: StreamItem[];
   swimlane: SwimlaneCell[];
   lastSeq: number;
+};
+
+export type ComposerMode =
+  | "requirement"
+  | "question_round"
+  | "gate_decision"
+  | "change_request"
+  | "deployment_url"
+  | "read_only"
+  | "paused";
+
+export type ComposerProjection = {
+  mode: ComposerMode;
+  blockingGateId?: string;
+  disabled: boolean;
+  readOnly: boolean;
+  reason: string;
 };

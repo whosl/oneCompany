@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectHub } from "./project-hub";
 
@@ -12,11 +12,31 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api", () => ({
   consoleApi: {
     listProjects: vi.fn(async () => ({
-      projects: [{ id: "p1", name: "Alpha", slug: "a", status: "Developing", createdAt: "t", updatedAt: "t" }],
+      projects: [
+        {
+          id: "p1",
+          name: "Alpha",
+          slug: "a",
+          status: "Developing",
+          createdAt: "t",
+          updatedAt: "t",
+        },
+      ],
     })),
     getSnapshot: vi.fn(async () => ({
-      project: { id: "p1", name: "Alpha", slug: "a", status: "Developing", createdAt: "t", updatedAt: "t" },
-      phase: { label: "Developing", activeGroup: "Development Group", progressLabel: "Slice 1 / 2" },
+      project: {
+        id: "p1",
+        name: "Alpha",
+        slug: "a",
+        status: "Developing",
+        createdAt: "t",
+        updatedAt: "t",
+      },
+      phase: {
+        label: "Developing",
+        activeGroup: "Development Group",
+        progressLabel: "Slice 1 / 2",
+      },
       risks: [],
       openGates: [],
       events: [],

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ConsoleSnapshot, EventEnvelope, ProjectStatus } from "@oc/shared";
+import type { EventEnvelope, ProjectStatus } from "@oc/shared";
 import { consoleApi } from "../api";
 import { applyEvent, createProjectionFromSnapshot } from "./build-projection";
 import type { ConsoleProjection } from "./types";
@@ -27,11 +27,14 @@ export function useConsoleProjection(
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const lastSeqRef = useRef(0);
   const workflowPending = options.workflowPending ?? false;
+  const projectStatus = projection?.snapshot.project.status;
+  const openGateCount = projection?.openGates.length ?? 0;
 
   const hydrate = useCallback(async () => {
     const snapshot = await consoleApi.getSnapshot(projectId);
-    lastSeqRef.current = snapshot.lastSeq;
-    const next = createProjectionFromSnapshot(snapshot);
+    const lastSeq = Math.max(lastSeqRef.current, snapshot.lastSeq);
+    lastSeqRef.current = lastSeq;
+    const next = createProjectionFromSnapshot({ ...snapshot, lastSeq });
     setProjection(next);
     setStatus("ready");
     return snapshot;
@@ -106,15 +109,12 @@ export function useConsoleProjection(
   }, [projectId, status, hydrate]);
 
   useEffect(() => {
-    if (status !== "ready" || !projection) {
+    if (status !== "ready" || !projectStatus) {
       return;
     }
 
-    const projectStatus = projection.snapshot.project.status;
     const shouldPoll =
-      workflowPending ||
-      ACTIVE_PROJECT_STATUSES.has(projectStatus) ||
-      projection.openGates.length > 0;
+      workflowPending || ACTIVE_PROJECT_STATUSES.has(projectStatus) || openGateCount > 0;
 
     if (!shouldPoll) {
       return;
@@ -125,13 +125,7 @@ export function useConsoleProjection(
     }, SNAPSHOT_POLL_MS);
 
     return () => clearInterval(timer);
-  }, [
-    status,
-    projection?.snapshot.project.status,
-    projection?.openGates.length,
-    workflowPending,
-    hydrate,
-  ]);
+  }, [status, projectStatus, openGateCount, workflowPending, hydrate]);
 
   const refresh = useCallback(async () => {
     await hydrate();

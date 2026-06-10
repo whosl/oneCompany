@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ConsoleSnapshot } from "@oc/shared";
-import { applyEvent, createProjectionFromSnapshot } from "./build-projection";
+import type { ConsoleSnapshot, EventEnvelope, ProjectStatus } from "@oc/shared";
+import { applyEvent, createProjectionFromSnapshot, deriveComposer } from "./build-projection";
 
 const baseSnapshot: ConsoleSnapshot = {
   project: {
@@ -22,6 +22,37 @@ const baseSnapshot: ConsoleSnapshot = {
   events: [],
   lastSeq: 0,
 };
+
+function event(
+  seq: number,
+  payload: EventEnvelope["payload"],
+  overrides: Partial<EventEnvelope> = {},
+): EventEnvelope {
+  return {
+    eventId: `e${seq}`,
+    seq,
+    schemaVersion: "1",
+    projectId: "p1",
+    timestamp: `2026-01-01T00:00:${String(seq).padStart(2, "0")}.000Z`,
+    payload,
+    ...overrides,
+  };
+}
+
+function snapshotWithStatus(
+  status: ProjectStatus,
+  overrides: Partial<ConsoleSnapshot> = {},
+): ConsoleSnapshot {
+  return {
+    ...baseSnapshot,
+    ...overrides,
+    project: {
+      ...baseSnapshot.project,
+      status,
+      ...(overrides.project ?? {}),
+    },
+  };
+}
 
 describe("console projection — M9", () => {
   it("hydrates developing phase from snapshot", () => {
@@ -112,5 +143,142 @@ describe("console projection — M9", () => {
 
     expect(projection.blockingGateId).toBeUndefined();
     expect(projection.openGates).toHaveLength(0);
+  });
+
+  it("hydrates snapshot events without duplicating them", () => {
+    const projection = createProjectionFromSnapshot({
+      ...baseSnapshot,
+      events: [
+        event(1, {
+          type: "agent.plan",
+          projectId: "p1",
+          agentId: "architect@1",
+          summary: "Plan from snapshot",
+        }),
+      ],
+      lastSeq: 1,
+    });
+
+    expect(projection.events).toHaveLength(1);
+    expect(projection.streamItems.filter((item) => item.id === "e1")).toHaveLength(1);
+    expect(projection.agents["architect@1"]?.latestPlan).toBe("Plan from snapshot");
+  });
+
+  it("keeps timeline events sorted and covers the full shared event taxonomy", () => {
+    const projection = createProjectionFromSnapshot({
+      ...baseSnapshot,
+      events: [
+        event(7, {
+          type: "delivery.report_generated",
+          projectId: "p1",
+          artifactPath: "reports/final.md",
+        }),
+        event(
+          2,
+          {
+            type: "agent.reflect",
+            projectId: "p1",
+            agentId: "developer@1",
+            summary: "Reflection summary",
+          },
+          { agentId: "developer@1" },
+        ),
+        event(5, { type: "deployment.started", projectId: "p1" }),
+        event(
+          3,
+          {
+            type: "run.failed",
+            projectId: "p1",
+            agentId: "developer@1",
+            runId: "run-1",
+            reason: "tests failed",
+          },
+          { agentId: "developer@1" },
+        ),
+        event(
+          1,
+          {
+            type: "agent.started",
+            projectId: "p1",
+            agentId: "developer@1",
+            runId: "run-1",
+          },
+          { agentId: "developer@1" },
+        ),
+        event(8, { type: "project.status_changed", projectId: "p1", status: "Delivered" }),
+        event(4, {
+          type: "change_request.created",
+          projectId: "p1",
+          changeRequestId: "cr-1",
+          summary: "Tighten scope",
+          kind: "requirement_change",
+        }),
+        event(6, {
+          type: "artifact.created",
+          projectId: "p1",
+          artifactId: "artifact-1",
+          path: "apps/web/src/app/page.tsx",
+        }),
+      ],
+      lastSeq: 8,
+    });
+
+    expect(projection.events.map((item) => item.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(projection.streamItems.map((item) => item.kind)).toEqual([
+      "agent.started",
+      "agent.reflect",
+      "run.failed",
+      "change_request.created",
+      "deployment.started",
+      "artifact.created",
+      "delivery.report_generated",
+      "project.status_changed",
+    ]);
+    expect(
+      projection.streamItems.find((item) => item.kind === "delivery.report_generated")?.metadata
+        ?.navigateTab,
+    ).toBe("report");
+    expect(projection.timeline).toEqual(projection.streamItems);
+  });
+
+  it("derives composer modes from workflow state", () => {
+    expect(deriveComposer(snapshotWithStatus("Draft Requirement")).mode).toBe("requirement");
+    expect(
+      deriveComposer(
+        snapshotWithStatus("Asking Questions", {
+          requirement: {
+            rawRequirement: "Build a calendar",
+            normalizedSummary: "Calendar",
+            completenessScore: 60,
+            completenessLocked: false,
+            settledChips: [],
+            upcomingChips: [],
+            pendingQuestions: [{ question: "Who uses it?", suggestedAnswers: ["Team"] }],
+          },
+        }),
+      ).mode,
+    ).toBe("question_round");
+    expect(deriveComposer(snapshotWithStatus("Developing")).mode).toBe("change_request");
+    expect(deriveComposer(snapshotWithStatus("Testing")).mode).toBe("change_request");
+    expect(deriveComposer(snapshotWithStatus("PRD Ready")).mode).toBe("read_only");
+    expect(deriveComposer(snapshotWithStatus("Delivered")).readOnly).toBe(true);
+    expect(deriveComposer(snapshotWithStatus("Failed")).readOnly).toBe(true);
+    expect(deriveComposer(snapshotWithStatus("Paused", { pausedFrom: "Developing" })).mode).toBe(
+      "paused",
+    );
+
+    const gated = snapshotWithStatus("Deploying", {
+      openGates: [
+        {
+          id: "gate-deploy",
+          gateType: "deployment",
+          status: "open",
+          options: ["provide_url", "fail"],
+          decision: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+    expect(deriveComposer(gated, "gate-deploy").mode).toBe("deployment_url");
   });
 });

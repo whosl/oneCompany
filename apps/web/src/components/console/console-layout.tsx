@@ -21,7 +21,10 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [deployPending, setDeployPending] = useState(false);
   const [rightTab, setRightTab] = useState<RightPanelTabId>("Files");
-  const pendingQuestions = projection?.snapshot.requirement?.pendingQuestions ?? [];
+  const pendingQuestions = useMemo(
+    () => projection?.snapshot.requirement?.pendingQuestions ?? [],
+    [projection?.snapshot.requirement?.pendingQuestions],
+  );
   const pendingQuestionKey = useMemo(
     () => pendingQuestions.map((item) => item.question).join("\u0000"),
     [pendingQuestions],
@@ -55,9 +58,8 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
         onOpenSettings={() => setSettingsOpen(true)}
         onPauseResume={() => {
           const paused = projection.snapshot.project.status === "Paused";
-          void (paused
-            ? consoleApi.resumeProject(projectId)
-            : consoleApi.pauseProject(projectId)
+          void (
+            paused ? consoleApi.resumeProject(projectId) : consoleApi.pauseProject(projectId)
           ).then(() => refresh());
         }}
         onDeploy={(id) => {
@@ -107,10 +109,14 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
                   });
                 }}
                 onNavigateTab={(tab) => {
-                  const mapping: Record<"files" | "tests" | "terminal", RightPanelTabId> = {
+                  const mapping: Record<
+                    "files" | "tests" | "terminal" | "report",
+                    RightPanelTabId
+                  > = {
                     files: "Files",
                     tests: "Tests",
                     terminal: "Terminal",
+                    report: "Report",
                   };
                   setRightTab(mapping[tab]);
                 }}
@@ -141,7 +147,8 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
               const delta = moveEvent.clientX - startX;
               const container = (event.target as HTMLElement).parentElement;
               if (!container) return;
-              const ratio = ((startWidth / 100) * container.clientWidth + delta) / container.clientWidth;
+              const ratio =
+                ((startWidth / 100) * container.clientWidth + delta) / container.clientWidth;
               setLeftWidth(Math.min(60, Math.max(30, ratio * 100)));
             }
             function onUp() {
@@ -153,7 +160,11 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
           }}
         />
 
-        <section className="min-w-0 flex-1 p-3" style={{ width: `${100 - leftWidth}%` }} data-testid="right-panel-slot">
+        <section
+          className="min-w-0 flex-1 p-3"
+          style={{ width: `${100 - leftWidth}%` }}
+          data-testid="right-panel-slot"
+        >
           <RightPanel projectId={projectId} activeTab={rightTab} onTabChange={setRightTab} />
         </section>
       </div>
@@ -163,11 +174,7 @@ export function ConsoleLayout({ projectId }: { projectId: string }) {
         onClose={() => setSettingsOpen(false)}
         projectId={projectId}
       />
-      <ProjectHub
-        open={hubOpen}
-        currentProjectId={projectId}
-        onClose={() => setHubOpen(false)}
-      />
+      <ProjectHub open={hubOpen} currentProjectId={projectId} onClose={() => setHubOpen(false)} />
     </div>
   );
 }

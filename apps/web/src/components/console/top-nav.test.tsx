@@ -3,38 +3,28 @@
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createProjectionFromSnapshot } from "@/lib/projection/build-projection";
 import { TopNav } from "./top-nav";
-import type { ConsoleProjection } from "@/lib/projection/types";
 
-const developingProjection: ConsoleProjection = {
-  snapshot: {
-    project: {
-      id: "p1",
-      name: "Demo",
-      slug: "demo",
-      status: "Developing",
-      createdAt: "t",
-      updatedAt: "t",
-    },
-    phase: {
-      label: "Developing",
-      activeGroup: "Development Group",
-      progressLabel: "Slice 2 / 3",
-    },
-    risks: [],
-    openGates: [],
-    events: [],
-    lastSeq: 0,
+const developingProjection = createProjectionFromSnapshot({
+  project: {
+    id: "p1",
+    name: "Demo",
+    slug: "demo",
+    status: "Developing",
+    createdAt: "t",
+    updatedAt: "t",
   },
-  events: [],
+  phase: {
+    label: "Developing",
+    activeGroup: "Development Group",
+    progressLabel: "Slice 2 / 3",
+  },
+  risks: [],
   openGates: [],
-  agents: {},
-  streamItems: [],
-  streamGroups: [],
-  ungroupedStreamItems: [],
-  swimlane: [],
+  events: [],
   lastSeq: 0,
-};
+});
 
 afterEach(() => cleanup());
 

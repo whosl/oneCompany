@@ -31,6 +31,13 @@ vi.mock("@/lib/projection/use-console-projection", () => ({
       },
       events: [],
       openGates: [],
+      composer: {
+        mode: "read_only",
+        disabled: true,
+        readOnly: true,
+        reason: "Console is read-only in this view.",
+      },
+      timeline: [],
       agents: {},
       streamItems: [],
       streamGroups: [],

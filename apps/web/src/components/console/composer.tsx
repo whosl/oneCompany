@@ -44,15 +44,14 @@ export function Composer({
   }, [pending, onPendingChange]);
 
   const status = projection.snapshot.project.status;
+  const composer = projection.composer;
   const pendingQuestions = projection.snapshot.requirement?.pendingQuestions ?? [];
-  const blockingGate = projection.openGates.find(
-    (gate) => gate.id === projection.blockingGateId,
-  );
+  const blockingGate = projection.openGates.find((gate) => gate.id === projection.blockingGateId);
   const gateOptions = blockingGate?.options ?? [];
-  const awaitingAnswers = status === "Asking Questions" && pendingQuestions.length > 0;
-  const canSubmitChangeRequest =
-    !blockingGate && (status === "Developing" || status === "Testing" || status === "Tech Plan Review");
-  const deploymentGateBlocked = blockingGate?.gateType === "deployment";
+  const awaitingAnswers = composer.mode === "question_round";
+  const canSubmitChangeRequest = composer.mode === "change_request";
+  const deploymentGateBlocked = composer.mode === "deployment_url";
+  const disabled = pending || composer.disabled;
   const allQuestionAnswersReady =
     pendingQuestions.length > 0 &&
     questionAnswers.length === pendingQuestions.length &&
@@ -115,19 +114,6 @@ export function Composer({
     }
   }
 
-  async function startDevelopment() {
-    setPending(true);
-    setError(null);
-    try {
-      await consoleApi.startDevelopment(projectId);
-      onSubmitted?.();
-    } catch (startError) {
-      setError(startError instanceof Error ? startError.message : "Start development failed");
-    } finally {
-      setPending(false);
-    }
-  }
-
   async function resolveGate(decision: string) {
     if (!blockingGate) {
       return;
@@ -150,39 +136,38 @@ export function Composer({
   }
 
   return (
-    <div className="border-t border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] p-3" data-testid="composer">
+    <div
+      className="border-t border-[var(--oc-border-muted)] bg-[var(--oc-surface-base)] p-3"
+      data-testid="composer"
+    >
       {awaitingAnswers ? (
-        <p className="mb-2 text-xs text-[var(--oc-text-muted)]" data-testid="composer-questions-hint">
+        <p
+          className="mb-2 text-xs text-[var(--oc-text-muted)]"
+          data-testid="composer-questions-hint"
+        >
           Select A/B/C or fill in D for each question card above, then submit.
         </p>
-      ) : null}
-
-      {status === "PRD Ready" && !blockingGate ? (
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <p className="text-sm text-[var(--oc-text-muted)]">PRD is ready — start the development phase.</p>
-          <button
-            type="button"
-            disabled={pending}
-            className="rounded-md bg-[var(--oc-accent-primary)] px-3 py-1.5 text-xs text-white"
-            onClick={() => void startDevelopment()}
-            data-testid="composer-start-development"
-          >
-            Start development
-          </button>
-        </div>
       ) : null}
 
       {blockingGate ? (
         <div className="mb-2 text-xs text-[var(--oc-text-muted)]">
           Gate blocked: choose an allowed decision. Custom text does not imply approval.
         </div>
-      ) : null}
+      ) : (
+        <div
+          className="mb-2 text-xs text-[var(--oc-text-muted)]"
+          data-testid="composer-mode-reason"
+        >
+          {composer.reason}
+        </div>
+      )}
 
-      {!awaitingAnswers ? (
+      {!awaitingAnswers && !composer.readOnly ? (
         <textarea
           className="min-h-16 w-full rounded-md border border-[var(--oc-border-muted)] px-3 py-2 text-sm"
           value={text}
           onChange={(event) => setText(event.target.value)}
+          disabled={composer.disabled}
           placeholder={
             deploymentGateBlocked
               ? "Paste your Cloudflare Tunnel URL (https://...)"
@@ -206,7 +191,7 @@ export function Composer({
                 <button
                   key={option}
                   type="button"
-                  disabled={pending}
+                  disabled={disabled}
                   className="rounded-md border px-3 py-1 text-xs"
                   onClick={() => void resolveGate(option)}
                 >
@@ -217,7 +202,7 @@ export function Composer({
         {blockingGate && gateOptions.includes("custom") ? (
           <button
             type="button"
-            disabled={pending || text.trim().length === 0}
+            disabled={disabled || text.trim().length === 0}
             className="rounded-md border px-3 py-1 text-xs"
             onClick={() => void resolveGate("custom")}
           >
@@ -227,7 +212,7 @@ export function Composer({
         {deploymentGateBlocked ? (
           <button
             type="button"
-            disabled={pending || text.trim().length === 0}
+            disabled={disabled || text.trim().length === 0}
             className="rounded-md bg-[var(--oc-accent-primary)] px-3 py-1 text-xs text-white"
             onClick={() => void submitDeploymentUrl()}
             data-testid="composer-submit-deployment-url"
@@ -235,11 +220,12 @@ export function Composer({
             Submit tunnel URL
           </button>
         ) : null}
-        {!blockingGate && status !== "PRD Ready" && !canSubmitChangeRequest ? (
+        {!blockingGate &&
+        (composer.mode === "requirement" || composer.mode === "question_round") ? (
           <button
             type="button"
             disabled={
-              pending || (awaitingAnswers ? !allQuestionAnswersReady : text.trim().length === 0)
+              disabled || (awaitingAnswers ? !allQuestionAnswersReady : text.trim().length === 0)
             }
             className="rounded-md bg-[var(--oc-accent-primary)] px-3 py-1 text-xs text-white"
             onClick={() => void submitRequirement()}
@@ -250,22 +236,12 @@ export function Composer({
         {canSubmitChangeRequest ? (
           <button
             type="button"
-            disabled={pending || text.trim().length === 0}
+            disabled={disabled || text.trim().length === 0}
             className="rounded-md bg-[var(--oc-accent-primary)] px-3 py-1 text-xs text-white"
             onClick={() => void submitChangeRequest()}
             data-testid="composer-submit-change-request"
           >
             Submit change request
-          </button>
-        ) : null}
-        {!blockingGate && status === "PRD Ready" && text.trim().length > 0 ? (
-          <button
-            type="button"
-            disabled={pending}
-            className="rounded-md border px-3 py-1 text-xs"
-            onClick={() => void submitRequirement()}
-          >
-            Send note
           </button>
         ) : null}
       </div>

@@ -7,16 +7,18 @@ import type {
 } from "@oc/shared";
 import { attachParorSegments } from "./stream-paror";
 import { groupStreamItems } from "./stream-grouping";
-import type { AgentProjection, ConsoleProjection } from "./types";
+import type { AgentProjection, ComposerProjection, ConsoleProjection } from "./types";
 
 const LARGE_OUTPUT_THRESHOLD = 500;
 
 export function createProjectionFromSnapshot(snapshot: ConsoleSnapshot): ConsoleProjection {
   let projection: ConsoleProjection = {
     snapshot,
-    events: [...snapshot.events],
+    events: [],
     openGates: [...snapshot.openGates],
     blockingGateId: snapshot.openGates[0]?.id,
+    composer: deriveComposer(snapshot, snapshot.openGates[0]?.id),
+    timeline: [],
     agents: {},
     streamItems: [],
     streamGroups: [],
@@ -25,26 +27,34 @@ export function createProjectionFromSnapshot(snapshot: ConsoleSnapshot): Console
     lastSeq: snapshot.lastSeq,
   };
 
-  for (const event of snapshot.events) {
+  for (const event of [...snapshot.events].sort((left, right) => left.seq - right.seq)) {
     projection = applyEvent(projection, event);
   }
 
-  projection.streamItems = deriveStreamItems(projection);
-  const grouped = groupStreamItems(projection.streamItems, projection.events);
-  projection.ungroupedStreamItems = grouped.ungrouped;
-  projection.streamGroups = attachParorSegments(grouped.groups);
-  projection.swimlane = deriveSwimlane(projection);
-  return projection;
+  return rebuildDerivedProjection({
+    ...projection,
+    lastSeq: Math.max(projection.lastSeq, snapshot.lastSeq),
+  });
 }
 
-export function applyEvent(projection: ConsoleProjection, envelope: EventEnvelope): ConsoleProjection {
-  const events = [...projection.events, envelope];
+export function applyEvent(
+  projection: ConsoleProjection,
+  envelope: EventEnvelope,
+): ConsoleProjection {
+  const existing = projection.events.some((event) => event.eventId === envelope.eventId);
+  const events = existing
+    ? projection.events
+    : [...projection.events, envelope].sort((left, right) => left.seq - right.seq);
   const agents = { ...projection.agents };
   const openGates = [...projection.openGates];
   const payload = envelope.payload;
 
-  updateAgents(agents, envelope, payload);
-  updateGates(openGates, payload);
+  if (!existing) {
+    updateAgents(agents, envelope, payload);
+    updateGates(openGates, payload);
+  }
+
+  const blockingGateId = openGates[0]?.id;
 
   const next: ConsoleProjection = {
     ...projection,
@@ -53,16 +63,100 @@ export function applyEvent(projection: ConsoleProjection, envelope: EventEnvelop
     openGates,
     // The first open gate is the single emphasized blocking gate; when none are
     // open this clears so the composer leaves the gate-blocked state.
-    blockingGateId: openGates[0]?.id,
-    lastSeq: envelope.seq,
+    blockingGateId,
+    composer: deriveComposer(projection.snapshot, blockingGateId),
+    lastSeq: Math.max(projection.lastSeq, envelope.seq),
   };
 
-  next.streamItems = deriveStreamItems(next);
-  const grouped = groupStreamItems(next.streamItems, next.events);
-  next.ungroupedStreamItems = grouped.ungrouped;
-  next.streamGroups = attachParorSegments(grouped.groups);
-  next.swimlane = deriveSwimlane(next);
-  return next;
+  return rebuildDerivedProjection(next);
+}
+
+function rebuildDerivedProjection(projection: ConsoleProjection): ConsoleProjection {
+  const streamItems = deriveStreamItems(projection);
+  const grouped = groupStreamItems(streamItems, projection.events);
+  return {
+    ...projection,
+    composer: deriveComposer(projection.snapshot, projection.blockingGateId),
+    timeline: streamItems,
+    streamItems,
+    ungroupedStreamItems: grouped.ungrouped,
+    streamGroups: attachParorSegments(grouped.groups),
+    swimlane: deriveSwimlane({ ...projection, streamItems }),
+  };
+}
+
+export function deriveComposer(
+  snapshot: ConsoleSnapshot,
+  blockingGateId?: string,
+): ComposerProjection {
+  const status = snapshot.project.status;
+  const blockingGate = snapshot.openGates.find((gate) => gate.id === blockingGateId);
+
+  if (status === "Paused") {
+    return {
+      mode: "paused",
+      blockingGateId,
+      disabled: true,
+      readOnly: true,
+      reason: snapshot.pausedFrom
+        ? `Project is paused. Resume returns to ${snapshot.pausedFrom}.`
+        : "Project is paused.",
+    };
+  }
+
+  if (status === "Delivered" || status === "Failed") {
+    return {
+      mode: "read_only",
+      blockingGateId,
+      disabled: true,
+      readOnly: true,
+      reason: status === "Delivered" ? "Project is delivered." : "Project failed.",
+    };
+  }
+
+  if (blockingGate) {
+    return {
+      mode: blockingGate.gateType === "deployment" ? "deployment_url" : "gate_decision",
+      blockingGateId,
+      disabled: false,
+      readOnly: false,
+      reason: `Resolve ${blockingGate.gateType} to continue.`,
+    };
+  }
+
+  if (status === "Asking Questions" && snapshot.requirement?.pendingQuestions?.length) {
+    return {
+      mode: "question_round",
+      disabled: false,
+      readOnly: false,
+      reason: "Answer the current requirement question round.",
+    };
+  }
+
+  if (status === "Developing" || status === "Testing") {
+    return {
+      mode: "change_request",
+      disabled: false,
+      readOnly: false,
+      reason: "Submit a requirement change for review.",
+    };
+  }
+
+  if (status === "Draft Requirement") {
+    return {
+      mode: "requirement",
+      disabled: false,
+      readOnly: false,
+      reason: "Describe the product requirement.",
+    };
+  }
+
+  return {
+    mode: "read_only",
+    disabled: true,
+    readOnly: true,
+    reason: `${status} is waiting for workflow events or gates.`,
+  };
 }
 
 function updateAgents(
@@ -98,11 +192,11 @@ function updateAgents(
   agents[agentId] = current;
 }
 
-function updateGates(
-  openGates: ConsoleProjection["openGates"],
-  payload: AgentEvent,
-): void {
+function updateGates(openGates: ConsoleProjection["openGates"], payload: AgentEvent): void {
   if (payload.type === "human_gate.created") {
+    if (openGates.some((gate) => gate.id === payload.gateId)) {
+      return;
+    }
     // Live gate events do not carry the allowed options (those live in the
     // snapshot), so this is a placeholder until the hook re-hydrates.
     openGates.push({
@@ -182,15 +276,26 @@ export function deriveStreamItems(projection: ConsoleProjection): StreamItem[] {
     }
 
     if (payload.type.startsWith("agent.")) {
-      if (payload.type === "agent.reflect" || payload.type === "agent.started") {
-        continue;
-      }
+      const title =
+        payload.type === "agent.started"
+          ? "Agent started"
+          : payload.type === "agent.error"
+            ? "Agent error"
+            : payload.type.replace("agent.", "Agent ");
+      const summary =
+        payload.type === "agent.started"
+          ? payload.agentId
+          : payload.type === "agent.error"
+            ? payload.message
+            : "summary" in payload
+              ? String(payload.summary)
+              : payload.type;
       items.push({
         id: event.eventId,
         origin: "agent",
         kind: payload.type,
-        title: payload.type.replace("agent.", "Agent "),
-        summary: "summary" in payload ? String(payload.summary) : payload.type,
+        title,
+        summary,
         timestamp: event.timestamp,
         metadata: { agentId: event.agentId },
         expanded: payload.type === "agent.error",
@@ -259,6 +364,141 @@ export function deriveStreamItems(projection: ConsoleProjection): StreamItem[] {
         summary: payload.status,
         timestamp: event.timestamp,
         metadata: { suite: payload.suite, navigateTab: "tests" },
+      });
+      continue;
+    }
+
+    if (payload.type === "run.failed") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Run failed",
+        summary: payload.reason,
+        timestamp: event.timestamp,
+        metadata: { agentId: payload.agentId, runId: payload.runId },
+        expanded: true,
+      });
+      continue;
+    }
+
+    if (payload.type === "project.status_changed") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Status changed",
+        summary: payload.status,
+        timestamp: event.timestamp,
+        expanded: true,
+      });
+      continue;
+    }
+
+    if (payload.type === "change_request.created") {
+      items.push({
+        id: event.eventId,
+        origin: "user",
+        kind: payload.type,
+        title: "Change request",
+        summary: payload.summary,
+        timestamp: event.timestamp,
+        metadata: { changeRequestId: payload.changeRequestId, kind: payload.kind },
+        expanded: true,
+      });
+      continue;
+    }
+
+    if (payload.type === "change_request.resolved") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Change request resolved",
+        summary: payload.decision,
+        timestamp: event.timestamp,
+        metadata: { changeRequestId: payload.changeRequestId },
+      });
+      continue;
+    }
+
+    if (payload.type === "deployment.started") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Deployment started",
+        summary: "Waiting for deployment URL confirmation.",
+        timestamp: event.timestamp,
+      });
+      continue;
+    }
+
+    if (payload.type === "deployment.url_confirmed") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Deployment URL confirmed",
+        summary: payload.url,
+        timestamp: event.timestamp,
+        metadata: { url: payload.url },
+      });
+      continue;
+    }
+
+    if (payload.type === "deployment.completed") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Deployment completed",
+        summary: payload.url ?? "Deployment completed.",
+        timestamp: event.timestamp,
+        metadata: { url: payload.url },
+      });
+      continue;
+    }
+
+    if (payload.type === "delivery.report_generated") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Delivery report generated",
+        summary: payload.artifactPath,
+        timestamp: event.timestamp,
+        metadata: { artifactPath: payload.artifactPath, navigateTab: "report" },
+      });
+      continue;
+    }
+
+    if (payload.type === "artifact.created") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: "Artifact created",
+        summary: payload.path,
+        timestamp: event.timestamp,
+        metadata: {
+          artifactId: payload.artifactId,
+          artifactPath: payload.path,
+          navigateTab: "files",
+        },
+      });
+      continue;
+    }
+
+    if (payload.type === "environment.missing_key") {
+      items.push({
+        id: event.eventId,
+        origin: "system",
+        kind: payload.type,
+        title: `Missing ${payload.keyName}`,
+        summary: payload.message,
+        timestamp: event.timestamp,
+        expanded: true,
       });
     }
   }

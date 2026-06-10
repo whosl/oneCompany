@@ -8,12 +8,14 @@ import { RequirementQuestionCard } from "./requirement-question-card";
 import { StreamRunGroup } from "./stream-run-group";
 import { StreamToolCallRow } from "./stream-tool-call-row";
 
+type NavigableRightTab = "files" | "tests" | "terminal" | "report";
+
 function renderStreamItem(
   item: ConsoleProjection["streamItems"][number],
   options: {
     questionAnswers?: string[];
     onQuestionAnswerChange?: (index: number, answer: string) => void;
-    onNavigateTab?: (tab: "files" | "tests" | "terminal") => void;
+    onNavigateTab?: (tab: NavigableRightTab) => void;
   },
 ) {
   const isUser = item.origin === "user";
@@ -76,9 +78,7 @@ function renderStreamItem(
         <button
           type="button"
           className="mt-2 text-xs text-[var(--oc-accent-primary)] underline"
-          onClick={() =>
-            options.onNavigateTab?.(item.metadata?.navigateTab as "files" | "tests" | "terminal")
-          }
+          onClick={() => options.onNavigateTab?.(item.metadata?.navigateTab as NavigableRightTab)}
         >
           Open in {String(item.metadata.navigateTab)} tab
         </button>
@@ -106,12 +106,10 @@ export function StreamRenderer({
   projection: ConsoleProjection;
   questionAnswers?: string[];
   onQuestionAnswerChange?: (index: number, answer: string) => void;
-  onNavigateTab?: (tab: "files" | "tests" | "terminal") => void;
+  onNavigateTab?: (tab: NavigableRightTab) => void;
   onGateResolved?: () => void;
 }) {
-  const blockingGate = projection.openGates.find(
-    (gate) => gate.id === projection.blockingGateId,
-  );
+  const blockingGate = projection.openGates.find((gate) => gate.id === projection.blockingGateId);
   const streamScrollKey = `${projection.lastSeq}:${projection.streamItems.length}:${blockingGate?.id ?? "none"}`;
   const { containerRef, pinned, handleScroll, scrollToBottom } = usePinToBottom(streamScrollKey);
   const renderOptions = { questionAnswers, onQuestionAnswerChange, onNavigateTab };
@@ -134,8 +132,10 @@ export function StreamRenderer({
         data-testid="stream-scroll-container"
         onScroll={handleScroll}
       >
-        {(projection.ungroupedStreamItems ??
-          projection.streamItems.filter((item) => item.origin !== "gate"))
+        {(
+          projection.ungroupedStreamItems ??
+          projection.streamItems.filter((item) => item.origin !== "gate")
+        )
           .filter((item) => item.origin !== "gate")
           .map((item) => renderStreamItem(item, renderOptions))}
 

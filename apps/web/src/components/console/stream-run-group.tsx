@@ -4,12 +4,14 @@ import { useState } from "react";
 import type { StreamRunGroup } from "@/lib/projection/types";
 import { StreamToolCallRow } from "./stream-tool-call-row";
 
+type NavigableRightTab = "files" | "tests" | "terminal" | "report";
+
 export function StreamRunGroup({
   group,
   onNavigateTab,
 }: {
   group: StreamRunGroup;
-  onNavigateTab?: (tab: "files" | "tests" | "terminal") => void;
+  onNavigateTab?: (tab: NavigableRightTab) => void;
 }) {
   const [collapsed, setCollapsed] = useState(group.collapsed);
 
@@ -51,8 +53,7 @@ export function StreamRunGroup({
                 status={
                   item.kind === "tool_call.started"
                     ? "started"
-                    : item.kind === "tool_call.result" &&
-                        item.metadata?.toolName === "failed"
+                    : item.kind === "tool_call.result" && item.metadata?.toolName === "failed"
                       ? "failed"
                       : "output"
                 }

@@ -3,40 +3,32 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createProjectionFromSnapshot } from "@/lib/projection/build-projection";
 import { StreamRenderer } from "./stream-renderer";
-import type { ConsoleProjection } from "@/lib/projection/types";
 
 vi.mock("@/lib/api", () => ({
   consoleApi: { resolveGate: vi.fn() },
 }));
 
-const projection: ConsoleProjection = {
-  snapshot: {
-    project: { id: "p1", name: "Demo", slug: "d", status: "Asking Questions", createdAt: "t", updatedAt: "t" },
-    phase: { label: "Asking Questions", activeGroup: "Requirement Group" },
-    requirement: {
-      rawRequirement: "Build a todo app",
-      normalizedSummary: "Todo app",
-      completenessScore: 72,
-      completenessLocked: false,
-      settledChips: [],
-      upcomingChips: [],
-    },
-    risks: [],
-    openGates: [
-      {
-        id: "gate-1",
-        gateType: "requirement_stuck",
-        status: "open",
-        options: ["keep_answering", "force_continue", "fail"],
-        decision: null,
-        createdAt: "t",
-      },
-    ],
-    events: [],
-    lastSeq: 0,
+const projection = createProjectionFromSnapshot({
+  project: {
+    id: "p1",
+    name: "Demo",
+    slug: "d",
+    status: "Asking Questions",
+    createdAt: "t",
+    updatedAt: "t",
   },
-  events: [],
+  phase: { label: "Asking Questions", activeGroup: "Requirement Group" },
+  requirement: {
+    rawRequirement: "Build a todo app",
+    normalizedSummary: "Todo app",
+    completenessScore: 72,
+    completenessLocked: false,
+    settledChips: [],
+    upcomingChips: [],
+  },
+  risks: [],
   openGates: [
     {
       id: "gate-1",
@@ -47,32 +39,23 @@ const projection: ConsoleProjection = {
       createdAt: "t",
     },
   ],
-  blockingGateId: "gate-1",
-  agents: {},
-  streamItems: [
+  events: [
     {
-      id: "u1",
-      origin: "user",
-      kind: "user.requirement.raw",
-      title: "Your requirement",
-      summary: "Build a todo app",
+      eventId: "g1",
+      seq: 1,
+      schemaVersion: "1",
+      projectId: "p1",
       timestamp: "t",
+      payload: {
+        type: "human_gate.created",
+        projectId: "p1",
+        gateId: "gate-1",
+        gateType: "requirement_stuck",
+      },
     },
   ],
-  streamGroups: [],
-  ungroupedStreamItems: [
-    {
-      id: "u1",
-      origin: "user",
-      kind: "user.requirement.raw",
-      title: "Your requirement",
-      summary: "Build a todo app",
-      timestamp: "t",
-    },
-  ],
-  swimlane: [],
-  lastSeq: 0,
-};
+  lastSeq: 1,
+});
 
 afterEach(() => cleanup());
 
