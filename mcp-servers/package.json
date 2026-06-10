@@ -1,0 +1,23 @@
+{
+  "name": "@oc/mcp-servers",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pre-installed stdio MCP servers for OneCompany Integration Gateway (Docker + PR-D oc-gateway-mcp).",
+  "dependencies": {
+    "@cloudflare/mcp-server-cloudflare": "0.2.0",
+    "@modelcontextprotocol/server-github": "2025.4.8",
+    "@modelcontextprotocol/server-postgres": "0.6.2",
+    "@modelcontextprotocol/server-slack": "2025.4.25",
+    "@mseep/linear-mcp": "78.0.1",
+    "@notionhq/notion-mcp-server": "2.2.1",
+    "@playwright/mcp": "0.0.76",
+    "@posthog/mcp": "0.1.21",
+    "@sentry/mcp-server": "0.36.0",
+    "@stripe/mcp": "0.3.3",
+    "@supabase/mcp-server-supabase": "0.8.2",
+    "@upstash/context7-mcp": "3.1.0",
+    "docker-mcp": "1.0.0",
+    "figma-developer-mcp": "0.12.0",
+    "mcp-server-kubernetes": "3.9.0"
+  }
+}

@@ -74,7 +74,15 @@ export function createApp(deps: AppDependencies) {
   const requirement = createRequirementService(deps.db, projects, gates, workspace, onEvent);
   const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
   const changeRequests = createChangeRequestService(deps.db, projects, devCtx);
-  const testing = createTestingService(deps.db, projects, workspace, deployment, delivery, onEvent);
+  const testing = createTestingService(
+    deps.db,
+    projects,
+    gates,
+    workspace,
+    deployment,
+    delivery,
+    onEvent,
+  );
   const panel = createPanelService(deps.db, projects, workspace);
   const consoleService = createConsoleService(deps.db, projects, gates);
   const environment = createEnvironmentService();

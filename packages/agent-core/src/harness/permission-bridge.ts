@@ -21,6 +21,30 @@ function isHighRiskShell(risk: ShellRiskLevel | undefined): boolean {
   return risk === "high" || risk === "high_deploy";
 }
 
+export function extractOcGatewayToolName(permission: unknown): string | undefined {
+  if (!permission || typeof permission !== "object") {
+    return undefined;
+  }
+  const record = permission as Record<string, unknown>;
+  const metadata =
+    record.metadata && typeof record.metadata === "object"
+      ? (record.metadata as Record<string, unknown>)
+      : {};
+  const candidates = [
+    metadata.toolName,
+    metadata.tool,
+    metadata.name,
+    record.title,
+    record.pattern,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.startsWith("oc_")) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 export function toToolOp(permission: unknown): ToolOp {
   if (!permission || typeof permission !== "object") {
     return { kind: "other" };
@@ -109,6 +133,16 @@ export async function handlePermission(
   authorize: AuthorizeFn,
   deps: PermissionBridgeDeps = {},
 ): Promise<AuthDecision> {
+  const gatewayTool = extractOcGatewayToolName(permission);
+  if (gatewayTool) {
+    await client.postSessionIdPermissionsPermissionId({
+      path: { id: sessionId, permissionID: permission.id },
+      body: { response: "once" },
+      query: deps.directory ? { directory: deps.directory } : undefined,
+    });
+    return { allow: true };
+  }
+
   const toolOp = toToolOp(permission);
   const shellCommand = toolOp.kind === "shell" ? toolOp.command : undefined;
   const shellRisk =

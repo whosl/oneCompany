@@ -1,0 +1,48 @@
+# Dev overlay: mount source, hot reload, expose API directly.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  onecompany:
+    build:
+      target: builder
+    image: onecompany:dev
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      # Browser must use same-origin /api proxy — direct :3001 calls fail CORS in the browser.
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_API_BASE: /api
+      API_URL: http://127.0.0.1:3001
+      PLAYWRIGHT_BROWSERS_PATH: /opt/playwright-browsers
+      OC_INTEGRATION_ADAPTER_MODE: ${OC_INTEGRATION_ADAPTER_MODE:-real}
+      OC_TESTING_INTEGRATION_CHECKS: ${OC_TESTING_INTEGRATION_CHECKS:-1}
+      OC_MCP_SERVERS_ROOT: /opt/onecompany/mcp-servers
+      OC_INTEGRATION_MCP_MANIFEST: /opt/onecompany/config/integration-mcp-manifest.json
+      OC_GATEWAY_MCP_CONFIG: /opt/onecompany/config/oc-gateway-mcp.json
+      OC_GATEWAY_MCP_ENTRY: /opt/onecompany/packages/oc-gateway-mcp/dist/index.js
+      OC_API_URL: http://127.0.0.1:3001
+      FIGMA_ACCESS_TOKEN: ${FIGMA_ACCESS_TOKEN:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      SUPABASE_ACCESS_TOKEN: ${SUPABASE_ACCESS_TOKEN:-}
+      VERCEL_TOKEN: ${VERCEL_TOKEN:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+      CONTEXT7_API_KEY: ${CONTEXT7_API_KEY:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      KUBECONFIG: ${KUBECONFIG:-/opt/onecompany/config/kubeconfig}
+    volumes:
+      - .:/opt/onecompany
+      - onecompany-node-modules:/opt/onecompany/node_modules
+      - onecompany-mcp-node-modules:/opt/onecompany/mcp-servers/node_modules
+    entrypoint: ["/bin/bash", "/opt/onecompany/scripts/docker-dev-entrypoint.sh"]
+    command: []
+
+volumes:
+  onecompany-node-modules:
+  onecompany-mcp-node-modules:

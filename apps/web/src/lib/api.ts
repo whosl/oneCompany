@@ -14,7 +14,7 @@ import type {
   TestsResultsResponse,
 } from "@oc/shared";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
@@ -192,9 +192,18 @@ export const consoleApi = {
 
 export type ConsoleApi = typeof consoleApi;
 
+export type IntegrationGatewayMeta = {
+  adapterMode: "mock" | "real";
+  gateMode: "sync" | "async";
+  skillPacksRoot: string;
+};
+
 export const integrationsApi = {
   listDefinitions() {
-    return requestJson<{ integrations: IntegrationDefinition[] }>("/integrations");
+    return requestJson<{
+      integrations: IntegrationDefinition[];
+      gateway: IntegrationGatewayMeta;
+    }>("/integrations");
   },
 
   listSkillPacks() {
@@ -220,10 +229,11 @@ export const integrationsApi = {
 
   callTool(projectId: string, integrationId: string, toolName: string, args?: unknown) {
     return requestJson<{
-      mode: "remote" | "offline";
+      mode: "remote" | "offline" | "pending";
       output: unknown;
       artifactPath?: string;
       integrationToolCallId: string;
+      gateId?: string;
     }>(`/projects/${projectId}/integrations/${integrationId}/call`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

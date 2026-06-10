@@ -18,6 +18,13 @@ export async function runQaReview(
       testingContext: {
         failedSuites,
         previewUrl,
+        integrationArtifacts: payload.testing?.integrationArtifacts,
+        integrationNotes:
+          payload.testing?.integrationNotes ??
+          payload.testing?.integrationArtifacts?.map(
+            (artifact) =>
+              `${artifact.label} ${artifact.toolName}: ${artifact.summary ?? artifact.mode}`,
+          ),
       },
     },
   });

@@ -6,7 +6,7 @@ import { consoleApi } from "../api";
 import { applyEvent, createProjectionFromSnapshot } from "./build-projection";
 import type { ConsoleProjection } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 const ACTIVE_PROJECT_STATUSES = new Set<ProjectStatus>([
   "Draft Requirement",

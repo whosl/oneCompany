@@ -1,0 +1,158 @@
+{
+  "version": "1.0.0",
+  "description": "Registered integration connectors for OneCompany Gateway (P1–P3). Native adapters take precedence when implemented; MCP stdio servers are pre-baked in Docker at OC_MCP_SERVERS_ROOT.",
+  "integrations": [
+    {
+      "id": "playwright",
+      "priority": "P1",
+      "transport": "native",
+      "displayName": "Playwright / Browser",
+      "secretRefs": [],
+      "offlineFallbackSkillPackId": "playwright-offline",
+      "docker": { "native": "playwright-core", "mcpPackage": "@playwright/mcp", "mcpBinary": "playwright-mcp" },
+      "notes": "PR-B+ uses native playwright-core; @playwright/mcp reserved for oc-gateway-mcp (PR-D)."
+    },
+    {
+      "id": "figma",
+      "priority": "P1",
+      "transport": "mcp_stdio",
+      "displayName": "Figma",
+      "secretRefs": ["FIGMA_ACCESS_TOKEN"],
+      "offlineFallbackSkillPackId": "figma-offline",
+      "docker": { "mcpPackage": "figma-developer-mcp", "mcpBinary": "figma-developer-mcp" },
+      "envMapping": { "FIGMA_API_KEY": "FIGMA_ACCESS_TOKEN" },
+      "remoteAlternative": { "url": "https://mcp.figma.com/mcp", "transport": "mcp_remote" }
+    },
+    {
+      "id": "github",
+      "priority": "P1",
+      "transport": "mcp_stdio",
+      "displayName": "GitHub",
+      "secretRefs": ["GITHUB_TOKEN"],
+      "offlineFallbackSkillPackId": "github-offline",
+      "docker": { "mcpPackage": "@modelcontextprotocol/server-github", "mcpBinary": "mcp-server-github" },
+      "envMapping": { "GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_TOKEN" }
+    },
+    {
+      "id": "supabase",
+      "priority": "P1",
+      "transport": "mcp_stdio",
+      "displayName": "Supabase",
+      "secretRefs": ["SUPABASE_ACCESS_TOKEN"],
+      "offlineFallbackSkillPackId": "supabase-offline",
+      "docker": { "mcpPackage": "@supabase/mcp-server-supabase", "mcpBinary": "mcp-server-supabase" },
+      "envMapping": { "SUPABASE_ACCESS_TOKEN": "SUPABASE_ACCESS_TOKEN" }
+    },
+    {
+      "id": "vercel",
+      "priority": "P1",
+      "transport": "native_planned",
+      "displayName": "Vercel",
+      "secretRefs": ["VERCEL_TOKEN"],
+      "offlineFallbackSkillPackId": "vercel-offline",
+      "docker": { "mcpPackage": null },
+      "notes": "No official stdio MCP on npm; real adapter via HTTP API in PR-E/F."
+    },
+    {
+      "id": "cloudflare",
+      "priority": "P2",
+      "transport": "mcp_stdio",
+      "displayName": "Cloudflare",
+      "secretRefs": ["CLOUDFLARE_API_TOKEN"],
+      "offlineFallbackSkillPackId": "cloudflare-offline",
+      "docker": { "mcpPackage": "@cloudflare/mcp-server-cloudflare", "mcpBinary": "mcp-server-cloudflare" },
+      "envMapping": { "CLOUDFLARE_API_TOKEN": "CLOUDFLARE_API_TOKEN" }
+    },
+    {
+      "id": "linear",
+      "priority": "P2",
+      "transport": "mcp_stdio",
+      "displayName": "Linear",
+      "secretRefs": ["LINEAR_API_KEY"],
+      "docker": { "mcpPackage": "@mseep/linear-mcp", "mcpBinary": "linear-mcp" },
+      "envMapping": { "LINEAR_API_KEY": "LINEAR_API_KEY" }
+    },
+    {
+      "id": "sentry",
+      "priority": "P2",
+      "transport": "mcp_stdio",
+      "displayName": "Sentry",
+      "secretRefs": ["SENTRY_AUTH_TOKEN"],
+      "docker": { "mcpPackage": "@sentry/mcp-server", "mcpBinary": "sentry-mcp" },
+      "envMapping": { "SENTRY_AUTH_TOKEN": "SENTRY_AUTH_TOKEN" }
+    },
+    {
+      "id": "posthog",
+      "priority": "P2",
+      "transport": "mcp_stdio",
+      "displayName": "PostHog",
+      "secretRefs": ["POSTHOG_API_KEY"],
+      "docker": { "mcpPackage": "@posthog/mcp", "mcpBinary": "mcp" },
+      "envMapping": { "POSTHOG_API_KEY": "POSTHOG_API_KEY" }
+    },
+    {
+      "id": "documentation",
+      "priority": "P2",
+      "transport": "mcp_stdio",
+      "displayName": "Documentation / Context",
+      "secretRefs": ["CONTEXT7_API_KEY"],
+      "docker": { "mcpPackage": "@upstash/context7-mcp", "mcpBinary": "context7-mcp" },
+      "envMapping": { "CONTEXT7_API_KEY": "CONTEXT7_API_KEY" }
+    },
+    {
+      "id": "postgres",
+      "priority": "P2",
+      "transport": "mcp_stdio",
+      "displayName": "Postgres / Database",
+      "secretRefs": ["DATABASE_URL"],
+      "docker": { "mcpPackage": "@modelcontextprotocol/server-postgres", "mcpBinary": "mcp-server-postgres" },
+      "envMapping": { "POSTGRES_CONNECTION_STRING": "DATABASE_URL" }
+    },
+    {
+      "id": "docker",
+      "priority": "P2",
+      "transport": "mcp_stdio",
+      "displayName": "Docker / Container",
+      "secretRefs": [],
+      "docker": { "mcpPackage": "docker-mcp", "mcpBinary": "docker-mcp" },
+      "notes": "Requires Docker socket mount (/var/run/docker.sock) for live container inspection."
+    },
+    {
+      "id": "stripe",
+      "priority": "P3",
+      "transport": "mcp_stdio",
+      "displayName": "Stripe",
+      "secretRefs": ["STRIPE_SECRET_KEY"],
+      "docker": { "mcpPackage": "@stripe/mcp", "mcpBinary": "mcp" },
+      "envMapping": { "STRIPE_SECRET_KEY": "STRIPE_SECRET_KEY" }
+    },
+    {
+      "id": "slack",
+      "priority": "P3",
+      "transport": "mcp_stdio",
+      "displayName": "Slack",
+      "secretRefs": ["SLACK_BOT_TOKEN"],
+      "docker": { "mcpPackage": "@modelcontextprotocol/server-slack", "mcpBinary": "mcp-server-slack" },
+      "envMapping": { "SLACK_BOT_TOKEN": "SLACK_BOT_TOKEN" }
+    },
+    {
+      "id": "notion",
+      "priority": "P3",
+      "transport": "mcp_stdio",
+      "displayName": "Notion",
+      "secretRefs": ["NOTION_TOKEN"],
+      "docker": { "mcpPackage": "@notionhq/notion-mcp-server", "mcpBinary": "notion-mcp-server" },
+      "envMapping": { "NOTION_TOKEN": "NOTION_TOKEN" }
+    },
+    {
+      "id": "kubernetes",
+      "priority": "P3",
+      "transport": "mcp_stdio",
+      "displayName": "Kubernetes",
+      "secretRefs": ["KUBECONFIG"],
+      "docker": { "mcpPackage": "mcp-server-kubernetes", "mcpBinary": "mcp-server-kubernetes" },
+      "envMapping": { "KUBECONFIG": "KUBECONFIG" },
+      "notes": "Mount kubeconfig file or set KUBECONFIG path inside container."
+    }
+  ]
+}

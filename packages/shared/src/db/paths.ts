@@ -5,5 +5,8 @@ export function getDbPath(): string {
   if (process.env.OC_TEST_DB_PATH) {
     return process.env.OC_TEST_DB_PATH;
   }
+  if (process.env.OC_DB_PATH) {
+    return path.resolve(process.env.OC_DB_PATH);
+  }
   return path.resolve(process.cwd(), "../../data/app.sqlite");
 }

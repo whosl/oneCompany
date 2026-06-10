@@ -10,11 +10,13 @@
     }
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@oc/shared": "workspace:^",
-    "drizzle-orm": "^0.39.3"
+    "drizzle-orm": "^0.39.3",
+    "playwright-core": "^1.51.1"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external drizzle-orm",
+    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external drizzle-orm --external @modelcontextprotocol/sdk",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run"

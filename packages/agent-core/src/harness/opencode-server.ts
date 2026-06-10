@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { createOpencodeServer } from "@opencode-ai/sdk";
+import { buildOcGatewayMcpConfig } from "./opencode-gateway-mcp.js";
 
 export type ProjectServer = {
   url: string;
@@ -15,23 +16,28 @@ function portForRepo(repoPath: string): number {
   return 4100 + offset;
 }
 
-function governedConfig() {
+function governedConfig(options?: { projectId?: string }) {
   // Model is selected per prompt in OpencodeHarness; server-level model config can
   // break session.create on some opencode builds when auth is injected later.
+  const mcp = options?.projectId ? buildOcGatewayMcpConfig(options.projectId) : undefined;
   return {
     permission: {
       edit: "ask" as const,
       bash: "ask" as const,
     },
+    ...(mcp ? { mcp } : {}),
   };
 }
 
-async function startServerOnPort(port: number): Promise<ProjectServer> {
+async function startServerOnPort(
+  port: number,
+  options?: { projectId?: string },
+): Promise<ProjectServer> {
   const server = await createOpencodeServer({
     hostname: "127.0.0.1",
     port,
     timeout: 15_000,
-    config: governedConfig(),
+    config: governedConfig(options),
   });
 
   return {
@@ -46,9 +52,13 @@ function normalizeRepoPath(repoPath: string): string {
   return path.resolve(repoPath);
 }
 
-export async function startProjectServer(repoPath: string): Promise<ProjectServer> {
+export async function startProjectServer(
+  repoPath: string,
+  options?: { projectId?: string },
+): Promise<ProjectServer> {
   const resolved = normalizeRepoPath(repoPath);
-  const existing = activeServers.get(resolved);
+  const cacheKey = `${resolved}:${options?.projectId ?? ""}`;
+  const existing = activeServers.get(cacheKey);
   if (existing) {
     return existing;
   }
@@ -60,7 +70,7 @@ export async function startProjectServer(repoPath: string): Promise<ProjectServe
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const port = basePort + attempt;
     try {
-      started = await startServerOnPort(port);
+      started = await startServerOnPort(port, options);
       break;
     } catch (error) {
       lastError = error;
@@ -82,15 +92,15 @@ export async function startProjectServer(repoPath: string): Promise<ProjectServe
   const handle: ProjectServer = {
     url: server.url,
     async close() {
-      if (activeServers.get(resolved) !== handle) {
+      if (activeServers.get(cacheKey) !== handle) {
         return;
       }
-      activeServers.delete(resolved);
+      activeServers.delete(cacheKey);
       await server.close();
     },
   };
 
-  activeServers.set(resolved, handle);
+  activeServers.set(cacheKey, handle);
   return handle;
 }
 

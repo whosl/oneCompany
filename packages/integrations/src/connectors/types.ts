@@ -3,6 +3,7 @@ import type { IntegrationDefinition } from "@oc/shared";
 export type ConnectorCallContext = {
   projectId: string;
   args: unknown;
+  artifactsPath?: string;
 };
 
 export type ConnectorAdapter = {

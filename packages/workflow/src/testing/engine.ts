@@ -1,4 +1,5 @@
-import type { TestingSessionMeta } from "@oc/shared";
+import type { IntegrationVerificationArtifact, TestingSessionMeta } from "@oc/shared";
+import { applyRequirementIntegrations } from "../integrations/requirement-enable.js";
 import { persistRunnerResult } from "./results.js";
 import { runQaReview } from "./qa.js";
 import type { TestingRunResult, TestingWorkflowDeps } from "./types.js";
@@ -22,6 +23,47 @@ function toResult(
     suiteResults: payload.testing?.suiteResults ?? [],
     state: payload.state,
     qaNotes: payload.testing?.qaNotes,
+    integrationArtifacts: payload.testing?.integrationArtifacts,
+  };
+}
+
+async function resolveEnabledIntegrations(
+  deps: TestingWorkflowDeps,
+  projectId: string,
+): Promise<string[]> {
+  const raw = deps.loadRequirementIntegrations?.(projectId) ?? [];
+  if (raw.length === 0) {
+    return [];
+  }
+  const { normalizedIntegrations } = await applyRequirementIntegrations(
+    { db: deps.db, projectId, onEvent: deps.onEvent },
+    raw,
+  );
+  return normalizedIntegrations;
+}
+
+async function collectIntegrationArtifacts(
+  deps: TestingWorkflowDeps,
+  projectId: string,
+  previewUrl: string,
+  label: "baseline" | "diagnostic",
+  enabledIntegrationIds: string[],
+  existing: IntegrationVerificationArtifact[] = [],
+): Promise<{ artifacts: IntegrationVerificationArtifact[]; notes: string[] }> {
+  if (!deps.runPreviewIntegrationChecks) {
+    return { artifacts: existing, notes: [] };
+  }
+  const summary = await deps.runPreviewIntegrationChecks(
+    previewUrl,
+    label,
+    enabledIntegrationIds,
+  );
+  if (!summary) {
+    return { artifacts: existing, notes: [] };
+  }
+  return {
+    artifacts: [...existing, ...summary.artifacts],
+    notes: summary.notes,
   };
 }
 
@@ -36,6 +78,15 @@ export async function runTestingPhase(
 
   let payload = deps.loadSession(input.projectId);
   const preview = await deps.startPreview(input.projectId);
+  const enabledIntegrations = await resolveEnabledIntegrations(deps, input.projectId);
+
+  const baseline = await collectIntegrationArtifacts(
+    deps,
+    input.projectId,
+    preview.url,
+    "baseline",
+    enabledIntegrations,
+  );
 
   payload = {
     ...payload,
@@ -45,6 +96,8 @@ export async function runTestingPhase(
       previewUrl: preview.url,
       lastRunAt: new Date().toISOString(),
       suiteResults: [],
+      integrationArtifacts: baseline.artifacts,
+      integrationNotes: baseline.notes,
     },
   };
   deps.saveSession(input.projectId, payload);
@@ -67,6 +120,28 @@ export async function runTestingPhase(
   }
 
   if (failed) {
+    const diagnostic = await collectIntegrationArtifacts(
+      deps,
+      input.projectId,
+      preview.url,
+      "diagnostic",
+      enabledIntegrations,
+      payload.testing?.integrationArtifacts ?? [],
+    );
+
+    payload = {
+      ...payload,
+      testing: {
+        ...payload.testing!,
+        integrationArtifacts: diagnostic.artifacts,
+        integrationNotes: [
+          ...(payload.testing?.integrationNotes ?? []),
+          ...diagnostic.notes,
+        ],
+      },
+    };
+    deps.saveSession(input.projectId, payload);
+
     const failedSuites = suiteResults
       .filter((r) => r.status === "failed")
       .map((r) => r.suite);
@@ -84,6 +159,8 @@ export async function runTestingPhase(
         lastRunAt: new Date().toISOString(),
         suiteResults,
         qaNotes,
+        integrationArtifacts: diagnostic.artifacts,
+        integrationNotes: payload.testing?.integrationNotes,
       },
     };
     deps.saveSession(input.projectId, payload);
@@ -105,6 +182,8 @@ export async function runTestingPhase(
       previewUrl: preview.url,
       lastRunAt: new Date().toISOString(),
       suiteResults,
+      integrationArtifacts: baseline.artifacts,
+      integrationNotes: baseline.notes,
     },
   };
   deps.saveSession(input.projectId, payload);

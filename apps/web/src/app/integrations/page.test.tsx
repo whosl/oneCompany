@@ -57,7 +57,10 @@ const definitions = [
 
 describe("IntegrationsView", () => {
   it("shows honest status, mock badges and secret names without values", async () => {
-    listDefinitions.mockResolvedValue({ integrations: definitions });
+    listDefinitions.mockResolvedValue({
+      integrations: definitions,
+      gateway: { adapterMode: "mock", gateMode: "sync", skillPacksRoot: "/skill-packs" },
+    });
     listSkillPacks.mockResolvedValue({
       skillPacks: [
         {
@@ -96,8 +99,36 @@ describe("IntegrationsView", () => {
     expect(screen.getByTestId("secret-readiness-FIGMA_ACCESS_TOKEN")).toBeTruthy();
   });
 
+  it("hides simulated adapter badge when gateway runs in real mode", async () => {
+    listDefinitions.mockResolvedValue({
+      integrations: [definitions[0]],
+      gateway: { adapterMode: "real", gateMode: "sync", skillPacksRoot: "/skill-packs" },
+    });
+    listSkillPacks.mockResolvedValue({ skillPacks: [] });
+    listProjectStatus.mockResolvedValue({
+      integrations: [
+        {
+          integrationId: "github",
+          displayName: "GitHub",
+          version: "1.0.0",
+          status: "connected",
+          secretReadiness: [{ ref: "GITHUB_TOKEN", configured: false }],
+          offlineFallbackSkillPackId: "github-offline",
+          scopes: ["read"],
+        },
+      ],
+    });
+
+    render(<IntegrationsView projectId="p1" />);
+    await waitFor(() => expect(screen.getByTestId("integration-card-github")).toBeTruthy());
+    expect(screen.queryByText("Simulated adapter")).toBeNull();
+  });
+
   it("enables a project integration with selected scopes", async () => {
-    listDefinitions.mockResolvedValue({ integrations: [definitions[1]] });
+    listDefinitions.mockResolvedValue({
+      integrations: [definitions[1]],
+      gateway: { adapterMode: "mock", gateMode: "sync", skillPacksRoot: "/skill-packs" },
+    });
     listSkillPacks.mockResolvedValue({ skillPacks: [] });
     listProjectStatus.mockResolvedValue({
       integrations: [

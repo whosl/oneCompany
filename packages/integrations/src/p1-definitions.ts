@@ -18,7 +18,7 @@ export const P1_INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
   {
     id: "figma",
     version: "1.0.0",
-    protocol: "native",
+    protocol: "mcp",
     mode: "remote",
     displayName: "Figma",
     description: "Design baseline and design-to-code context",
@@ -31,7 +31,7 @@ export const P1_INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
   {
     id: "github",
     version: "1.0.0",
-    protocol: "native",
+    protocol: "mcp",
     mode: "remote",
     displayName: "GitHub",
     description: "Repository, branch, and PR handoff",
@@ -45,7 +45,7 @@ export const P1_INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
   {
     id: "supabase",
     version: "1.0.0",
-    protocol: "native",
+    protocol: "mcp",
     mode: "remote",
     displayName: "Supabase",
     description: "Dev project schema, migrations, and seed helpers",

@@ -9,6 +9,8 @@ import { assertTestingFixtureAllowed, type Db, type EventEnvelope, type FinalSui
 import {
   getTestingStatus,
   loadDevSession,
+  loadRequirementSession,
+  runPreviewIntegrationChecks,
   runTestingPhase,
   saveDevSession,
   type TestingRunResult,
@@ -21,14 +23,22 @@ import {
   stopPreview,
   type RunnerDeps,
 } from "@oc/workspace";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { GateService } from "../gates/service.js";
+import { createCallIntegrationToolDeps } from "../integrations/deps-factory.js";
 import type { ProjectService } from "../projects/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
 import type { DeploymentService } from "../deployment/service.js";
 import type { DeliveryService } from "../delivery/service.js";
 
+const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
+const DEFAULT_SKILL_PACKS_ROOT = path.join(REPO_ROOT, "skill-packs");
+
 export function createTestingService(
   db: Db,
   projects: ProjectService,
+  gates: GateService,
   workspace: WorkspaceService,
   deployment: DeploymentService,
   delivery: DeliveryService,
@@ -44,11 +54,29 @@ export function createTestingService(
     const paths = workspace.ensureForProject(project);
     const shellDeps = workspace.createShellDeps(project);
     const runnerDeps: RunnerDeps = { shell: shellDeps, repoPath: paths.repo };
+    const integrationChecksEnabled =
+      process.env.OC_TESTING_INTEGRATION_CHECKS !== "0" &&
+      process.env.OC_TESTING_FIXTURE !== "1";
+
+    const callIntegration = integrationChecksEnabled
+      ? createCallIntegrationToolDeps({
+          db,
+          projectId,
+          artifactsPath: paths.artifacts,
+          skillPacksRoot: DEFAULT_SKILL_PACKS_ROOT,
+          onEvent,
+          gates,
+          caller: "workflow",
+        })
+      : undefined;
 
     return {
       db,
       onEvent,
       repoPath: paths.repo,
+      artifactsPath: paths.artifacts,
+      skillPacksRoot: DEFAULT_SKILL_PACKS_ROOT,
+      callIntegration,
       loadSession: (pid) => loadDevSession(db, pid),
       saveSession: (pid, payload) => saveDevSession(db, pid, payload),
       startPreview: async (pid) => {
@@ -67,6 +95,22 @@ export function createTestingService(
           previewUrl,
         });
       },
+      loadRequirementIntegrations: (pid) => {
+        try {
+          return loadRequirementSession(db, pid).state.integrations;
+        } catch {
+          return [];
+        }
+      },
+      runPreviewIntegrationChecks:
+        integrationChecksEnabled && callIntegration
+          ? async (previewUrl, label, enabledIntegrationIds) =>
+              runPreviewIntegrationChecks(
+                { db, projectId, callIntegration, enabledIntegrationIds },
+                previewUrl,
+                label,
+              )
+          : undefined,
       runAgent: async (input) =>
         runAgent(
           {

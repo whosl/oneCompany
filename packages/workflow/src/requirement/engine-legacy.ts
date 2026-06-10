@@ -27,6 +27,7 @@ import {
   saveRequirementSession,
   updateSessionMeta,
 } from "./state.js";
+import { applyRequirementIntegrations } from "../integrations/requirement-enable.js";
 import type {
   RequirementRunResult,
   RequirementSessionPayload,
@@ -67,15 +68,22 @@ async function runAnalyst(deps: RequirementWorkflowDeps, payload: RequirementSes
     task: makeTask(payload.state, payload.meta.profile),
   });
   const output = AnalystOutputSchema.parse(result.output);
+  const { normalizedIntegrations, warnings } = await applyRequirementIntegrations(
+    { db: deps.db, projectId: payload.state.projectId, onEvent: deps.onEvent },
+    output.integrations,
+  );
+
   payload.state = {
     ...payload.state,
     coreFeatures: output.coreFeatures,
     pagesAndFlows: output.pagesAndFlows,
     dataObjects: output.dataObjects,
     rolesAndPermissions: output.rolesAndPermissions,
-    integrations: output.integrations,
+    integrations:
+      normalizedIntegrations.length > 0 ? normalizedIntegrations : output.integrations,
     nonFunctionalRequirements: output.nonFunctionalRequirements,
     assumptions: [...payload.state.assumptions, ...output.assumptions],
+    risks: warnings.length > 0 ? [...payload.state.risks, ...warnings] : payload.state.risks,
   };
 }
 

@@ -100,11 +100,13 @@ export function ProjectHub({
   currentProjectId,
   onClose,
   projectQuery,
+  mode = "dialog",
 }: {
   open: boolean;
   currentProjectId: string;
   onClose: () => void;
   projectQuery?: string;
+  mode?: "dialog" | "page";
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -119,7 +121,7 @@ export function ProjectHub({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && mode !== "page") return;
     let active = true;
     setSelectedId(currentProjectId);
     setLoadingProjects(true);
@@ -127,7 +129,11 @@ export function ProjectHub({
     void consoleApi
       .listProjects()
       .then((result) => {
-        if (active) setProjects(result.projects);
+        if (!active) return;
+        setProjects(result.projects);
+        if (!currentProjectId && result.projects[0]) {
+          setSelectedId(result.projects[0].id);
+        }
       })
       .catch((loadError: unknown) =>
         active
@@ -140,10 +146,10 @@ export function ProjectHub({
     return () => {
       active = false;
     };
-  }, [currentProjectId, open]);
+  }, [currentProjectId, mode, open]);
 
   useEffect(() => {
-    if (!open || !selectedId) return;
+    if ((!open && mode !== "page") || !selectedId) return;
     let active = true;
     setLoadingSnapshot(true);
     setError(null);
@@ -164,7 +170,7 @@ export function ProjectHub({
     return () => {
       active = false;
     };
-  }, [open, selectedId]);
+  }, [mode, open, selectedId]);
 
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -232,16 +238,13 @@ export function ProjectHub({
     snapshot &&
     !["Draft Requirement", "Delivered", "Failed", "Paused"].includes(snapshot.project.status);
 
-  return (
-    <UiDialog
-      open={open}
-      onClose={onClose}
-      title="Project Hub"
-      description="Project lifecycle, blockers, risks and delivery artifacts"
-      className="max-w-6xl"
-      testId="project-hub"
+  const hubContent = (
+    <div
+      className={cn(
+        "grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]",
+        mode === "page" && "min-h-[calc(100vh-4.5rem)]",
+      )}
     >
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col border-b border-[var(--oc-border-muted)] md:border-b-0 md:border-r">
           <div className="space-y-3 border-b border-[var(--oc-border-muted)] p-4">
             <div className="relative">
@@ -540,6 +543,32 @@ export function ProjectHub({
           )}
         </section>
       </div>
+  );
+
+  if (mode === "page") {
+    return (
+      <main className="flex min-h-screen flex-col bg-[var(--oc-app-bg)] text-[var(--oc-text-primary)]">
+        <header className="border-b border-[var(--oc-border-muted)] px-6 py-4">
+          <h1 className="text-lg font-semibold">Project Hub</h1>
+          <p className="mt-1 text-sm text-[var(--oc-text-muted)]">
+            Project lifecycle, blockers, risks and delivery artifacts
+          </p>
+        </header>
+        {hubContent}
+      </main>
+    );
+  }
+
+  return (
+    <UiDialog
+      open={open}
+      onClose={onClose}
+      title="Project Hub"
+      description="Project lifecycle, blockers, risks and delivery artifacts"
+      className="max-w-6xl"
+      testId="project-hub"
+    >
+      {hubContent}
     </UiDialog>
   );
 }

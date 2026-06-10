@@ -1,15 +1,22 @@
 import {
   buildIntegrationStatusForProject,
-  callIntegrationTool,
   enableIntegrationForProject,
+  getIntegrationGatewayMeta,
   listIntegrations,
   listInstalledSkillPacks,
+  parseGatewayToolName,
   type CallIntegrationToolResult,
 } from "@oc/integrations";
-import { isApprovalDecision, type Db, type EventEnvelope, type IntegrationStatusSnapshot } from "@oc/shared";
+import type { Db, EventEnvelope, IntegrationStatusSnapshot } from "@oc/shared";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { GateService } from "../gates/service.js";
 import type { ProjectService } from "../projects/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
+import { callProjectIntegrationTool, createCallIntegrationToolDeps } from "./deps-factory.js";
+
+const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
+const DEFAULT_SKILL_PACKS_ROOT = path.join(REPO_ROOT, "skill-packs");
 
 export function createIntegrationService(
   db: Db,
@@ -23,8 +30,12 @@ export function createIntegrationService(
       return listIntegrations();
     },
 
+    getGatewayMeta() {
+      return getIntegrationGatewayMeta(DEFAULT_SKILL_PACKS_ROOT);
+    },
+
     listSkillPacks() {
-      return listInstalledSkillPacks();
+      return listInstalledSkillPacks(DEFAULT_SKILL_PACKS_ROOT);
     },
 
     listProjectStatus(projectId: string): IntegrationStatusSnapshot[] {
@@ -41,40 +52,57 @@ export function createIntegrationService(
       return enableIntegrationForProject(db, { projectId, integrationId, scopes });
     },
 
+    async callOpencodeTool(
+      projectId: string,
+      prefixedToolName: string,
+      args?: unknown,
+    ): Promise<CallIntegrationToolResult> {
+      const { integrationId, toolName } = parseGatewayToolName(prefixedToolName);
+      return this.callTool(projectId, integrationId, toolName, args, "opencode");
+    },
+
     async callTool(
       projectId: string,
       integrationId: string,
       toolName: string,
       args?: unknown,
+      caller: "ui" | "workflow" | "agent" | "opencode" = "ui",
     ): Promise<CallIntegrationToolResult> {
       const project = projects.getProject(projectId);
       if (!project) {
         throw new Error(`Project not found: ${projectId}`);
       }
       const paths = workspace.ensureForProject(project);
-      return callIntegrationTool(
-        {
-          db,
-          projectId,
-          artifactsPath: paths.artifacts,
-          onEvent,
-          authorizeIntegrationWrite: async (input) => {
-            const gate = gates.createGate(projectId, "dangerous_operation", {
-              riskLevel: "high",
-            });
-            const metadata = { riskLevel: "high" as const };
-            const decision = await gates.waitForGate(gate.id, { timeoutMs: 0 });
-            if (isApprovalDecision("dangerous_operation", metadata, decision)) {
-              return { allow: true };
-            }
-            return {
-              allow: false,
-              reason: `Integration gate rejected ${input.toolName}: ${decision}`,
-            };
-          },
-        },
-        { integrationId, toolName, args },
-      );
+      return callProjectIntegrationTool({
+        db,
+        projectId,
+        artifactsPath: paths.artifacts,
+        skillPacksRoot: DEFAULT_SKILL_PACKS_ROOT,
+        onEvent,
+        gates,
+        caller,
+        integrationId,
+        toolName,
+        args,
+      });
+    },
+
+    createToolDeps(
+      projectId: string,
+      options: {
+        artifactsPath?: string;
+        caller?: "ui" | "workflow" | "agent" | "opencode";
+      } = {},
+    ) {
+      return createCallIntegrationToolDeps({
+        db,
+        projectId,
+        artifactsPath: options.artifactsPath,
+        skillPacksRoot: DEFAULT_SKILL_PACKS_ROOT,
+        onEvent,
+        gates,
+        caller: options.caller,
+      });
     },
   };
 }

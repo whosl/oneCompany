@@ -1,0 +1,86 @@
+{
+  "version": "1.0.0",
+  "description": "Spawn templates for PR-D oc-gateway-mcp. Commands resolve against OC_MCP_SERVERS_ROOT at runtime.",
+  "serversRootEnv": "OC_MCP_SERVERS_ROOT",
+  "manifestPathEnv": "OC_INTEGRATION_MCP_MANIFEST",
+  "toolNameFormat": "oc_{integrationId}__{toolName}",
+  "servers": {
+    "playwright": {
+      "transport": "native",
+      "notes": "Use native playwright-core adapter; do not spawn @playwright/mcp from Opencode directly."
+    },
+    "figma": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/figma-developer-mcp"],
+      "envFromSecretRefs": { "FIGMA_API_KEY": "FIGMA_ACCESS_TOKEN" }
+    },
+    "github": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/mcp-server-github"],
+      "envFromSecretRefs": { "GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_TOKEN" }
+    },
+    "supabase": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/mcp-server-supabase"],
+      "envFromSecretRefs": { "SUPABASE_ACCESS_TOKEN": "SUPABASE_ACCESS_TOKEN" }
+    },
+    "vercel": {
+      "transport": "native_planned",
+      "notes": "HTTP native adapter only (PR-E/F)."
+    },
+    "cloudflare": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/mcp-server-cloudflare"],
+      "envFromSecretRefs": { "CLOUDFLARE_API_TOKEN": "CLOUDFLARE_API_TOKEN" }
+    },
+    "linear": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/linear-mcp"],
+      "envFromSecretRefs": { "LINEAR_API_KEY": "LINEAR_API_KEY" }
+    },
+    "sentry": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/sentry-mcp"],
+      "envFromSecretRefs": { "SENTRY_AUTH_TOKEN": "SENTRY_AUTH_TOKEN" }
+    },
+    "posthog": {
+      "transport": "mcp_stdio",
+      "command": ["node", "${OC_MCP_SERVERS_ROOT}/node_modules/@posthog/mcp/dist/index.js"],
+      "envFromSecretRefs": { "POSTHOG_API_KEY": "POSTHOG_API_KEY" }
+    },
+    "documentation": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/context7-mcp"],
+      "envFromSecretRefs": { "CONTEXT7_API_KEY": "CONTEXT7_API_KEY" }
+    },
+    "postgres": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/mcp-server-postgres"],
+      "envFromSecretRefs": { "POSTGRES_CONNECTION_STRING": "DATABASE_URL" }
+    },
+    "docker": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/docker-mcp"]
+    },
+    "stripe": {
+      "transport": "mcp_stdio",
+      "command": ["node", "${OC_MCP_SERVERS_ROOT}/node_modules/@stripe/mcp/dist/index.js"],
+      "envFromSecretRefs": { "STRIPE_SECRET_KEY": "STRIPE_SECRET_KEY" }
+    },
+    "slack": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/mcp-server-slack"],
+      "envFromSecretRefs": { "SLACK_BOT_TOKEN": "SLACK_BOT_TOKEN" }
+    },
+    "notion": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/notion-mcp-server"],
+      "envFromSecretRefs": { "NOTION_TOKEN": "NOTION_TOKEN" }
+    },
+    "kubernetes": {
+      "transport": "mcp_stdio",
+      "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/mcp-server-kubernetes"],
+      "envFromSecretRefs": { "KUBECONFIG": "KUBECONFIG" }
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   IntegrationDefinition,
   IntegrationStatusSnapshot,
@@ -91,6 +91,7 @@ export function IntegrationsView({ projectId }: { projectId: string }) {
   const [argsById, setArgsById] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<Record<string, string>>({});
   const [actionResult, setActionResult] = useState<Record<string, string>>({});
+  const [adapterMode, setAdapterMode] = useState<"mock" | "real">("mock");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +105,7 @@ export function IntegrationsView({ projectId }: { projectId: string }) {
       const nextIntegrations =
         statusResult?.integrations ?? definitionResult.integrations.map(defaultStatus);
       setDefinitions(definitionResult.integrations);
+      setAdapterMode(definitionResult.gateway?.adapterMode ?? "mock");
       setSkillPacks(packsResult.skillPacks);
       setIntegrations(nextIntegrations);
       setScopeSelection((current) => {
@@ -329,7 +331,9 @@ export function IntegrationsView({ projectId }: { projectId: string }) {
                               tone={statusTone(integration.status)}
                               label={statusLabel(integration.status)}
                             />
-                            <UiStatusPill tone="info" label="Simulated adapter" />
+                            {adapterMode === "mock" ? (
+                              <UiStatusPill tone="info" label="Simulated adapter" />
+                            ) : null}
                           </div>
                           <p className="mt-1 text-xs text-[var(--oc-text-muted)]">{definition.description}</p>
                         </div>
@@ -542,7 +546,15 @@ export function IntegrationsView({ projectId }: { projectId: string }) {
   );
 }
 
-export default function IntegrationsPage() {
+function IntegrationsPageContent() {
   const searchParams = useSearchParams();
   return <IntegrationsView projectId={searchParams.get("projectId") ?? ""} />;
+}
+
+export default function IntegrationsPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-[var(--oc-surface-base)] p-6">Loading…</main>}>
+      <IntegrationsPageContent />
+    </Suspense>
+  );
 }

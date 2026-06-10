@@ -4,7 +4,12 @@ import type { IntegrationService } from "./service.js";
 export function createIntegrationRoutes(integrations: IntegrationService) {
   const app = new Hono();
 
-  app.get("/integrations", (c) => c.json({ integrations: integrations.listDefinitions() }));
+  app.get("/integrations", (c) =>
+    c.json({
+      integrations: integrations.listDefinitions(),
+      gateway: integrations.getGatewayMeta(),
+    }),
+  );
   app.get("/integrations/skill-packs", (c) => c.json({ skillPacks: integrations.listSkillPacks() }));
 
   return app;
@@ -28,6 +33,13 @@ export function createProjectIntegrationRoutes(integrations: IntegrationService)
       body.scopes ?? [],
     );
     return c.json(connection);
+  });
+
+  app.post("/:projectId/integrations/opencode/call", async (c) => {
+    const projectId = c.req.param("projectId");
+    const body = (await c.req.json()) as { toolName: string; args?: unknown };
+    const result = await integrations.callOpencodeTool(projectId, body.toolName, body.args);
+    return c.json(result);
   });
 
   app.post("/:projectId/integrations/:integrationId/call", async (c) => {

@@ -84,6 +84,7 @@ export function runScriptedDevAgent(agentIdAtVersion: string, task: DevAgentTask
     case DEVELOPMENT_AGENT_IDS.qa: {
       const failedSuites = task.testingContext?.failedSuites ?? [];
       const previewReachable = Boolean(task.testingContext?.previewUrl);
+      const integrationNotes = task.testingContext?.integrationNotes ?? [];
       if (failedSuites.length > 0) {
         return QaOutputSchema.parse({
           passed: false,
@@ -92,12 +93,17 @@ export function runScriptedDevAgent(agentIdAtVersion: string, task: DevAgentTask
             previewReachable
               ? "Preview reachable — focus on test failures"
               : "Preview unreachable — restart preview before E2E",
-          ],
+            ...integrationNotes,
+          ].filter(Boolean),
         });
       }
       return QaOutputSchema.parse({
         passed: true,
-        notes: ["final acceptance suite passed", "preview verified"],
+        notes: [
+          "final acceptance suite passed",
+          "preview verified",
+          ...integrationNotes,
+        ].filter(Boolean),
       });
     }
 

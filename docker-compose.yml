@@ -1,0 +1,53 @@
+services:
+  onecompany:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: onecompany:local
+    ports:
+      - "3000:3000"
+    environment:
+      # Required for real agent workflows (mount via env_file)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OC_LLM_API_KEY: ${OC_LLM_API_KEY:-}
+      OC_LLM_BASE_URL: ${OC_LLM_BASE_URL:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      OC_OPENCODE_MODEL_CHEAP: ${OC_OPENCODE_MODEL_CHEAP:-}
+      OC_OPENCODE_MODEL_STANDARD: ${OC_OPENCODE_MODEL_STANDARD:-}
+      OC_OPENCODE_MODEL_STRONG: ${OC_OPENCODE_MODEL_STRONG:-}
+      # Playwright (Chromium baked into image at /opt/playwright-browsers)
+      PLAYWRIGHT_BROWSERS_PATH: /opt/playwright-browsers
+      OC_INTEGRATION_ADAPTER_MODE: ${OC_INTEGRATION_ADAPTER_MODE:-real}
+      OC_TESTING_INTEGRATION_CHECKS: ${OC_TESTING_INTEGRATION_CHECKS:-1}
+      # MCP servers (pre-installed under mcp-servers/; spawn config for PR-D)
+      OC_MCP_SERVERS_ROOT: /opt/onecompany/mcp-servers
+      OC_INTEGRATION_MCP_MANIFEST: /opt/onecompany/config/integration-mcp-manifest.json
+      OC_GATEWAY_MCP_CONFIG: /opt/onecompany/config/oc-gateway-mcp.json
+      # P1 integration secrets (optional — missing → offline skill pack in real mode)
+      FIGMA_ACCESS_TOKEN: ${FIGMA_ACCESS_TOKEN:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      SUPABASE_ACCESS_TOKEN: ${SUPABASE_ACCESS_TOKEN:-}
+      VERCEL_TOKEN: ${VERCEL_TOKEN:-}
+      # P2
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+      CONTEXT7_API_KEY: ${CONTEXT7_API_KEY:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      # P3
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      KUBECONFIG: ${KUBECONFIG:-/opt/onecompany/config/kubeconfig}
+    env_file:
+      - path: .env.docker
+        required: false
+    volumes:
+      - onecompany-data:/opt/onecompany/data
+      - onecompany-projects:/var/lib/onecompany/generated-projects
+    restart: unless-stopped
+
+volumes:
+  onecompany-data:
+  onecompany-projects:

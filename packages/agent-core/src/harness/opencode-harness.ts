@@ -131,7 +131,7 @@ export function createOpencodeHarness(): CodingHarness {
       emitPhase(ctx, "plan", `opencode slice ${slice.sliceId}: ${slice.goal}`);
 
       const directory = path.resolve(ctx.repoPath);
-      const server = await startProjectServer(directory);
+      const server = await startProjectServer(directory, { projectId: ctx.projectId });
       const model = parseModelRef(pickOpencodeModel(slice.modelTier as ModelTier));
       let bridge: ReturnType<typeof createEventBridge> | undefined;
 

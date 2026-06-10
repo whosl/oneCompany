@@ -16,5 +16,13 @@ export type DevAgentTask = {
   testingContext?: {
     failedSuites: string[];
     previewUrl?: string;
+    integrationArtifacts?: Array<{
+      label: "baseline" | "diagnostic";
+      toolName: string;
+      mode: "remote" | "offline" | "pending";
+      artifactPath?: string;
+      summary?: string;
+    }>;
+    integrationNotes?: string[];
   };
 };

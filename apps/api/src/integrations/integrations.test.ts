@@ -9,6 +9,7 @@ describe("integrations API — M12", () => {
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
         integrations: Array<{ id: string }>;
+        gateway?: { adapterMode: string };
       };
       expect(body.integrations.map((row) => row.id).sort()).toEqual([
         "figma",
@@ -17,6 +18,12 @@ describe("integrations API — M12", () => {
         "supabase",
         "vercel",
       ]);
+      const gatewayBody = body as {
+        gateway?: { adapterMode: string; gateMode: string; skillPacksRoot: string };
+      };
+      expect(gatewayBody.gateway?.adapterMode).toBe("mock");
+      expect(gatewayBody.gateway?.gateMode).toBe("sync");
+      expect(gatewayBody.gateway?.skillPacksRoot).toContain("skill-packs");
     } finally {
       cleanup();
     }
@@ -52,6 +59,32 @@ describe("integrations API — M12", () => {
         body: JSON.stringify({ toolName: "get_design_context" }),
       });
       expect(call.status).toBe(200);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("routes opencode gateway tool names through caller=opencode", async () => {
+    const { app, projects, cleanup } = setupTestApp();
+    try {
+      const project = projects.createProject("Opencode Gateway");
+      await app.request(`/projects/${project.id}/integrations/figma/enable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scopes: ["read"] }),
+      });
+
+      const call = await app.request(`/projects/${project.id}/integrations/opencode/call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolName: "oc_figma__get_design_context",
+          args: { fileKey: "demo" },
+        }),
+      });
+      expect(call.status).toBe(200);
+      const body = (await call.json()) as { mode: string };
+      expect(body.mode).toBe("remote");
     } finally {
       cleanup();
     }
