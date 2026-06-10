@@ -15,7 +15,7 @@
     "drizzle-orm": "^0.39.3"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external @oc/agent-core --external drizzle-orm",
+    "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external @oc/agent-core --external drizzle-orm && cp src/preview-fallback.mjs dist/preview-fallback.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run"

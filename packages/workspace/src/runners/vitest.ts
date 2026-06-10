@@ -62,6 +62,7 @@ export async function runVitest(
     projectId: deps.shell.projectId,
     cmd: spec.command,
     cwd: spec.cwd ?? deps.repoPath,
+    env: spec.env,
   });
 
   const parsed = parseVitestJson(readOutputText(result.outputRef));

@@ -1,4 +1,5 @@
 import type { NormalizedRunnerResult } from "@oc/shared";
+import { readOutputText } from "../log-pipeline.js";
 import { runCommand } from "../shell.js";
 import type { RunnerDeps, SuiteSpec } from "./types.js";
 
@@ -27,9 +28,10 @@ export async function runBuild(
     projectId: deps.shell.projectId,
     cmd: spec.command,
     cwd: spec.cwd ?? deps.repoPath,
+    env: spec.env,
   });
 
-  const stdout = result.outputRef.kind === "inline" ? (result.outputRef.text ?? "") : "";
+  const stdout = readOutputText(result.outputRef);
   const parsed = parseBuildOutput(stdout, "", result.exitCode);
 
   return {

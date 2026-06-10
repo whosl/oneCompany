@@ -1,4 +1,5 @@
 import type { NormalizedRunnerResult } from "@oc/shared";
+import { readOutputText } from "../log-pipeline.js";
 import { runCommand } from "../shell.js";
 import type { RunnerDeps, SuiteSpec } from "./types.js";
 
@@ -80,15 +81,16 @@ export async function runPlaywright(
     projectId: deps.shell.projectId,
     cmd: command,
     cwd: spec.cwd ?? deps.repoPath,
+    env,
   });
 
-  const output =
-    result.outputRef.kind === "inline" ? (result.outputRef.text ?? "") : "";
+  const output = readOutputText(result.outputRef);
   const parsed = parsePlaywrightJson(output);
+  const passed = result.exitCode === 0 && parsed.passed;
 
   return {
     suite: spec.suite,
-    status: parsed.passed ? "passed" : "failed",
+    status: passed ? "passed" : "failed",
     passedCount: parsed.passedCount,
     failedCount: parsed.failedCount,
     details: parsed.details,

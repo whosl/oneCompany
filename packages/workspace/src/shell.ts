@@ -27,8 +27,8 @@ export type ShellDeps = {
   onEvent?: (envelope: EventEnvelope) => void;
   createGate: (projectId: string, gateType: string, metadata?: GateMetadata) => GateRecord;
   waitForGate: (gateId: string) => Promise<string>;
-  runLocal: (cmd: string, cwd: string) => Promise<ExecResult>;
-  runSandbox: (cmd: string, projectPath: string) => Promise<ExecResult>;
+  runLocal: (cmd: string, cwd: string, env?: Record<string, string>) => Promise<ExecResult>;
+  runSandbox: (cmd: string, projectPath: string, env?: Record<string, string>) => Promise<ExecResult>;
   isDockerAvailable: () => boolean | Promise<boolean>;
 };
 
@@ -36,6 +36,7 @@ export type RunCommandInput = {
   projectId: string;
   cmd: string;
   cwd?: string;
+  env?: Record<string, string>;
 };
 
 export type RunCommandResult = {
@@ -141,9 +142,9 @@ export async function runCommand(deps: ShellDeps, input: RunCommandInput): Promi
       if (!dockerOk) {
         throw new DockerUnavailableError();
       }
-      execResult = await deps.runSandbox(input.cmd, cwd);
+      execResult = await deps.runSandbox(input.cmd, cwd, input.env);
     } else {
-      execResult = await deps.runLocal(input.cmd, cwd);
+      execResult = await deps.runLocal(input.cmd, cwd, input.env);
     }
 
     const combined = [execResult.stdout, execResult.stderr].filter(Boolean).join("\n");

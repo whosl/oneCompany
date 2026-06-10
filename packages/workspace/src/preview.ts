@@ -1,5 +1,8 @@
-import http from "node:http";
-import type { AddressInfo } from "node:net";
+import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import http from "node:net";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type PreviewHandle = {
   url: string;
@@ -7,35 +10,168 @@ export type PreviewHandle = {
   stop: () => Promise<void>;
 };
 
+export class PreviewStartError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PreviewStartError";
+  }
+}
+
 const previewRegistry = new Map<string, PreviewHandle>();
 
 export type StartPreviewInput = {
   projectId: string;
+  repoPath?: string;
   port?: number;
   host?: string;
+  readyTimeoutMs?: number;
 };
 
-async function listenOnFreePort(
-  host: string,
-  preferredPort?: number,
-): Promise<{ server: http.Server; port: number }> {
-  const server = http.createServer((_req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("preview ok");
+type PreviewCommand = {
+  command: string;
+  shell: boolean;
+};
+
+type PackageJson = {
+  scripts?: Record<string, string>;
+};
+
+function findFreePort(host: string, preferredPort?: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer();
+    server.once("error", reject);
+    server.listen(preferredPort ?? 0, host, () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        reject(new Error("Failed to resolve preview port"));
+        return;
+      }
+      const port = address.port;
+      server.close((err) => (err ? reject(err) : resolve(port)));
+    });
+  });
+}
+
+function readPackageJson(repoPath: string): PackageJson | null {
+  const pkgPath = path.join(repoPath, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(pkgPath, "utf8")) as PackageJson;
+  } catch {
+    return null;
+  }
+}
+
+export function resolvePreviewCommand(repoPath: string): PreviewCommand | null {
+  const pkg = readPackageJson(repoPath);
+  const scripts = pkg?.scripts ?? {};
+
+  if (scripts.dev) {
+    return { command: "pnpm dev", shell: true };
+  }
+  if (scripts.preview) {
+    return { command: "pnpm preview", shell: true };
+  }
+  if (scripts.start) {
+    if (scripts.build) {
+      return { command: "pnpm build && pnpm start", shell: true };
+    }
+    return { command: "pnpm start", shell: true };
+  }
+
+  return null;
+}
+
+function fallbackPreviewCommand(): PreviewCommand {
+  const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "preview-fallback.mjs");
+  return { command: `node "${scriptPath}"`, shell: true };
+}
+
+async function waitForPreviewReady(
+  url: string,
+  timeoutMs: number,
+): Promise<{ reachable: boolean; statusCode?: number }> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const health = await getPreviewHealth(url);
+    if (health.reachable) {
+      return health;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return { reachable: false };
+}
+
+function killProcessTree(child: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (!child.pid) {
+      resolve();
+      return;
+    }
+
+    const onExit = () => {
+      child.removeListener("exit", onExit);
+      resolve();
+    };
+    child.once("exit", onExit);
+
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        onExit();
+        return;
+      }
+    }
+
+    setTimeout(() => {
+      try {
+        if (child.pid) {
+          process.kill(-child.pid, "SIGKILL");
+        }
+      } catch {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // already exited
+        }
+      }
+    }, 2_000);
+  });
+}
+
+async function spawnPreviewProcess(input: {
+  repoPath: string;
+  host: string;
+  port: number;
+}): Promise<{ child: ChildProcess; url: string }> {
+  const resolved = resolvePreviewCommand(input.repoPath) ?? fallbackPreviewCommand();
+  const env = {
+    ...process.env,
+    PORT: String(input.port),
+    PREVIEW_PORT: String(input.port),
+    PREVIEW_HOST: input.host,
+    PREVIEW_ROOT: input.repoPath,
+    HOST: input.host,
+  };
+
+  const child = spawn(resolved.command, {
+    cwd: input.repoPath,
+    env,
+    shell: resolved.shell,
+    detached: true,
+    stdio: "ignore",
   });
 
-  const tryListen = (port: number) =>
-    new Promise<number>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(port, host, () => {
-        server.removeListener("error", reject);
-        const address = server.address() as AddressInfo;
-        resolve(address.port);
-      });
-    });
+  child.unref();
 
-  const port = await tryListen(preferredPort ?? 0);
-  return { server, port };
+  const url = `http://${input.host}:${input.port}`;
+  return { child, url };
 }
 
 export async function startPreview(input: StartPreviewInput): Promise<PreviewHandle> {
@@ -45,16 +181,23 @@ export async function startPreview(input: StartPreviewInput): Promise<PreviewHan
   }
 
   const host = input.host ?? "127.0.0.1";
-  const { server, port } = await listenOnFreePort(host, input.port);
-  const url = `http://${host}:${port}`;
+  const repoPath = input.repoPath ? path.resolve(input.repoPath) : process.cwd();
+  fs.mkdirSync(repoPath, { recursive: true });
+
+  const port = await findFreePort(host, input.port);
+  const { child, url } = await spawnPreviewProcess({ repoPath, host, port });
+
+  const health = await waitForPreviewReady(url, input.readyTimeoutMs ?? 30_000);
+  if (!health.reachable) {
+    await killProcessTree(child);
+    throw new PreviewStartError(`Preview server did not become reachable at ${url}`);
+  }
 
   const handle: PreviewHandle = {
     url,
     port,
     stop: async () => {
-      await new Promise<void>((resolve, reject) => {
-        server.close((err) => (err ? reject(err) : resolve()));
-      });
+      await killProcessTree(child);
       previewRegistry.delete(input.projectId);
     },
   };

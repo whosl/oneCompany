@@ -52,11 +52,13 @@ export {
 } from "./shell.js";
 export { createAuthorize, type AuthorizeDeps } from "./authorize.js";
 export {
+  PreviewStartError,
   startPreview,
   stopPreview,
   getPreviewHandle,
   getPreviewHealth,
   clearPreviewRegistry,
+  resolvePreviewCommand,
   type PreviewHandle,
 } from "./preview.js";
 export {

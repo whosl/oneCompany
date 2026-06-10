@@ -94,6 +94,28 @@ describe("shell executor — M5", () => {
     cleanup();
   });
 
+  it("forwards env vars to runLocal", async () => {
+    const runLocal = vi.fn(async (_cmd, _cwd, env) => ({
+      exitCode: 0,
+      stdout: env?.BASE_URL ?? "",
+      stderr: "",
+    }));
+    const { deps, cleanup } = makeDeps({ runLocal });
+
+    await runCommand(deps, {
+      projectId: deps.projectId,
+      cmd: "git status",
+      env: { BASE_URL: "http://127.0.0.1:4567" },
+    });
+
+    expect(runLocal).toHaveBeenCalledWith(
+      "git status",
+      deps.repoPath,
+      { BASE_URL: "http://127.0.0.1:4567" },
+    );
+    cleanup();
+  });
+
   it("routes deploy commands through deployment gate and local runner", async () => {
     const createGate = vi.fn((projectId, gateType) => ({
       id: randomUUID(),

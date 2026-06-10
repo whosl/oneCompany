@@ -24,10 +24,19 @@ export async function isDockerAvailable(): Promise<boolean> {
   }
 }
 
-export async function runInSandbox(projectPath: string, cmd: string): Promise<ExecResult> {
+export async function runInSandbox(
+  projectPath: string,
+  cmd: string,
+  env?: Record<string, string>,
+): Promise<ExecResult> {
   if (!(await isDockerAvailable())) {
     throw new DockerUnavailableError();
   }
+
+  const envArgs =
+    env && Object.keys(env).length > 0
+      ? Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`])
+      : [];
 
   const { stdout, stderr } = await execFileAsync(
     "docker",
@@ -36,6 +45,7 @@ export async function runInSandbox(projectPath: string, cmd: string): Promise<Ex
       "--rm",
       "--network",
       "none",
+      ...envArgs,
       "-v",
       `${projectPath}:/workspace`,
       "-w",

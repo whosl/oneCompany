@@ -51,7 +51,10 @@ export function createTestingService(
       repoPath: paths.repo,
       loadSession: (pid) => loadDevSession(db, pid),
       saveSession: (pid, payload) => saveDevSession(db, pid, payload),
-      startPreview: async (pid) => startPreview({ projectId: pid }),
+      startPreview: async (pid) => {
+        const session = loadDevSession(db, pid);
+        return startPreview({ projectId: pid, repoPath: session.state.repoPath });
+      },
       stopPreview: async (pid) => stopPreview(pid),
       runSuite: async (suite: FinalSuiteId, previewUrl?: string) => {
         if (process.env.OC_TESTING_FIXTURE === "1") {

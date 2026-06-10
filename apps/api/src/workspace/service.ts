@@ -55,7 +55,7 @@ export function createWorkspaceService(
       },
       waitForGate: (gateId) => gates.waitForGate(gateId, { timeoutMs: 0 }),
       runLocal: runLocalCommand,
-      runSandbox: (cmd, projectPath) => runInSandbox(projectPath, cmd),
+      runSandbox: (cmd, projectPath, env) => runInSandbox(projectPath, cmd, env),
       isDockerAvailable,
     };
   };
