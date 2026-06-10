@@ -1,7 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { commitSlice, ensureDevRepoScaffold, initRepo } from "@oc/workspace";
-import { appendCustomGateNote, emit, getAllowedOptions, resolveGateDecision } from "@oc/shared";
+import {
+  appendCustomGateNote,
+  getAllowedOptions,
+  resolveGateDecision,
+  sliceSuiteId,
+} from "@oc/shared";
+import { persistRunnerResult } from "../testing/results.js";
 import { DEVELOPMENT_AGENT_IDS } from "@oc/agent-core";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
 import {
@@ -86,24 +92,23 @@ export async function runSliceIteration(
     const check = sliceResult.passed
       ? await deps.runAuthoritativeCheck(slice, attempt)
       : { passed: false, details: sliceResult.summary };
-    const envelope = emit(deps.db, {
-      projectId: state.projectId,
-      payload: {
-        type: "test.result",
-        projectId: state.projectId,
-        suite: slice.id,
-        status: check.passed ? "passed" : "failed",
-      },
-    });
-    deps.onEvent?.(envelope);
+    const suite = sliceSuiteId(slice.id);
+    const status = check.passed ? "passed" : "failed";
+
+    persistRunnerResult(
+      deps.db,
+      state.projectId,
+      { suite, status, details: check.details },
+      deps.onEvent,
+    );
 
     state = {
       ...state,
       testResults: [
         ...state.testResults,
         {
-          suite: slice.id,
-          status: check.passed ? "passed" : "failed",
+          suite,
+          status,
           details: check.details,
         },
       ],

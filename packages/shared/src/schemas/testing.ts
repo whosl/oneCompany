@@ -38,3 +38,7 @@ export function isFinalSuite(suite: string): boolean {
 export function isSliceSuite(suite: string): boolean {
   return suite.startsWith("slice:");
 }
+
+export function sliceSuiteId(sliceId: string): string {
+  return sliceId.startsWith("slice:") ? sliceId : `slice:${sliceId}`;
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { commits, diffs, events } from "@oc/shared";
+import { loadTestResults } from "../testing/results.js";
 import { startDevelopment, resumeDevelopmentAfterGate } from "./engine.js";
 import { setupDevelopmentTest } from "../test-utils.js";
 
@@ -31,6 +32,10 @@ describe("slice loop with stub harness", () => {
       const passed = testEvents.filter((e) => e.type === "test.result" && e.status === "passed");
       expect(failed.length).toBeGreaterThan(0);
       expect(passed.length).toBeGreaterThan(0);
+
+      const sliceResults = loadTestResults(db, projectId, "slice");
+      expect(sliceResults.length).toBeGreaterThan(0);
+      expect(sliceResults.every((row) => row.suite.startsWith("slice:"))).toBe(true);
     } finally {
       cleanup();
     }
