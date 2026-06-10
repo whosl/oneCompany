@@ -453,6 +453,7 @@ Key configuration (see [.env.example](.env.example) for full list):
 | **M10** | **Deployment, delivery, change requests** | **✅ Done** |
 | **M11** | **Hardening & MVP acceptance** | **✅ Done** |
 | M12 | Integration Gateway + offline Skill Packs | ✅ Done ([plan](handbook/m12-implementation-plan.md)) |
+| M13 | Spec-review remediation & hardening | 📋 Next ([plan](handbook/m13-remediation-plan.md)) |
 
 ## Event System
 

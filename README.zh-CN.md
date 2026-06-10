@@ -453,6 +453,7 @@ OneCompany 支持两种引擎模式：
 | **M10** | **部署、交付、变更请求** | **✅ 已完成** |
 | **M11** | **加固与 MVP 验收** | **✅ 已完成** |
 | M12 | 集成网关 + 离线 Skill Packs | ✅ 完成（[计划](handbook/m12-implementation-plan.md)） |
+| M13 | Spec 审查修复与加固 | 📋 下一步（[计划](handbook/m13-remediation-plan.md)） |
 
 ### M9.5：真实引擎集成（当前里程碑）
 
