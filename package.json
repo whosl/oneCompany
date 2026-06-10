@@ -9,6 +9,7 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "migrate": "turbo run migrate --filter=@oc/shared",
+    "api": "pnpm --filter @oc/api dev",
     "format": "prettier --write ."
   },
   "devDependencies": {

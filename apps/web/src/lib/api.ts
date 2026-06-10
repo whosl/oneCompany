@@ -17,10 +17,17 @@ import type {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(5 * 60 * 1000),
+  });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
-    const error = new Error(body.error ?? `Request failed: ${response.status}`);
+    const fallback =
+      response.status === 502
+        ? "API 代理超时或后端不可用，请确认 API 在 :3001 运行后重试"
+        : `Request failed: ${response.status}`;
+    const error = new Error(body.error ?? fallback);
     Object.assign(error, body);
     throw error;
   }

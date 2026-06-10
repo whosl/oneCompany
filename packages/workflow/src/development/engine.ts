@@ -8,6 +8,7 @@ import {
 import {
   getDevelopmentStatus as getDevelopmentStatusLegacy,
   resumeDevelopmentAfterGateLegacy,
+  resumeOrphanedSliceLoop,
   runSliceIteration as runSliceIterationLegacy,
   startDevelopmentLegacy,
 } from "./engine-legacy.js";
@@ -23,6 +24,12 @@ export async function startDevelopment(
     profile?: DevFixtureProfile;
   },
 ): Promise<DevelopmentRunResult> {
+  // A "Developing" project whose in-memory slice loop died (API restart /
+  // crash) can be resumed from the persisted dev session. The session payload
+  // is engine-agnostic, so the legacy slice loop resumes either engine's run.
+  if (deps.getProjectStatus(input.projectId) === "Developing") {
+    return resumeOrphanedSliceLoop(deps, input.projectId);
+  }
   if (useGraphDevelopmentEngine()) {
     return startDevelopmentGraph(deps, input);
   }

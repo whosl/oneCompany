@@ -6,7 +6,14 @@ import {
   type DevAgentTask,
   type DevFixtureProfile,
 } from "@oc/agent-core";
-import { classifyCommandChain, createAuthorize, readOutputText, runCommand } from "@oc/workspace";
+import {
+  classifyCommandChain,
+  createAuthorize,
+  parseTypecheckOutput,
+  readOutputText,
+  resolveTypecheckCommand,
+  runCommand,
+} from "@oc/workspace";
 import type { DevelopmentWorkflowDeps } from "@oc/workflow";
 import type { Db, EventEnvelope } from "@oc/shared";
 import type { GateService } from "../gates/service.js";
@@ -65,10 +72,26 @@ export function createDevelopmentDeps(
       mode === "stub"
         ? async () => ({ passed: true, details: "stub-engine-pass" })
         : createRunAuthoritativeCheck(shell),
+    runSliceTypecheck:
+      mode === "stub"
+        ? undefined
+        : async () => {
+            const command = resolveTypecheckCommand(paths.repo);
+            if (!command) {
+              return { passed: true, details: "typecheck skipped (no tsconfig/tsc)" };
+            }
+            const result = await runCommand(shell, {
+              projectId,
+              cmd: command,
+              cwd: paths.repo,
+            });
+            const parsed = parseTypecheckOutput(readOutputText(result.outputRef), "");
+            return { passed: parsed.passed, details: parsed.details };
+          },
     classifyShellRisk: (command) => classifyCommandChain(command, { repoPath: paths.repo }),
     runGovernedCommand: async (command) => {
       const result = await runCommand(shell, { projectId, cmd: command });
-      const combined = await readOutputText(shell.db, result.outputRef);
+      const combined = readOutputText(result.outputRef);
       return {
         exitCode: result.exitCode,
         stdout: combined,

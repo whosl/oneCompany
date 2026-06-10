@@ -3,9 +3,14 @@ import { emit, type AgentEvent, type DevState } from "@oc/shared";
 import { classifyCommandChain, persistOutput } from "@oc/workspace";
 import type { DevelopmentWorkflowDeps } from "./types.js";
 
-const HARNESS_AGENT_ID = "opencode";
+/**
+ * Default attribution for harness events. The opencode engine is an
+ * implementation detail — events surface under the pipeline role that drives
+ * it ("coding" for slice implementation, "review" for code review).
+ */
+const DEFAULT_HARNESS_AGENT_ID = "coding";
 
-function toAgentEvent(projectId: string, raw: unknown): AgentEvent | null {
+function toAgentEvent(projectId: string, agentId: string, raw: unknown): AgentEvent | null {
   if (!raw || typeof raw !== "object" || !("type" in raw)) {
     return null;
   }
@@ -16,7 +21,7 @@ function toAgentEvent(projectId: string, raw: unknown): AgentEvent | null {
     return null;
   }
 
-  const base = { projectId, agentId: HARNESS_AGENT_ID };
+  const base = { projectId, agentId };
 
   switch (type) {
     case "agent.plan":
@@ -34,6 +39,7 @@ function toAgentEvent(projectId: string, raw: unknown): AgentEvent | null {
         projectId,
         toolCallId: String(event.toolCallId ?? ""),
         toolName: String(event.toolName ?? "tool"),
+        summary: typeof event.summary === "string" ? event.summary : undefined,
       };
     case "tool_call.output":
       return {
@@ -57,6 +63,7 @@ function toAgentEvent(projectId: string, raw: unknown): AgentEvent | null {
 export function buildHarnessContext(
   deps: DevelopmentWorkflowDeps,
   state: DevState,
+  agentId: string = DEFAULT_HARNESS_AGENT_ID,
 ): DevContext {
   const formatToolOutput =
     deps.logsPath &&
@@ -83,13 +90,13 @@ export function buildHarnessContext(
       classifyCommandChain(command, { repoPath: deps.repoPath }),
     runGovernedCommand: deps.runGovernedCommand,
     emit: (raw) => {
-      const payload = toAgentEvent(state.projectId, raw);
+      const payload = toAgentEvent(state.projectId, agentId, raw);
       if (!payload) {
         return;
       }
       const envelope = emit(deps.db, {
         projectId: state.projectId,
-        agentId: HARNESS_AGENT_ID,
+        agentId,
         payload,
       });
       deps.onEvent?.(envelope);

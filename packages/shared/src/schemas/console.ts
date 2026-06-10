@@ -36,6 +36,7 @@ export const ConsoleGateMetadataSchema = z.object({
   integrationId: z.string().optional(),
   toolName: z.string().optional(),
   caller: z.enum(["ui", "workflow", "agent", "opencode"]).optional(),
+  operation: z.string().optional(),
 });
 
 export const ConsoleGateSnapshotSchema = z.object({

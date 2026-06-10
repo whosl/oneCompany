@@ -5,7 +5,7 @@ import {
   type CallIntegrationToolDeps,
   type CallIntegrationToolResult,
 } from "@oc/integrations";
-import type { Db, IntegrationVerificationArtifact } from "@oc/shared";
+import { emit, type Db, type EventEnvelope, type IntegrationVerificationArtifact } from "@oc/shared";
 
 export type IntegrationVerificationSummary = {
   label: "baseline" | "diagnostic";
@@ -68,6 +68,7 @@ export async function runPreviewIntegrationChecks(
     projectId: string;
     callIntegration: CallIntegrationToolDeps;
     enabledIntegrationIds?: string[];
+    onEvent?: (envelope: EventEnvelope) => void;
   },
   previewUrl: string,
   label: "baseline" | "diagnostic",
@@ -101,6 +102,21 @@ export async function runPreviewIntegrationChecks(
     toArtifact(label, "screenshot", screenshot),
     toArtifact(label, "console_errors", consoleErrors),
   ];
+
+  // Surface user-visible files (screenshots etc.) in the project artifacts panel.
+  for (const artifact of artifacts) {
+    if (!artifact.artifactPath) continue;
+    const envelope = emit(deps.db, {
+      projectId: deps.projectId,
+      payload: {
+        type: "artifact.created",
+        projectId: deps.projectId,
+        artifactId: `${label}-${artifact.toolName}`,
+        path: artifact.artifactPath,
+      },
+    });
+    deps.onEvent?.(envelope);
+  }
 
   const notes = [
     `Preview ${label} screenshot: ${screenshot.artifactPath ?? screenshot.mode}`,

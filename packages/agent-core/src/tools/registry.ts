@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { AgentDefinition } from "@oc/shared";
 import type { AuthorizeFn } from "../harness/permission-bridge.js";
+import type { CallIntegrationToolDeps } from "@oc/integrations";
 import type { ToolContext } from "../tools.js";
 
-export type ToolProtocol = "local" | "mcp" | "skill_pack";
+export type ToolProtocol = "local" | "mcp" | "skill_pack" | "integration";
 
 const RISK_RANK = { low: 0, medium: 1, high: 2 } as const;
 
@@ -22,6 +23,8 @@ export type ToolExecutionContext = ToolContext & {
   authorize?: AuthorizeFn;
   repoPath?: string;
   task?: unknown;
+  callIntegration?: CallIntegrationToolDeps;
+  enabledIntegrationIds?: string[];
 };
 
 const registry = new Map<string, RegisteredTool>();

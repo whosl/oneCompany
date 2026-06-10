@@ -21,6 +21,38 @@ describe("permission-bridge", () => {
     });
   });
 
+  it("maps opencode 1.16 permission.asked payloads (permission + patterns)", () => {
+    expect(
+      toToolOp({
+        id: "per_1",
+        sessionID: "ses_1",
+        permission: "bash",
+        patterns: ["npm install"],
+        metadata: {},
+      }),
+    ).toEqual({ kind: "shell", command: "npm install" });
+
+    expect(
+      toToolOp({
+        id: "per_2",
+        sessionID: "ses_1",
+        permission: "edit",
+        patterns: ["src/index.ts"],
+        metadata: {},
+      }),
+    ).toEqual({ kind: "edit", path: "src/index.ts" });
+
+    expect(
+      toToolOp({
+        id: "per_3",
+        sessionID: "ses_1",
+        permission: "write",
+        patterns: [],
+        metadata: { filePath: "README.md" },
+      }),
+    ).toEqual({ kind: "edit", path: "README.md" });
+  });
+
   it("replies once when authorize allows", async () => {
     const reply = vi.fn(async () => ({ data: true }));
     const client = {

@@ -1,18 +1,32 @@
-import { describe, expect, it, vi } from "vitest";
-import * as sandbox from "./sandbox.js";
-import { DockerUnavailableError } from "./sandbox.js";
+import os from "node:os";
+import { describe, expect, it } from "vitest";
+import { buildSeatbeltProfile, isSeatbeltAvailable, runInSandbox } from "./sandbox.js";
 
-describe("docker sandbox — M5", () => {
-  it("reports docker availability without throwing", async () => {
-    const available = await sandbox.isDockerAvailable();
-    expect(typeof available).toBe("boolean");
+describe("OS-native sandbox (Seatbelt)", () => {
+  it("builds a profile that denies network and restricts writes to the repo + tmp", () => {
+    const profile = buildSeatbeltProfile("/tmp/repo");
+    expect(profile).toContain("(deny network*)");
+    expect(profile).toContain("(deny file-write*)");
+    expect(profile).toContain("(allow file-write*");
+    expect(profile).toContain('"/private/tmp"');
   });
 
-  it("throws when docker is unavailable instead of running locally", async () => {
-    vi.spyOn(sandbox, "isDockerAvailable").mockResolvedValue(false);
+  it("runs approved commands without docker (seatbelt or local fallback)", async () => {
+    const result = await runInSandbox(os.tmpdir(), "echo sandboxed");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("sandboxed");
+  });
 
-    await expect(sandbox.runInSandbox("/tmp/repo", "rm -rf node_modules")).rejects.toBeInstanceOf(
-      DockerUnavailableError,
-    );
+  it("blocks writes outside the project path when seatbelt is available", async () => {
+    if (!isSeatbeltAvailable()) return;
+    const target = `/Users/.oc-sandbox-test-${Date.now()}`;
+    const result = await runInSandbox(os.tmpdir(), `touch ${target}`);
+    expect(result.exitCode).not.toBe(0);
+  });
+
+  it("allows writes inside the project path", async () => {
+    const dir = os.tmpdir();
+    const result = await runInSandbox(dir, `touch .oc-sandbox-ok && rm .oc-sandbox-ok`);
+    expect(result.exitCode).toBe(0);
   });
 });

@@ -344,7 +344,13 @@ export async function resumeRequirementAfterGateLegacy(
       };
       payload.meta.phase = "running";
       saveRequirementSession(deps.db, input.projectId, payload);
-      return decideAndContinue(deps, payload);
+      // Go straight to another question round: decideAndContinue would
+      // re-evaluate isStuck (no new answers yet) and immediately raise the
+      // same stuck gate again instead of asking more questions.
+      await runQuestionPlanner(deps, payload);
+      const waiting = updateSessionMeta(payload, { phase: "awaiting_answers" });
+      saveRequirementSession(deps.db, input.projectId, waiting);
+      return toResult(deps, waiting);
     }
     case "force_continue": {
       payload.state = {

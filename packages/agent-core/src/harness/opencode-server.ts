@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { createOpencodeServer } from "@opencode-ai/sdk";
+import { createOpencodeServer, type Config } from "@opencode-ai/sdk";
 import { buildOcGatewayMcpConfig } from "./opencode-gateway-mcp.js";
 
 export type ProjectServer = {
@@ -25,7 +25,7 @@ function governedConfig(options?: { projectId?: string }) {
       edit: "ask" as const,
       bash: "ask" as const,
     },
-    ...(mcp ? { mcp } : {}),
+    ...(mcp ? { mcp: mcp as Config["mcp"] } : {}),
   };
 }
 

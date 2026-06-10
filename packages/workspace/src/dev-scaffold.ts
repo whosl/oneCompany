@@ -44,6 +44,38 @@ export function resolveSliceTestCommand(repoPath: string, command: string): stri
   return trimmed;
 }
 
+function findTscJs(startDir: string): string | undefined {
+  let dir = path.resolve(startDir);
+  for (let depth = 0; depth < 10; depth += 1) {
+    const candidate = path.join(dir, "node_modules", "typescript", "lib", "tsc.js");
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return undefined;
+}
+
+/**
+ * Typecheck command for a generated repo using the workspace TypeScript
+ * (generated repos have no node_modules of their own). Returns undefined when
+ * the repo has no tsconfig or no tsc is reachable — callers should skip.
+ */
+export function resolveTypecheckCommand(repoPath: string): string | undefined {
+  if (!fs.existsSync(path.join(repoPath, "tsconfig.json"))) {
+    return undefined;
+  }
+  const tscJs = findTscJs(repoPath);
+  if (!tscJs) {
+    return undefined;
+  }
+  return `node "${tscJs}" --noEmit -p tsconfig.json`;
+}
+
 export function ensureDevRepoScaffold(repoPath: string): void {
   initRepo(repoPath);
   const pkgPath = path.join(repoPath, "package.json");
@@ -65,6 +97,7 @@ export function ensureDevRepoScaffold(repoPath: string): void {
         scripts: {
           build: "tsc",
           test: "vitest run",
+          typecheck: "tsc --noEmit",
         },
       },
       null,

@@ -47,6 +47,8 @@ const RequirementGraphAnnotation = Annotation.Root({
   payload: Annotation<RequirementSessionPayload>,
   scorerRoundIndex: Annotation<number>,
   result: Annotation<RequirementRunResult | undefined>,
+  /** Set by waitStuckGate to force the next hop (bypasses the stuck re-check). */
+  resumeTo: Annotation<"questionPlanner" | undefined>,
 });
 
 type RequirementGraphState = typeof RequirementGraphAnnotation.State;
@@ -277,7 +279,14 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
         };
         payload.meta.phase = "running";
         saveRequirementSession(deps.db, payload.state.projectId, payload);
-        return { payload, scorerRoundIndex: payload.state.questionRounds.length };
+        // Route straight to the question planner: re-running the scorer here
+        // would re-trigger isStuck (no new answers yet) and raise the same
+        // stuck gate again instead of asking another round.
+        return {
+          payload,
+          scorerRoundIndex: payload.state.questionRounds.length,
+          resumeTo: "questionPlanner",
+        };
       }
       case "force_continue": {
         payload.state = {
@@ -319,7 +328,7 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
       deps.setStatus(payload.state.projectId, "Asking Questions", "requirement_questions");
     }
     saveRequirementSession(deps.db, payload.state.projectId, waiting);
-    return { payload: waiting };
+    return { payload: waiting, resumeTo: undefined };
   };
 
   const waitAnswersNode = async (
@@ -378,7 +387,7 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
       if (state.result) {
         return END;
       }
-      return "scorer";
+      return state.resumeTo === "questionPlanner" ? "questionPlanner" : "scorer";
     })
     .addEdge("questionPlanner", "waitAnswers")
     .addConditionalEdges("waitAnswers", (state) => {

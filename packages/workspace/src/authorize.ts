@@ -58,11 +58,17 @@ export function createAuthorize(
       return { allow: true };
     }
 
+    const operation =
+      op.kind === "shell"
+        ? `shell: ${op.command ?? "(unknown command)"}`
+        : `${op.kind}: ${normalizedPath ?? op.path ?? "(unknown target)"}`;
+
     try {
       const metadata = {
         riskLevel: (risk === "high_deploy" ? "high" : risk === "high" ? "high" : "medium") as
           | "high"
           | "medium",
+        operation,
       };
       const gate = deps.createGate(projectId, gateType, metadata);
       const decision = await deps.waitForGate(gate.id);

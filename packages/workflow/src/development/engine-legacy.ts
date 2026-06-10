@@ -1,9 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
+import { and, eq } from "drizzle-orm";
 import { commitSlice, ensureDevRepoScaffold, initRepo } from "@oc/workspace";
 import {
   appendCustomGateNote,
+  emit,
   getAllowedOptions,
+  humanGates,
   resolveGateDecision,
   sliceSuiteId,
 } from "@oc/shared";
@@ -68,6 +71,26 @@ function toResult(
   };
 }
 
+/**
+ * Surface server-side pipeline steps (authoritative tests, typecheck…) in the
+ * event stream. These run outside the opencode session, so without explicit
+ * events the console sees minutes of silence and reports a false stall.
+ */
+function emitPipelineNote(
+  deps: DevelopmentWorkflowDeps,
+  projectId: string,
+  kind: "agent.act" | "agent.observe",
+  summary: string,
+): void {
+  deps.onEvent?.(
+    emit(deps.db, {
+      projectId,
+      agentId: "coding",
+      payload: { type: kind, projectId, agentId: "coding", summary },
+    }),
+  );
+}
+
 export async function runSliceIteration(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
@@ -91,9 +114,44 @@ export async function runSliceIteration(
 
     const sliceResult = await deps.harness.runSlice(sliceSpec, buildHarnessContext(deps, state));
 
-    const check = sliceResult.passed
-      ? await deps.runAuthoritativeCheck(slice, attempt)
-      : { passed: false, details: sliceResult.summary };
+    let check: { passed: boolean; details: string };
+    if (sliceResult.passed) {
+      emitPipelineNote(
+        deps,
+        state.projectId,
+        "agent.act",
+        `正在运行权威测试验证切片 ${slice.id}（第 ${attempt} 次尝试）— 测试由平台独立执行，请稍候`,
+      );
+      check = await deps.runAuthoritativeCheck(slice, attempt);
+      emitPipelineNote(
+        deps,
+        state.projectId,
+        "agent.observe",
+        `权威测试${check.passed ? "通过" : "未通过"}：${check.details}`,
+      );
+    } else {
+      check = { passed: false, details: sliceResult.summary };
+    }
+
+    // Slice-boundary typecheck: a slice whose tests pass but breaks the build
+    // must fail HERE, not 30 minutes later in the final Testing phase.
+    if (check.passed && deps.runSliceTypecheck) {
+      emitPipelineNote(deps, state.projectId, "agent.act", "正在运行全仓类型检查（tsc --noEmit）…");
+      const typecheck = await deps.runSliceTypecheck();
+      if (!typecheck.passed) {
+        check = {
+          passed: false,
+          details: `tests passed but typecheck failed: ${typecheck.details}`,
+        };
+      }
+      emitPipelineNote(
+        deps,
+        state.projectId,
+        "agent.observe",
+        typecheck.passed ? "类型检查通过" : `类型检查未通过：${typecheck.details}`,
+      );
+    }
+
     const suite = sliceSuiteId(slice.id);
     const status = check.passed ? "passed" : "failed";
 
@@ -159,14 +217,47 @@ export async function runSliceIteration(
       };
       state = captureDiff(deps.db, state, slice.id, deps.onEvent);
 
-      await deps.runAgent({
-        projectId: state.projectId,
-        agentIdAtVersion: DEVELOPMENT_AGENT_IDS.review,
-        task: {
-          state,
-          profile: payload.meta.profile,
-        },
-      });
+      if (deps.harness.runReview) {
+        // Same engine as coding, attributed to the "review" role. The verdict
+        // is advisory: findings surface in the stream, but a failed parse or
+        // disapproval doesn't block the slice (tests already passed).
+        try {
+          await deps.harness.runReview(
+            {
+              projectId: state.projectId,
+              sliceId: slice.id,
+              goal: sliceSpec.goal,
+              acceptanceChecks: sliceSpec.acceptanceChecks,
+              diffSummary: state.diffs.at(-1)?.summary,
+              modelTier: sliceSpec.modelTier,
+            },
+            buildHarnessContext(deps, state, "review"),
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          deps.onEvent?.(
+            emit(deps.db, {
+              projectId: state.projectId,
+              agentId: "review",
+              payload: {
+                type: "agent.observe",
+                projectId: state.projectId,
+                agentId: "review",
+                summary: `审查跳过（引擎错误）：${message.slice(0, 140)}`,
+              },
+            }),
+          );
+        }
+      } else {
+        await deps.runAgent({
+          projectId: state.projectId,
+          agentIdAtVersion: DEVELOPMENT_AGENT_IDS.review,
+          task: {
+            state,
+            profile: payload.meta.profile,
+          },
+        });
+      }
 
       return { kind: "passed", state };
     }
@@ -194,7 +285,79 @@ export async function runSliceIteration(
   return { kind: "gate", state, gateId: gate.id };
 }
 
+/** Projects with a slice loop currently running in this process. */
+const ACTIVE_SLICE_LOOPS = new Set<string>();
+
+export function isSliceLoopActive(projectId: string): boolean {
+  return ACTIVE_SLICE_LOOPS.has(projectId);
+}
+
 export async function runSliceLoopUntilHalt(
+  deps: DevelopmentWorkflowDeps,
+  payload: DevelopmentSessionPayload,
+): Promise<DevelopmentRunResult> {
+  const projectId = payload.state.projectId;
+  if (ACTIVE_SLICE_LOOPS.has(projectId)) {
+    throw new Error(`Slice loop already running for project: ${projectId}`);
+  }
+  ACTIVE_SLICE_LOOPS.add(projectId);
+  try {
+    return await runSliceLoopUntilHaltInner(deps, payload);
+  } finally {
+    ACTIVE_SLICE_LOOPS.delete(projectId);
+  }
+}
+
+/**
+ * Resume the slice loop of a "Developing" project whose in-memory run died
+ * (e.g. the API process restarted mid-slice). Only valid when no gate is
+ * pending — gated sessions resume through the gate decision instead.
+ */
+export async function resumeOrphanedSliceLoop(
+  deps: DevelopmentWorkflowDeps,
+  projectId: string,
+): Promise<DevelopmentRunResult> {
+  if (ACTIVE_SLICE_LOOPS.has(projectId)) {
+    // Resuming on top of a live loop is how slices end up executed twice
+    // (observed: every slice of a project ran twice, interleaved).
+    throw new Error("开发循环正在运行中，无需恢复 — 请等待当前切片完成");
+  }
+  const payload = loadDevSession(deps.db, projectId);
+  if (payload.meta.phase === "awaiting_gate" || payload.meta.phase === "change_review") {
+    throw new Error(
+      `Development is waiting on a ${payload.meta.gateType ?? "gate"} decision — resolve the gate instead of restarting`,
+    );
+  }
+  if (payload.meta.phase !== "slicing") {
+    throw new Error(`Cannot resume development from phase: ${payload.meta.phase}`);
+  }
+  return runSliceLoopUntilHalt(deps, payload);
+}
+
+/**
+ * Close still-open tech_plan_confirm gates once slicing actually starts.
+ * Duplicate / superseded gate rows otherwise linger "open" for the whole
+ * development run and confuse the console (observed: 64 min stale gate).
+ */
+function closeStaleTechPlanGates(deps: DevelopmentWorkflowDeps, projectId: string): void {
+  deps.db
+    .update(humanGates)
+    .set({
+      status: "resolved",
+      decision: "approve",
+      resolved_at: new Date().toISOString(),
+    })
+    .where(
+      and(
+        eq(humanGates.project_id, projectId),
+        eq(humanGates.gate_type, TECH_PLAN_CONFIRM_GATE),
+        eq(humanGates.status, "open"),
+      ),
+    )
+    .run();
+}
+
+async function runSliceLoopUntilHaltInner(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
 ): Promise<DevelopmentRunResult> {
@@ -203,6 +366,7 @@ export async function runSliceLoopUntilHalt(
     meta: { ...payload.meta, phase: "slicing" as const },
   };
   saveDevSession(deps.db, current.state.projectId, current);
+  closeStaleTechPlanGates(deps, current.state.projectId);
 
   while (hasRunnableSlices(current.state)) {
     const slice = getCurrentSlice(current.state);

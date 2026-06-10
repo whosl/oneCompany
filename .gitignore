@@ -12,4 +12,5 @@ generated-projects/*
 .DS_Store
 .env
 .env.local
+.env.docker
 apps/web/test-results/

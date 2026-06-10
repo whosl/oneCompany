@@ -20,6 +20,8 @@ export type GateMetadata = {
   integrationId?: string;
   toolName?: string;
   caller?: IntegrationCaller;
+  /** Human-readable description of the pending operation (command / file path). */
+  operation?: string;
 };
 
 export type GateDefinition = {

@@ -39,6 +39,20 @@ const PROVIDER_ID_ALIASES: Record<string, string[]> = {
   "zhipuai-coding-plan": ["zhipuai", "zhipu"],
 };
 
+/**
+ * The managed key (OC_LLM_API_KEY) belongs to whatever gateway OC_LLM_BASE_URL
+ * points at. Only hand it to opencode's `openai` provider when it is actually
+ * an OpenAI key, otherwise opencode calls api.openai.com with a foreign key
+ * and fails with "Incorrect API key provided".
+ */
+function managedOpenAiKeyForOpencode(): string | undefined {
+  const baseUrl = process.env.OC_LLM_BASE_URL?.trim();
+  if (baseUrl && !/(^|\/\/)api\.openai\.com/.test(baseUrl)) {
+    return process.env.OPENAI_API_KEY ?? process.env.OC_OPENAI_API_KEY;
+  }
+  return getManagedApiKeys().openai;
+}
+
 function parseProviderFromModelRef(modelRef: string | undefined): string | undefined {
   if (!modelRef) {
     return undefined;
@@ -79,6 +93,22 @@ export function readLocalOpencodeAuth(authPath?: string): Record<string, LocalOp
   }
 }
 
+function modelRefFromEnv(): string | undefined {
+  const keys = [
+    "OC_OPENCODE_MODEL_STRONG",
+    "OC_OPENCODE_MODEL_STANDARD",
+    "OC_OPENCODE_MODEL_CHEAP",
+    ...MODEL_ENV_KEYS,
+  ] as const;
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value && value.includes("/")) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 export function getDefaultOpencodeModelRef(authPath?: string): string | undefined {
   if (
     process.env.NODE_ENV === "test" &&
@@ -88,6 +118,11 @@ export function getDefaultOpencodeModelRef(authPath?: string): string | undefine
     return undefined;
   }
 
+  const fromEnv = modelRefFromEnv();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
   const localAuth = readLocalOpencodeAuth(authPath);
   for (const providerID of LOCAL_AUTH_PROVIDER_PRIORITY) {
     const credential = localAuth[providerID];
@@ -95,6 +130,20 @@ export function getDefaultOpencodeModelRef(authPath?: string): string | undefine
       const modelID = DEFAULT_MODEL_BY_PROVIDER[providerID];
       return modelID ? `${providerID}/${modelID}` : undefined;
     }
+  }
+
+  const explicitProvider = process.env.OC_OPENCODE_PROVIDER?.trim();
+  if (explicitProvider) {
+    const normalized = normalizeProviderId(explicitProvider);
+    const key = resolveProviderApiKey(normalized, [normalized], localAuth);
+    if (key) {
+      const modelID = DEFAULT_MODEL_BY_PROVIDER[normalized] ?? "gpt-4.1-mini";
+      return `${normalized}/${modelID}`;
+    }
+  }
+
+  if (managedOpenAiKeyForOpencode()) {
+    return "openai/gpt-4.1-mini";
   }
 
   return undefined;
@@ -161,7 +210,6 @@ function resolveProviderApiKey(
   localAuth: Record<string, LocalOpencodeCredential>,
 ): string | undefined {
   const normalized = normalizeProviderId(providerID);
-  const managed = getManagedApiKeys();
   const genericProvider = process.env.OC_OPENCODE_PROVIDER
     ? normalizeProviderId(process.env.OC_OPENCODE_PROVIDER)
     : undefined;
@@ -186,7 +234,7 @@ function resolveProviderApiKey(
   }
 
   if (normalized === "openai") {
-    return managed.openai;
+    return managedOpenAiKeyForOpencode();
   }
 
   return undefined;

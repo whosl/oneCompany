@@ -1,14 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${process.env.API_URL ?? "http://localhost:3001"}/:path*`,
-      },
-    ];
-  },
+  // Long-running agent workflows are proxied via app/api/[...path]/route.ts (5m timeout).
 };
 
 export default nextConfig;

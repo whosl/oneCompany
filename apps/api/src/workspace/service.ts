@@ -1,13 +1,15 @@
 import path from "node:path";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
+  acceptanceCriteriaVersions,
   diffs,
+  prdVersions,
+  techPlanVersions,
   type FileScope,
 } from "@oc/shared";
 import {
   ensureWorkspace,
   getGitPatch,
-  isDockerAvailable,
   listFiles,
   readFile,
   runCommand,
@@ -25,6 +27,40 @@ export type WorkspaceServiceOptions = {
   generatedProjectsRoot?: string;
   onEvent?: (envelope: EventEnvelope) => void;
 };
+
+/**
+ * Resolves DB-backed virtual artifacts (`artifacts/{projectId}/{version}.md`)
+ * that have no on-disk counterpart: PRD, acceptance criteria, and tech plan
+ * versions. `prd-latest` / `ac-latest` / `tp-latest` resolve to the newest row.
+ */
+function readDbArtifact(db: Db, projectId: string, relativePath: string): string | undefined {
+  const base = path.basename(relativePath).replace(/\.md$/, "");
+  const match = /^(prd|ac|tp)-(\d+|latest)$/.exec(base);
+  if (!match) return undefined;
+
+  const table =
+    match[1] === "prd"
+      ? prdVersions
+      : match[1] === "ac"
+        ? acceptanceCriteriaVersions
+        : techPlanVersions;
+
+  const byProject = eq(table.project_id, projectId);
+  const row =
+    match[2] === "latest"
+      ? db
+          .select({ content: table.content })
+          .from(table)
+          .where(byProject)
+          .orderBy(desc(table.created_at))
+          .get()
+      : db
+          .select({ content: table.content })
+          .from(table)
+          .where(and(byProject, eq(table.version, base)))
+          .get();
+  return row?.content;
+}
 
 export function createWorkspaceService(
   db: Db,
@@ -56,7 +92,6 @@ export function createWorkspaceService(
       waitForGate: (gateId) => gates.waitForGate(gateId, { timeoutMs: 0 }),
       runLocal: runLocalCommand,
       runSandbox: (cmd, projectPath, env) => runInSandbox(projectPath, cmd, env),
-      isDockerAvailable,
     };
   };
 
@@ -103,11 +138,20 @@ export function createWorkspaceService(
 
       if (scope === "artifacts" || relativePath.startsWith("artifacts/")) {
         const artifactPath = relativePath.replace(/^artifacts\//, "");
-        return {
-          path: relativePath,
-          scope: "artifacts",
-          content: readFile(workspace.artifacts, artifactPath),
-        };
+        try {
+          return {
+            path: relativePath,
+            scope: "artifacts",
+            content: readFile(workspace.artifacts, artifactPath),
+          };
+        } catch (error) {
+          // Virtual artifacts (PRD / acceptance criteria) live in the DB, not on disk.
+          const dbContent = readDbArtifact(db, projectId, relativePath);
+          if (dbContent !== undefined) {
+            return { path: relativePath, scope: "artifacts", content: dbContent };
+          }
+          throw error;
+        }
       }
 
       return {

@@ -8,22 +8,20 @@ import {
   type ToolExecutionContext,
 } from "./registry.js";
 import { ensureLocalToolsRegistered } from "./local-tools.js";
+import { buildIntegrationLangChainTools } from "./integration-tools.js";
 
 export function bindAgentTools(
   agent: AgentDefinition,
   execCtx: ToolExecutionContext,
 ): StructuredToolInterface[] {
   ensureLocalToolsRegistered();
-  if (agent.tools.length === 0) {
-    return [];
-  }
 
-  const definitions = resolveToolsForAgent(agent.tools);
+  const definitions = agent.tools.length > 0 ? resolveToolsForAgent(agent.tools) : [];
   for (const definition of definitions) {
     assertAgentMayUseTool(agent, definition);
   }
 
-  return definitions.map((definition) =>
+  const staticTools = definitions.map((definition) =>
     tool(
       async (args) => {
         const toolCtx: ToolExecutionContext = {
@@ -52,4 +50,8 @@ export function bindAgentTools(
       },
     ),
   );
+
+  const integrationTools = agent.id === "qa" ? buildIntegrationLangChainTools(agent, execCtx) : [];
+
+  return [...staticTools, ...integrationTools];
 }

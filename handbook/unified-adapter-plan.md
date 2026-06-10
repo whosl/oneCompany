@@ -1,6 +1,6 @@
 # Unified Integration Adapter Plan
 
-Status: **Complete** (PR-A+ through PR-G done; PR-C2 optional)
+Status: **Complete** (PR-A+ through PR-G + PR-C2 done)
 
 ## Goal
 
@@ -51,10 +51,27 @@ Integrations UI   ──►  API routes
 | **PR-A+** | Resolver, deps factory, skill-pack root, gateway meta API, caller/suppressEvents, secret→offline, async gate types | Done |
 | **PR-B+** | Native Playwright, testing deps (`artifactsPath`, gates), dual screenshot hooks | Done |
 | **PR-C1** | Workflow injects integration results into QA `testingContext`; auto-enable with id normalization | Done |
-| **PR-C2** | QA langchain executor + dynamic integration tools | Optional |
+| **PR-C2** | QA langchain executor + dynamic integration tools | Done |
 | **PR-D** | MCP transport + `oc-gateway-mcp` + opencode config + permission bridge | Done |
 | **PR-E/F** | Figma, GitHub, Supabase, Vercel real adapters | Done |
 | **PR-G** | Stream gate metadata, Settings summary, E2E | Done |
+
+## PR-C2 (completed)
+
+### Deliverables
+
+1. **`integration-tools.ts`** — `buildIntegrationLangChainTools()` exposes `integration__{id}__{toolName}` LangChain tools
+2. **`bind-tools.ts`** — QA agent appends dynamic integration tools when `callIntegration` is wired
+3. **Executor / runner context** — `callIntegration` + `enabledIntegrationIds` flow through `runAgent` → langchain runner
+4. **Testing API service** — QA runs receive governed deps + requirement-enabled connector ids
+5. **QA agent definition** — `riskLevel: medium`, `permissions: ["read", "network"]` for Playwright tools
+6. **Env** — `OC_QA_INTEGRATION_TOOLS=0` disables dynamic QA tools (default on when deps present)
+
+### Tool naming (QA LangChain)
+
+```text
+integration__{integrationId}__{toolName}
+```
 
 ## PR-G (completed)
 
@@ -195,5 +212,6 @@ oc_{integrationId}__{toolName}
 - [x] PR-A+ merged
 - [x] PR-B+: Testing auto-screenshot visible in Stream
 - [x] PR-C1: QA notes cite integration artifacts
+- [x] PR-C2: QA LangChain agent can call governed integration tools
 - [x] PR-D: Opencode can call allowlisted tools via oc-gateway-mcp
 - [x] All five P1 connectors have real or MCP adapter behind resolver

@@ -18,6 +18,7 @@ type GateRecord = {
   options: string[];
   decision: string | null;
   createdAt: string;
+  metadata?: Record<string, unknown>;
 };
 
 export function buildConsoleSnapshot(

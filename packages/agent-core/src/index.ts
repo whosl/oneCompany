@@ -63,6 +63,7 @@ export {
   type ManagedApiKeys,
 } from "./engine-mode.js";
 export { getEngineReadiness, type EngineReadinessSnapshot } from "./engine-readiness.js";
+export { ensureOpencodeOnPath, resolveOpencodeExecutable } from "./util/opencode-cli.js";
 export {
   createDevelopmentRunner,
   createRequirementRunner,
@@ -71,6 +72,10 @@ export {
 export { StubHarness } from "./harness/stub.js";
 export { createOpencodeHarness, OpencodeHarness } from "./harness/opencode-harness.js";
 export { resolveCodingHarness } from "./harness/coding-harness-factory.js";
+export {
+  getActiveHarnessSession,
+  steerHarnessSession,
+} from "./harness/session-registry.js";
 export { handlePermission, toToolOp, type AuthorizeFn } from "./harness/permission-bridge.js";
 export type {
   AuthDecision,

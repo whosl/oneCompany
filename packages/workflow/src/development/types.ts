@@ -76,6 +76,13 @@ export type DevelopmentWorkflowDeps = {
     slice: FunctionSliceTask,
     attempt: number,
   ) => Promise<AuthoritativeCheckResult>;
+  /**
+   * Optional whole-repo typecheck run after a slice's tests pass and before
+   * its commit. Catches build-breaking type errors at the slice boundary
+   * instead of at the final Testing phase (where fixing means another full
+   * Developing round-trip).
+   */
+  runSliceTypecheck?: () => Promise<{ passed: boolean; details: string }>;
   repoPath: string;
   logsPath?: string;
   runGovernedCommand?: DevContext["runGovernedCommand"];

@@ -31,6 +31,7 @@ COPY config ./config
 COPY mcp-servers ./mcp-servers
 COPY scripts/docker-install-playwright.sh ./scripts/docker-install-playwright.sh
 COPY scripts/docker-install-mcp-servers.sh ./scripts/docker-install-mcp-servers.sh
+COPY scripts/docker-install-opencode.sh ./scripts/docker-install-opencode.sh
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 ENV OC_MCP_SERVERS_ROOT=/opt/onecompany/mcp-servers
@@ -38,9 +39,10 @@ ENV OC_INTEGRATION_MCP_MANIFEST=/opt/onecompany/config/integration-mcp-manifest.
 ENV OC_GATEWAY_MCP_CONFIG=/opt/onecompany/config/oc-gateway-mcp.json
 
 RUN pnpm install --frozen-lockfile
-RUN chmod +x scripts/docker-install-playwright.sh scripts/docker-install-mcp-servers.sh \
+RUN chmod +x scripts/docker-install-playwright.sh scripts/docker-install-mcp-servers.sh scripts/docker-install-opencode.sh \
   && scripts/docker-install-playwright.sh /opt/onecompany \
-  && scripts/docker-install-mcp-servers.sh /opt/onecompany
+  && scripts/docker-install-mcp-servers.sh /opt/onecompany \
+  && scripts/docker-install-opencode.sh
 RUN pnpm --filter @oc/oc-gateway-mcp build
 RUN pnpm build
 

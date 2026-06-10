@@ -66,6 +66,7 @@ export {
 } from "./development/types.js";
 export { runPreviewIntegrationChecks } from "./integrations/hooks.js";
 export type { IntegrationVerificationSummary } from "./integrations/hooks.js";
+export { applyRequirementIntegrations } from "./integrations/requirement-enable.js";
 export { runTestingPhase, getTestingStatus } from "./testing/engine.js";
 export { persistRunnerResult, loadTestResults } from "./testing/results.js";
 export type { TestingRunResult, TestingWorkflowDeps } from "./testing/types.js";

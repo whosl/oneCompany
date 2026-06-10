@@ -39,8 +39,8 @@ export function assertOpenAiConfigured(): void {
   }
 }
 
-import { commandExists } from "./util/command.js";
+import { resolveOpencodeExecutable } from "./util/opencode-cli.js";
 
 export function isOpencodeAvailable(): boolean {
-  return commandExists("opencode");
+  return resolveOpencodeExecutable() !== undefined;
 }

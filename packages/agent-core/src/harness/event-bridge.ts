@@ -33,6 +33,9 @@ export function createEventBridge(
   const changedFiles = new Set<string>();
   const seenToolCalls = new Set<string>();
   const runningTools = new Set<string>();
+  // Throttled "thinking" forwarding: surfaces the model's narration so the
+  // user-facing stream never goes silent for minutes during long generations.
+  const thinking = { lastEmitAt: 0, emittedLen: new Map<string, number>() };
   let sessionIdle = false;
   let assistantReply = false;
   let pendingPermissions = 0;
@@ -63,6 +66,7 @@ export function createEventBridge(
           changedFiles,
           seenToolCalls,
           runningTools,
+          thinking,
           markSessionActive,
           markSessionIdle,
           markAssistantReply: () => {
@@ -92,6 +96,38 @@ export function createEventBridge(
   };
 }
 
+const THINKING_EMIT_INTERVAL_MS = 8_000;
+const THINKING_MIN_NEW_CHARS = 60;
+
+/** Forward a snippet of the model's running narration into the event stream. */
+function maybeEmitThinking(
+  ctx: EventBridgeContext,
+  thinking: { lastEmitAt: number; emittedLen: Map<string, number> },
+  partId: string,
+  text: string,
+): void {
+  const now = Date.now();
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const emitted = thinking.emittedLen.get(partId) ?? 0;
+  if (trimmed.length - emitted < THINKING_MIN_NEW_CHARS) return;
+  if (now - thinking.lastEmitAt < THINKING_EMIT_INTERVAL_MS) return;
+
+  // Last sentence-ish chunk keeps it readable instead of a mid-word slice.
+  const tail = trimmed.slice(-200);
+  const sentenceStart = Math.max(
+    tail.lastIndexOf("。", tail.length - 2),
+    tail.lastIndexOf(". ", tail.length - 2),
+    tail.lastIndexOf("\n"),
+  );
+  const snippet = (sentenceStart > 0 ? tail.slice(sentenceStart + 1) : tail).trim().slice(0, 160);
+  if (!snippet) return;
+
+  thinking.lastEmitAt = now;
+  thinking.emittedLen.set(partId, trimmed.length);
+  ctx.emit({ type: "agent.observe", summary: snippet });
+}
+
 function handleOpencodeEvent(
   event: Event,
   ctx: EventBridgeContext,
@@ -99,12 +135,38 @@ function handleOpencodeEvent(
     changedFiles: Set<string>;
     seenToolCalls: Set<string>;
     runningTools: Set<string>;
+    thinking: { lastEmitAt: number; emittedLen: Map<string, number> };
     markSessionActive: () => void;
     markSessionIdle: () => void;
     markAssistantReply: () => void;
     onPermissionPending: (delta: number) => void;
   },
 ): void {
+  // "permission.updated" is the legacy (<=1.0.x) event name; opencode 1.16+
+  // emits "permission.asked" (and "permission.v2.asked") instead. Missing the
+  // new name leaves the permission unanswered and the session hangs forever.
+  const eventType = event.type as string;
+  if (
+    eventType === "permission.updated" ||
+    eventType === "permission.asked" ||
+    eventType === "permission.v2.asked"
+  ) {
+    const properties = (event as { properties: Permission }).properties;
+    if (properties.sessionID !== ctx.sessionId) {
+      return;
+    }
+    hooks.markSessionActive();
+    hooks.onPermissionPending(1);
+    void (async () => {
+      try {
+        await ctx.onPermission(properties);
+      } finally {
+        hooks.onPermissionPending(-1);
+      }
+    })();
+    return;
+  }
+
   switch (event.type) {
     case "session.idle": {
       if (event.properties.sessionID !== ctx.sessionId) {
@@ -114,21 +176,6 @@ function handleOpencodeEvent(
       return;
     }
     case "message.updated": {
-      return;
-    }
-    case "permission.updated": {
-      if (event.properties.sessionID !== ctx.sessionId) {
-        return;
-      }
-      hooks.markSessionActive();
-      hooks.onPermissionPending(1);
-      void (async () => {
-        try {
-          await ctx.onPermission(event.properties);
-        } finally {
-          hooks.onPermissionPending(-1);
-        }
-      })();
       return;
     }
     case "message.part.updated": {
@@ -142,6 +189,7 @@ function handleOpencodeEvent(
         (Boolean(part.text?.trim()) || Boolean(event.properties.delta?.trim()))
       ) {
         hooks.markAssistantReply();
+        maybeEmitThinking(ctx, hooks.thinking, part.id, part.text ?? "");
       }
       handleToolPart(part, ctx, hooks);
       return;
@@ -188,6 +236,31 @@ function handleOpencodeEvent(
   }
 }
 
+/** One-line human-readable summary of a tool call (command, file path, …). */
+function summarizeToolInput(state: { title?: string; input?: unknown }): string | undefined {
+  if (typeof state.title === "string" && state.title.trim()) {
+    return state.title.trim().slice(0, 160);
+  }
+  if (!state.input || typeof state.input !== "object") return undefined;
+  const input = state.input as Record<string, unknown>;
+  const candidates = [
+    input.command,
+    input.filePath,
+    input.filepath,
+    input.path,
+    input.pattern,
+    input.url,
+    input.description,
+    input.query,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim().replace(/\s+/g, " ").slice(0, 160);
+    }
+  }
+  return undefined;
+}
+
 function handleToolPart(
   part: Part,
   ctx: EventBridgeContext,
@@ -212,6 +285,7 @@ function handleToolPart(
         type: "tool_call.started",
         toolCallId,
         toolName: part.tool,
+        summary: summarizeToolInput(state),
       });
     }
     hooks.runningTools.add(toolCallId);

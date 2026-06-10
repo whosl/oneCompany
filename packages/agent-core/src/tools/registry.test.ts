@@ -17,6 +17,8 @@ import {
 import { setupTestDb, seedProject } from "../test-utils.js";
 import { z } from "zod";
 import type { RequirementAgentTask } from "../agents/requirement/types.js";
+import { registerDevelopmentAgents, DEVELOPMENT_AGENT_IDS } from "../agents/development/definitions.js";
+import { getAgent } from "../registry.js";
 
 describe("tool registry — M9.5", () => {
   beforeEach(() => {
@@ -147,6 +149,34 @@ describe("tool registry — M9.5", () => {
         tool,
       ),
     ).toThrow(/lacks permission "deploy"/);
+  });
+
+  it("binds integration tools only for the QA agent when callIntegration is present", () => {
+    const { db, cleanup } = setupTestDb();
+    try {
+      registerDevelopmentAgents(db);
+      const projectId = seedProject(db);
+      const qa = getAgent(db, DEVELOPMENT_AGENT_IDS.qa);
+      const planner = getAgent(db, DEVELOPMENT_AGENT_IDS.planner);
+
+      const qaTools = bindAgentTools(qa, {
+        db,
+        projectId,
+        enabledIntegrationIds: ["playwright", "figma"],
+        callIntegration: { db, projectId, caller: "agent" },
+      });
+      const plannerTools = bindAgentTools(planner, {
+        db,
+        projectId,
+        enabledIntegrationIds: ["playwright"],
+        callIntegration: { db, projectId, caller: "agent" },
+      });
+
+      expect(qaTools.some((tool) => tool.name.startsWith("integration__"))).toBe(true);
+      expect(plannerTools.some((tool) => tool.name.startsWith("integration__"))).toBe(false);
+    } finally {
+      cleanup();
+    }
   });
 
   it("workspace-read blocks path traversal outside repo root", async () => {

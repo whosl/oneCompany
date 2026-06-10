@@ -10,7 +10,7 @@ import {
   formatIntegrationGateSummary,
   formatIntegrationToolLabel,
   getGatePresentation,
-} from "../gate-presentations.js";
+} from "@/lib/gate-presentations";
 import { attachParorSegments } from "./stream-paror";
 import { groupStreamItems } from "./stream-grouping";
 import type { AgentProjection, ComposerProjection, ConsoleProjection } from "./types";

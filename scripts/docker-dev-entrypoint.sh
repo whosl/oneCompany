@@ -32,11 +32,20 @@ ensure_playwright_browsers() {
   bash "${ROOT}/scripts/docker-install-playwright.sh" "${ROOT}"
 }
 
+ensure_opencode_cli() {
+  if command -v opencode >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "[onecompany-dev] OpenCode CLI missing — installing..."
+  bash "${ROOT}/scripts/docker-install-opencode.sh"
+}
+
 mkdir -p "$(dirname "${OC_DB_PATH:-/opt/onecompany/data/app.sqlite}")" \
   "${OC_GENERATED_PROJECTS_ROOT:-/var/lib/onecompany/generated-projects}"
 
 ensure_playwright_browsers
 ensure_mcp_servers
+ensure_opencode_cli
 
 cd "${ROOT}"
 echo "[onecompany-dev] installing dependencies..."

@@ -21,5 +21,9 @@ export function createChatModel(tier: ModelTier): ChatOpenAI {
       baseURL: resolveBaseUrl(),
     },
     temperature: 0.2,
+    // Stream tokens so long generations can surface live progress
+    // (handleLLMNewToken callbacks); invoke() still resolves with the
+    // aggregated final message.
+    streaming: true,
   });
 }

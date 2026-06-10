@@ -1,5 +1,6 @@
 import { getOpenAiApiKey, isOpencodeAvailable } from "./engine-mode.js";
 import { getDefaultOpencodeModelRef } from "./harness/opencode-auth.js";
+import { ensureOpencodeOnPath } from "./util/opencode-cli.js";
 
 export type EngineReadinessSnapshot = {
   workflowLlmReady: boolean;
@@ -8,6 +9,7 @@ export type EngineReadinessSnapshot = {
 };
 
 export function getEngineReadiness(): EngineReadinessSnapshot {
+  ensureOpencodeOnPath();
   return {
     workflowLlmReady: Boolean(getOpenAiApiKey()),
     opencodeCliReady: isOpencodeAvailable(),

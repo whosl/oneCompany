@@ -7,6 +7,7 @@ import {
 } from "@oc/agent-core";
 import { assertTestingFixtureAllowed, type Db, type EventEnvelope, type FinalSuiteId } from "@oc/shared";
 import {
+  applyRequirementIntegrations,
   getTestingStatus,
   loadDevSession,
   loadRequirementSession,
@@ -106,20 +107,41 @@ export function createTestingService(
         integrationChecksEnabled && callIntegration
           ? async (previewUrl, label, enabledIntegrationIds) =>
               runPreviewIntegrationChecks(
-                { db, projectId, callIntegration, enabledIntegrationIds },
+                { db, projectId, callIntegration, enabledIntegrationIds, onEvent },
                 previewUrl,
                 label,
               )
           : undefined,
-      runAgent: async (input) =>
-        runAgent(
+      runAgent: async (input) => {
+        let enabledIntegrationIds: string[] = [];
+        try {
+          const raw = loadRequirementSession(db, projectId).state.integrations;
+          if (raw.length > 0) {
+            const applied = await applyRequirementIntegrations(
+              { db, projectId, onEvent },
+              raw,
+            );
+            enabledIntegrationIds = applied.normalizedIntegrations;
+          }
+        } catch {
+          enabledIntegrationIds = [];
+        }
+
+        return runAgent(
           {
             db,
             onEvent,
             runner: createDevelopmentRunner(db, { mode: resolveEngineMode() }),
+            callIntegration:
+              input.agentIdAtVersion.startsWith("qa@") && callIntegration
+                ? { ...callIntegration, caller: "agent" as const }
+                : undefined,
+            enabledIntegrationIds:
+              input.agentIdAtVersion.startsWith("qa@") ? enabledIntegrationIds : undefined,
           },
           { ...input, task: input.task as DevAgentTask },
-        ),
+        );
+      },
       setStatus: (pid, status, trigger) => projects.setStatus(pid, status, trigger),
       getProjectStatus: (pid) => {
         const row = projects.getProject(pid);

@@ -55,46 +55,42 @@ export function toToolOp(permission: unknown): ToolOp {
     record.metadata && typeof record.metadata === "object"
       ? (record.metadata as Record<string, unknown>)
       : {};
+  // opencode >=1.16 "permission.asked" carries the kind in `permission` and
+  // targets in `patterns`; older versions used `type`/`kind` and `pattern`.
+  const firstPattern = Array.isArray(record.patterns)
+    ? record.patterns.find((p): p is string => typeof p === "string")
+    : undefined;
+  const pickString = (...candidates: unknown[]): string | undefined => {
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.length > 0) {
+        return candidate;
+      }
+    }
+    return undefined;
+  };
 
-  const kind = record.kind ?? record.type;
+  const kind = record.kind ?? record.type ?? record.permission;
   if (kind === "shell" || kind === "bash") {
-    const command =
-      typeof metadata.command === "string"
-        ? metadata.command
-        : typeof record.command === "string"
-          ? record.command
-          : typeof record.pattern === "string"
-            ? record.pattern
-            : undefined;
+    const command = pickString(metadata.command, record.command, record.pattern, firstPattern);
     return { kind: "shell", command };
   }
   if (kind === "edit" || kind === "write") {
-    const path =
-      typeof metadata.path === "string"
-        ? metadata.path
-        : typeof record.path === "string"
-          ? record.path
-          : typeof record.pattern === "string"
-            ? record.pattern
-            : undefined;
+    const path = pickString(
+      metadata.path,
+      metadata.filePath,
+      metadata.filepath,
+      record.path,
+      record.pattern,
+      firstPattern,
+    );
     return { kind: "edit", path };
   }
   if (kind === "read") {
-    const path =
-      typeof metadata.path === "string"
-        ? metadata.path
-        : typeof record.path === "string"
-          ? record.path
-          : undefined;
+    const path = pickString(metadata.path, metadata.filePath, record.path, firstPattern);
     return { kind: "read", path };
   }
   if (kind === "patch" || kind === "multiedit") {
-    const path =
-      typeof metadata.path === "string"
-        ? metadata.path
-        : typeof record.path === "string"
-          ? record.path
-          : undefined;
+    const path = pickString(metadata.path, metadata.filePath, record.path, firstPattern);
     return { kind: "edit", path };
   }
   return { kind: "other" };

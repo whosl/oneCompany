@@ -7,6 +7,7 @@ import {
   type Db,
   type EventEnvelope,
 } from "@oc/shared";
+import type { CallIntegrationToolDeps } from "@oc/integrations";
 import type { AuthorizeFn } from "./harness/permission-bridge.js";
 import { getAgent } from "./registry.js";
 import { pickModel } from "./router.js";
@@ -29,6 +30,8 @@ export type AgentRunContext = {
   onEvent?: (envelope: EventEnvelope) => void;
   authorize?: AuthorizeFn;
   repoPath?: string;
+  callIntegration?: CallIntegrationToolDeps;
+  enabledIntegrationIds?: string[];
 };
 
 export type AgentRunner = (
@@ -43,6 +46,8 @@ export type ExecutorContext = {
   runner?: AgentRunner;
   authorize?: AuthorizeFn;
   repoPath?: string;
+  callIntegration?: CallIntegrationToolDeps;
+  enabledIntegrationIds?: string[];
 };
 
 export type RunAgentInput = {
@@ -111,6 +116,8 @@ export async function runAgent(
           onEvent: ctx.onEvent,
           authorize: ctx.authorize,
           repoPath: ctx.repoPath,
+          callIntegration: ctx.callIntegration,
+          enabledIntegrationIds: ctx.enabledIntegrationIds,
         },
         input.agentIdAtVersion,
         input.task,

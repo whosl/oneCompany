@@ -35,6 +35,15 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     agentId: z.string(),
     summary: z.string(),
   }),
+  // Ephemeral generation progress (streamed LLM tokens, throttled). Consumers
+  // update live status displays; it is NOT meant for the persistent timeline.
+  z.object({
+    type: z.literal("agent.progress"),
+    ...base,
+    agentId: z.string(),
+    summary: z.string(),
+    charCount: z.number().optional(),
+  }),
   z.object({
     type: z.literal("agent.error"),
     ...base,
@@ -54,6 +63,8 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     ...base,
     toolCallId: z.string(),
     toolName: z.string(),
+    /** One-line human-readable summary of the call (command, file path, …). */
+    summary: z.string().optional(),
   }),
   z.object({
     type: z.literal("tool_call.output"),
@@ -98,6 +109,13 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     changeRequestId: z.string(),
     summary: z.string(),
     kind: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("user.interjection"),
+    ...base,
+    message: z.string(),
+    /** Whether the message was delivered into a live coding session. */
+    delivered: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("deployment.started"),

@@ -105,6 +105,19 @@ export function registerLocalTools(): void {
         return { error: `File not found: ${relativePath}` };
       }
 
+      // Agents probe directories ("." / "src") to explore the workspace —
+      // return a listing instead of EISDIR-crashing the tool call.
+      if (fs.statSync(fullPath).isDirectory()) {
+        const entries = fs.readdirSync(fullPath, { withFileTypes: true });
+        return {
+          relativePath,
+          directory: true,
+          entries: entries
+            .slice(0, 200)
+            .map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name)),
+        };
+      }
+
       const content = fs.readFileSync(fullPath, "utf8");
       return {
         relativePath,

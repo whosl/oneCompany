@@ -5,7 +5,6 @@ import { isApprovalDecision } from "@oc/shared";
 import { classifyCommandChain } from "./command-chain.js";
 import type { RiskLevel } from "./risk.js";
 import { persistOutput, type OutputRef } from "./log-pipeline.js";
-import { DockerUnavailableError } from "./sandbox.js";
 
 export type ExecResult = {
   exitCode: number;
@@ -29,7 +28,8 @@ export type ShellDeps = {
   waitForGate: (gateId: string) => Promise<string>;
   runLocal: (cmd: string, cwd: string, env?: Record<string, string>) => Promise<ExecResult>;
   runSandbox: (cmd: string, projectPath: string, env?: Record<string, string>) => Promise<ExecResult>;
-  isDockerAvailable: () => boolean | Promise<boolean>;
+  /** @deprecated Sandbox no longer requires docker; kept for older callers. */
+  isDockerAvailable?: () => boolean | Promise<boolean>;
 };
 
 export type RunCommandInput = {
@@ -69,15 +69,16 @@ function gateTypeForRisk(risk: RiskLevel): "dangerous_operation" | "deployment" 
   return null;
 }
 
-function riskMetadata(risk: RiskLevel): GateMetadata | undefined {
+function riskMetadata(risk: RiskLevel, cmd?: string): GateMetadata | undefined {
+  const operation = cmd ? `shell: ${cmd}` : undefined;
   if (risk === "high") {
-    return { riskLevel: "high" };
+    return { riskLevel: "high", operation };
   }
   if (risk === "medium_constrained" || risk === "medium") {
-    return { riskLevel: "medium" };
+    return { riskLevel: "medium", operation };
   }
   if (risk === "low") {
-    return { riskLevel: "low" };
+    return { riskLevel: "low", operation };
   }
   return undefined;
 }
@@ -92,7 +93,7 @@ async function ensureGateApproval(
     return;
   }
 
-  const metadata = riskMetadata(risk);
+  const metadata = riskMetadata(risk, cmd);
   const gate = deps.createGate(deps.projectId, gateType, metadata);
   const decision = await deps.waitForGate(gate.id);
   if (!isApprovalDecision(gateType, metadata, decision)) {
@@ -117,6 +118,7 @@ export async function runCommand(deps: ShellDeps, input: RunCommandInput): Promi
       projectId: input.projectId,
       toolCallId,
       toolName: "shell",
+      summary: input.cmd.replace(/\s+/g, " ").slice(0, 160),
     },
   });
   deps.onEvent?.(started);
@@ -138,10 +140,8 @@ export async function runCommand(deps: ShellDeps, input: RunCommandInput): Promi
 
     let execResult: ExecResult;
     if (risk === "high") {
-      const dockerOk = await Promise.resolve(deps.isDockerAvailable());
-      if (!dockerOk) {
-        throw new DockerUnavailableError();
-      }
+      // OS-native sandbox (Seatbelt on macOS); degrades to local execution —
+      // the human gate approval above is the primary control.
       execResult = await deps.runSandbox(input.cmd, cwd, input.env);
     } else {
       execResult = await deps.runLocal(input.cmd, cwd, input.env);

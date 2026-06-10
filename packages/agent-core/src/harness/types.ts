@@ -40,6 +40,24 @@ export interface SliceResult {
   changedFiles: string[];
 }
 
+export interface ReviewSpec {
+  projectId: string;
+  sliceId: string;
+  goal: string;
+  acceptanceChecks: string[];
+  /** Commit summary / diff stat shown to the reviewer for orientation. */
+  diffSummary?: string;
+  modelTier: "cheap" | "standard" | "strong";
+}
+
+export interface ReviewResult {
+  approved: boolean;
+  findings: string[];
+  summary: string;
+}
+
 export interface CodingHarness {
   runSlice(slice: SliceSpec, ctx: DevContext): Promise<SliceResult>;
+  /** Read-only code review of the latest slice commit via the same engine. */
+  runReview?(review: ReviewSpec, ctx: DevContext): Promise<ReviewResult>;
 }
