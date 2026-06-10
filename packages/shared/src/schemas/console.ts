@@ -89,6 +89,7 @@ export const EnvironmentReadinessSchema = z.object({
     sqlite: z.boolean(),
   }),
   policies: z.array(z.string()),
+  degradedModes: z.array(z.string()).optional(),
 });
 
 export const StreamItemOriginSchema = z.enum(["user", "agent", "system", "gate"]);

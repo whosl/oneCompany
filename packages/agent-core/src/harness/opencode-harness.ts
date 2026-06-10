@@ -162,8 +162,12 @@ export function createOpencodeHarness(): CodingHarness {
           sessionId: session.id,
           directory,
           emit: (event) => ctx.emit(event),
-          onPermission: (permission) => {
-            void handlePermission(client, session.id, permission, ctx.authorize, directory);
+          onPermission: async (permission) => {
+            await handlePermission(client, session.id, permission, ctx.authorize, {
+              directory,
+              classifyShellRisk: ctx.classifyShellRisk,
+              runGovernedCommand: ctx.runGovernedCommand,
+            });
           },
           logBridge: ctx.formatToolOutput
             ? { formatOutput: ctx.formatToolOutput }

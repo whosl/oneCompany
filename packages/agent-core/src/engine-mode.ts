@@ -1,3 +1,5 @@
+import { assertStubEngineAllowed } from "@oc/shared";
+
 export type EngineMode = "real" | "stub";
 
 export class EngineUnavailableError extends Error {
@@ -9,6 +11,7 @@ export class EngineUnavailableError extends Error {
 
 export function resolveEngineMode(): EngineMode {
   if (process.env.OC_USE_STUB_ENGINE === "1") {
+    assertStubEngineAllowed();
     return "stub";
   }
   return "real";

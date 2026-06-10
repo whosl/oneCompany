@@ -17,6 +17,28 @@ describe("development deps — M9.5", () => {
     }
   });
 
+  it("rejects stub engine in production", () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousStub = process.env.OC_USE_STUB_ENGINE;
+    const { db, projects, gates, workspace, cleanup } = setupTestApp();
+    process.env.NODE_ENV = "production";
+    process.env.OC_USE_STUB_ENGINE = "1";
+
+    try {
+      const project = projects.createProject("Prod Stub");
+      const ctx: DevelopmentServiceContext = { db, projects, gates, workspace, onEvent: () => undefined };
+      expect(() => createDevelopmentDeps(ctx, project.id)).toThrow(/never in production/i);
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousStub === undefined) {
+        delete process.env.OC_USE_STUB_ENGINE;
+      } else {
+        process.env.OC_USE_STUB_ENGINE = previousStub;
+      }
+      cleanup();
+    }
+  });
+
   it("uses OpencodeHarness and createAuthorize in real mode", async () => {
     const previous = process.env.OC_USE_STUB_ENGINE;
     const { db, projects, gates, workspace, cleanup } = setupTestApp();

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { emit, toolCalls, type Db, type EventEnvelope, type GateMetadata } from "@oc/shared";
 import { isApprovalDecision } from "@oc/shared";
-import { classifyCommand } from "./risk.js";
+import { classifyCommandChain } from "./command-chain.js";
 import type { RiskLevel } from "./risk.js";
 import { persistOutput, type OutputRef } from "./log-pipeline.js";
 import { DockerUnavailableError } from "./sandbox.js";
@@ -104,7 +104,7 @@ async function ensureGateApproval(
 
 export async function runCommand(deps: ShellDeps, input: RunCommandInput): Promise<RunCommandResult> {
   const cwd = input.cwd ?? deps.repoPath;
-  const risk = classifyCommand(input.cmd, { repoPath: deps.repoPath });
+  const risk = classifyCommandChain(input.cmd, { repoPath: deps.repoPath });
   const toolCallId = randomUUID();
   const rowId = randomUUID();
   const now = new Date().toISOString();

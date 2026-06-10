@@ -35,7 +35,9 @@ export function SettingsModal({
   const workflowMissing = engine ? !engine.workflowLlmReady : !readiness?.apiKeyReady;
   const opencodeCliMissing = engine ? !engine.opencodeCliReady : false;
   const opencodeModelMissing = engine ? !engine.opencodeModelReady : false;
-  const showDegradedNotice = workflowMissing || opencodeCliMissing || opencodeModelMissing;
+  const stubModes = readiness?.degradedModes ?? [];
+  const showDegradedNotice =
+    workflowMissing || opencodeCliMissing || opencodeModelMissing || stubModes.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" data-testid="settings-modal">
@@ -73,6 +75,17 @@ export function SettingsModal({
                     <li>
                       Opencode model auth is missing. Configure <code>~/.local/share/opencode/auth.json</code> (or your
                       provider credentials) so governed slices can run.
+                    </li>
+                  ) : null}
+                  {stubModes.includes("stub_engine") ? (
+                    <li>
+                      <code>OC_USE_STUB_ENGINE=1</code> is active. Authoritative checks and permission gates are
+                      bypassed — results are not production-safe.
+                    </li>
+                  ) : null}
+                  {stubModes.includes("testing_fixture") ? (
+                    <li>
+                      <code>OC_TESTING_FIXTURE=1</code> is active. Final test suites are being faked as passed.
                     </li>
                   ) : null}
                 </ul>

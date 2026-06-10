@@ -1,6 +1,6 @@
 import type { DevContext } from "@oc/agent-core";
 import { emit, type AgentEvent, type DevState } from "@oc/shared";
-import { persistOutput } from "@oc/workspace";
+import { classifyCommandChain, persistOutput } from "@oc/workspace";
 import type { DevelopmentWorkflowDeps } from "./types.js";
 
 const HARNESS_AGENT_ID = "opencode";
@@ -78,6 +78,10 @@ export function buildHarnessContext(
     projectId: state.projectId,
     logsPath: deps.logsPath,
     formatToolOutput: formatToolOutput || undefined,
+    classifyShellRisk: (command) =>
+      deps.classifyShellRisk?.(command) ??
+      classifyCommandChain(command, { repoPath: deps.repoPath }),
+    runGovernedCommand: deps.runGovernedCommand,
     emit: (raw) => {
       const payload = toAgentEvent(state.projectId, raw);
       if (!payload) {

@@ -17,6 +17,7 @@ export {
   resolveSliceTestCommand,
 } from "./dev-scaffold.js";
 export { getGitPatch } from "./git-diff.js";
+export { classifyCommandChain, splitShellSegments } from "./command-chain.js";
 export {
   classifyCommand,
   classifyToolOp,

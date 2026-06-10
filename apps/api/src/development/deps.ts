@@ -6,7 +6,7 @@ import {
   type DevAgentTask,
   type DevFixtureProfile,
 } from "@oc/agent-core";
-import { createAuthorize } from "@oc/workspace";
+import { classifyCommandChain, createAuthorize, readOutputText, runCommand } from "@oc/workspace";
 import type { DevelopmentWorkflowDeps } from "@oc/workflow";
 import type { Db, EventEnvelope } from "@oc/shared";
 import type { GateService } from "../gates/service.js";
@@ -65,6 +65,16 @@ export function createDevelopmentDeps(
       mode === "stub"
         ? async () => ({ passed: true, details: "stub-engine-pass" })
         : createRunAuthoritativeCheck(shell),
+    classifyShellRisk: (command) => classifyCommandChain(command, { repoPath: paths.repo }),
+    runGovernedCommand: async (command) => {
+      const result = await runCommand(shell, { projectId, cmd: command });
+      const combined = await readOutputText(shell.db, result.outputRef);
+      return {
+        exitCode: result.exitCode,
+        stdout: combined,
+        stderr: "",
+      };
+    },
     runAgent: async (input) =>
       runAgent(
         {

@@ -15,6 +15,14 @@ export interface ToolOp {
 
 export type AuthDecision = { allow: true } | { allow: false; reason: string };
 
+export type CommandExecResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+export type ShellRiskLevel = "low" | "medium" | "medium_constrained" | "high" | "high_deploy";
+
 export interface DevContext {
   repoPath: string;
   projectId: string;
@@ -22,6 +30,8 @@ export interface DevContext {
   authorize: (op: ToolOp) => Promise<AuthDecision>;
   logsPath?: string;
   formatToolOutput?: (toolCallId: string, raw: string) => string;
+  classifyShellRisk?: (command: string) => ShellRiskLevel;
+  runGovernedCommand?: (command: string) => Promise<CommandExecResult>;
 }
 
 export interface SliceResult {

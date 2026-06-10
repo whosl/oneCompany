@@ -5,7 +5,7 @@ import {
   runAgent,
   type DevAgentTask,
 } from "@oc/agent-core";
-import type { Db, EventEnvelope, FinalSuiteId } from "@oc/shared";
+import { assertTestingFixtureAllowed, type Db, type EventEnvelope, type FinalSuiteId } from "@oc/shared";
 import {
   getTestingStatus,
   loadDevSession,
@@ -55,6 +55,7 @@ export function createTestingService(
       stopPreview: async (pid) => stopPreview(pid),
       runSuite: async (suite: FinalSuiteId, previewUrl?: string) => {
         if (process.env.OC_TESTING_FIXTURE === "1") {
+          assertTestingFixtureAllowed();
           return { suite, status: "passed", details: "api-testing-fixture" };
         }
         return runSuite(runnerDeps, {

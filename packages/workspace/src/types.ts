@@ -19,9 +19,4 @@ export type WorkspacePaths = {
   meta: WorkspaceMeta;
 };
 
-export class PathEscapeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "PathEscapeError";
-  }
-}
+export { PathEscapeError } from "@oc/shared";

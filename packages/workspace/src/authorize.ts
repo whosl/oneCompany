@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { AuthDecision, ToolOp } from "@oc/agent-core";
 import { isApprovalDecision } from "@oc/shared";
+import { resolveScopedPath } from "./paths.js";
 import { classifyToolOp } from "./risk.js";
 import type { GateRecord, ShellDeps } from "./shell.js";
 import { CommandRejectedError } from "./shell.js";
@@ -10,16 +11,15 @@ function normalizeToolPath(repoPath: string, rawPath?: string): string | undefin
     return undefined;
   }
 
-  const repoRoot = path.resolve(repoPath);
-  const candidate = path.isAbsolute(rawPath)
-    ? path.relative(repoRoot, path.resolve(rawPath))
-    : rawPath;
-
-  if (!candidate || candidate.startsWith("..") || path.isAbsolute(candidate)) {
+  try {
+    const relative = path.isAbsolute(rawPath)
+      ? path.relative(path.resolve(repoPath), path.resolve(rawPath))
+      : rawPath;
+    resolveScopedPath(repoPath, relative);
+    return relative.replace(/\\/g, "/");
+  } catch {
     return undefined;
   }
-
-  return candidate;
 }
 
 export type AuthorizeDeps = {
@@ -58,14 +58,13 @@ export function createAuthorize(
       return { allow: true };
     }
 
-    let gate: GateRecord;
     try {
       const metadata = {
         riskLevel: (risk === "high_deploy" ? "high" : risk === "high" ? "high" : "medium") as
           | "high"
           | "medium",
       };
-      gate = deps.createGate(projectId, gateType, metadata);
+      const gate = deps.createGate(projectId, gateType, metadata);
       const decision = await deps.waitForGate(gate.id);
       if (!isApprovalDecision(gateType, metadata, decision)) {
         return { allow: false, reason: `Gate rejected: ${decision}` };

@@ -36,6 +36,17 @@ export {
   resolveGateDecision,
 } from "./gates/policy.js";
 export { GateResumeConflictError, GateResumeFailedError } from "./gates/errors.js";
+export {
+  assertStubEngineAllowed,
+  assertTestingFixtureAllowed,
+  isDegradedStubMode,
+  StubModeForbiddenError,
+} from "./stub-guard.js";
+export {
+  assertInsideRepo,
+  PathEscapeError,
+  resolveScopedPath,
+} from "./paths/workspace-paths.js";
 export { parseGatePayload, serializeGatePayload } from "./gates/storage.js";
 export {
   assertTransition,

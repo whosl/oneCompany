@@ -3,6 +3,24 @@ import type { AuthDecision, ToolOp } from "./types.js";
 
 export type AuthorizeFn = (op: ToolOp) => Promise<AuthDecision>;
 
+export type CommandExecResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+export type ShellRiskLevel = "low" | "medium" | "medium_constrained" | "high" | "high_deploy";
+
+export type PermissionBridgeDeps = {
+  directory?: string;
+  classifyShellRisk?: (command: string) => ShellRiskLevel;
+  runGovernedCommand?: (command: string) => Promise<CommandExecResult>;
+};
+
+function isHighRiskShell(risk: ShellRiskLevel | undefined): boolean {
+  return risk === "high" || risk === "high_deploy";
+}
+
 export function toToolOp(permission: unknown): ToolOp {
   if (!permission || typeof permission !== "object") {
     return { kind: "other" };
@@ -58,18 +76,85 @@ export function toToolOp(permission: unknown): ToolOp {
   return { kind: "other" };
 }
 
+async function injectGovernedCommandResult(
+  client: OpencodeClient,
+  sessionId: string,
+  directory: string | undefined,
+  command: string,
+  result: CommandExecResult,
+): Promise<void> {
+  const text = [
+    "[OneCompany governed execution]",
+    `Command: ${command}`,
+    `Exit code: ${result.exitCode}`,
+    result.stdout ? `stdout:\n${result.stdout}` : "",
+    result.stderr ? `stderr:\n${result.stderr}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  await client.session.promptAsync({
+    path: { id: sessionId },
+    query: directory ? { directory } : undefined,
+    body: {
+      parts: [{ type: "text", text }],
+    },
+  });
+}
+
 export async function handlePermission(
   client: OpencodeClient,
   sessionId: string,
   permission: Permission,
   authorize: AuthorizeFn,
-  directory?: string,
+  deps: PermissionBridgeDeps = {},
 ): Promise<AuthDecision> {
-  const decision = await authorize(toToolOp(permission));
+  const toolOp = toToolOp(permission);
+  const shellCommand = toolOp.kind === "shell" ? toolOp.command : undefined;
+  const shellRisk =
+    shellCommand && deps.classifyShellRisk
+      ? deps.classifyShellRisk(shellCommand)
+      : undefined;
+  const requiresGovernedExecution =
+    Boolean(shellCommand) && isHighRiskShell(shellRisk) && Boolean(deps.runGovernedCommand);
+
+  const decision = await authorize(toolOp);
+  if (!decision.allow) {
+    await client.postSessionIdPermissionsPermissionId({
+      path: { id: sessionId, permissionID: permission.id },
+      body: { response: "reject" },
+      query: deps.directory ? { directory: deps.directory } : undefined,
+    });
+    return decision;
+  }
+
+  if (requiresGovernedExecution && shellCommand) {
+    await client.postSessionIdPermissionsPermissionId({
+      path: { id: sessionId, permissionID: permission.id },
+      body: { response: "reject" },
+      query: deps.directory ? { directory: deps.directory } : undefined,
+    });
+
+    try {
+      const result = await deps.runGovernedCommand!(shellCommand);
+      await injectGovernedCommandResult(
+        client,
+        sessionId,
+        deps.directory,
+        shellCommand,
+        result,
+      );
+      return { allow: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { allow: false, reason: message };
+    }
+  }
+
   await client.postSessionIdPermissionsPermissionId({
     path: { id: sessionId, permissionID: permission.id },
-    body: { response: decision.allow ? "once" : "reject" },
-    query: directory ? { directory } : undefined,
+    body: { response: "once" },
+    query: deps.directory ? { directory: deps.directory } : undefined,
   });
   return decision;
 }

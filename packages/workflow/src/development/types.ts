@@ -78,6 +78,8 @@ export type DevelopmentWorkflowDeps = {
   ) => Promise<AuthoritativeCheckResult>;
   repoPath: string;
   logsPath?: string;
+  runGovernedCommand?: DevContext["runGovernedCommand"];
+  classifyShellRisk?: DevContext["classifyShellRisk"];
 };
 
 export type DevelopmentRunResult = {

@@ -40,7 +40,7 @@ describe("permission-bridge", () => {
         time: { created: Date.now() },
       },
       async () => ({ allow: true }),
-      "/tmp/repo",
+      { directory: "/tmp/repo" },
     );
 
     expect(decision).toEqual({ allow: true });
@@ -78,5 +78,48 @@ describe("permission-bridge", () => {
       body: { response: "reject" },
       query: undefined,
     });
+  });
+
+  it("proxies high-risk shell through governed execution", async () => {
+    const reply = vi.fn(async () => ({ data: true }));
+    const promptAsync = vi.fn(async () => ({ data: true }));
+    const client = {
+      postSessionIdPermissionsPermissionId: reply,
+      session: { promptAsync },
+    };
+    const runGovernedCommand = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "ok",
+      stderr: "",
+    }));
+
+    const decision = await handlePermission(
+      client as never,
+      "session-1",
+      {
+        id: "perm-3",
+        type: "bash",
+        sessionID: "session-1",
+        messageID: "msg-1",
+        title: "install",
+        metadata: { command: "npm install lodash" },
+        time: { created: Date.now() },
+      },
+      async () => ({ allow: true }),
+      {
+        directory: "/tmp/repo",
+        classifyShellRisk: () => "high",
+        runGovernedCommand,
+      },
+    );
+
+    expect(decision).toEqual({ allow: true });
+    expect(reply).toHaveBeenCalledWith({
+      path: { id: "session-1", permissionID: "perm-3" },
+      body: { response: "reject" },
+      query: { directory: "/tmp/repo" },
+    });
+    expect(runGovernedCommand).toHaveBeenCalledWith("npm install lodash");
+    expect(promptAsync).toHaveBeenCalled();
   });
 });

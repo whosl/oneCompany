@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import path from "node:path";
 import { desc, eq } from "drizzle-orm";
-import { acceptanceCriteriaVersions, prdVersions } from "@oc/shared";
+import { acceptanceCriteriaVersions, prdVersions, resolveScopedPath } from "@oc/shared";
 import { z } from "zod";
 import type { RequirementAgentTask } from "../agents/requirement/types.js";
 import { registerTool } from "./registry.js";
@@ -95,10 +94,10 @@ export function registerLocalTools(): void {
         }
       }
 
-      const repoRoot = path.resolve(ctx.repoPath);
-      const fullPath = path.resolve(repoRoot, relativePath);
-      const relativeToRoot = path.relative(repoRoot, fullPath);
-      if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
+      let fullPath: string;
+      try {
+        fullPath = resolveScopedPath(ctx.repoPath, relativePath);
+      } catch {
         return { error: "Path escapes project root" };
       }
 
