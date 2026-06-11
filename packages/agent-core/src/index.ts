@@ -53,6 +53,31 @@ export {
 export { runScriptedDevAgent } from "./agents/development/scripted-runner.js";
 export type { DevAgentTask, DevFixtureProfile } from "./agents/development/types.js";
 export {
+  registerTaiziAgent,
+  TAIZI_AGENT_DEFINITION,
+  TAIZI_AGENT_ID,
+} from "./agents/taizi/definitions.js";
+export {
+  buildTaiziSystemPrompt,
+  classifyTaiziMessage,
+  classifyTaiziWithRules,
+  isStatusInquiry,
+  type TaiziClassifyInput,
+} from "./agents/taizi/runner.js";
+export {
+  answerTaiziWithTools,
+  buildTaiziAnswerPrompt,
+  isWeakTaiziAnswer,
+  shouldAnswerWithTools,
+  type TaiziAnswerInput,
+} from "./agents/taizi/answer-runner.js";
+export {
+  ensureTaiziToolsRegistered,
+  resetTaiziToolsRegistrationForTests,
+  TAIZI_READ_TOOL_IDS,
+  TAIZI_TOOL_IDS,
+} from "./agents/taizi/local-tools.js";
+export {
   assertOpenAiConfigured,
   EngineUnavailableError,
   getManagedApiKeys,
@@ -64,6 +89,7 @@ export {
 } from "./engine-mode.js";
 export { getEngineReadiness, type EngineReadinessSnapshot } from "./engine-readiness.js";
 export { ensureOpencodeOnPath, resolveOpencodeExecutable } from "./util/opencode-cli.js";
+export { OPENCODE_NO_FILE_CHANGES_SUMMARY } from "./harness/opencode-harness.js";
 export {
   createDevelopmentRunner,
   createRequirementRunner,

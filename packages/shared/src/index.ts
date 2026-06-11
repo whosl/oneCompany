@@ -9,6 +9,7 @@ export * from "./schemas/testing.js";
 export * from "./schemas/panel.js";
 export * from "./schemas/console.js";
 export * from "./schemas/change-request.js";
+export * from "./schemas/taizi.js";
 export * from "./schemas/delivery-report.js";
 export * from "./schemas/integration.js";
 export * from "./db/schema.js";
@@ -20,7 +21,7 @@ export {
   MVP_TABLE_COUNT,
   MVP_TABLE_NAMES,
 } from "./db/mvp-tables.js";
-export { emit, listEvents, type EmitInput } from "./events/log.js";
+export { emit, ephemeralEnvelope, listEvents, type EmitInput } from "./events/log.js";
 export { validRequirementState } from "./test-fixtures/m0-baseline.js";
 export * from "./gates/types.js";
 export { GATE_DEFINITIONS, getGateDefinition } from "./gates/registry.js";

@@ -1,3 +1,4 @@
+import { buildIntegrationStatusForProject } from "@oc/integrations";
 import { desc, eq } from "drizzle-orm";
 import {
   listEvents,
@@ -117,6 +118,12 @@ export function buildConsoleSnapshot(
     suiteTotal: testing?.suiteTotal,
   });
 
+  const integrations = buildIntegrationStatusForProject(db, projectId).map((item) => ({
+    integrationId: item.integrationId,
+    displayName: item.displayName,
+    status: item.status,
+  }));
+
   return {
     project: {
       id: row.id,
@@ -131,6 +138,7 @@ export function buildConsoleSnapshot(
     dev,
     testing,
     risks,
+    integrations,
     openGates: openGates.map((gate) => ({
       id: gate.id,
       gateType: gate.gateType,

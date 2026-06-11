@@ -32,6 +32,6 @@ describe("OpencodeHarness — M9.5", () => {
           authorize,
         },
       ),
-    ).rejects.toThrow(/opencode CLI is not installed/);
+    ).rejects.toThrow(/Coding CLI not found/);
   });
 });

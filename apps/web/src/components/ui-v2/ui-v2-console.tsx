@@ -82,6 +82,10 @@ export function UiV2Console({ projectId }: { projectId: string }) {
     onOpenProjectHub: () => setProjectHubOpen(true),
     onOpenSettings: () => setSettingsOpen(true),
     onComposerSubmit: submitComposer,
+    onSkipClarification: async () => {
+      await consoleApi.skipRequirementClarification(projectId);
+      await refresh();
+    },
     onResolveGate: async (decision, customText) => {
       if (projection.composer.disabled || projection.composer.readOnly) return;
       const gateId = projection.blockingGateId;

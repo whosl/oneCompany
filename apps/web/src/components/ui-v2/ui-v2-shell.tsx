@@ -69,6 +69,7 @@ export type UiV2Actions = {
   onOpenSettings?: () => void;
   onComposerSubmit?: (mode: UiV2ComposerMode, text: string) => Promise<void> | void;
   onResolveGate?: (decision: string, customText?: string) => Promise<void> | void;
+  onSkipClarification?: () => Promise<void> | void;
 };
 
 function TopNavigation({
@@ -1166,21 +1167,39 @@ function SwimlaneModeView({
 function ComposerBar({
   projection,
   onSubmit,
+  onSkipClarification,
 }: {
   projection: UiV2Projection;
   onSubmit?: UiV2Actions["onComposerSubmit"];
+  onSkipClarification?: UiV2Actions["onSkipClarification"];
 }) {
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
   const composer = projection.composer;
   const gated = composer.mode === "gate_decision";
   const canSubmit = !composer.disabled && !composer.readOnly && !gated && text.trim().length > 0;
+  const canSkip =
+    composer.mode === "question_round" &&
+    !composer.disabled &&
+    !composer.readOnly &&
+    Boolean(onSkipClarification);
 
   async function submit() {
     if (!canSubmit || !onSubmit) return;
     setPending(true);
     try {
       await onSubmit(composer.mode, text.trim());
+      setText("");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function skip() {
+    if (!canSkip || !onSkipClarification) return;
+    setPending(true);
+    try {
+      await onSkipClarification();
       setText("");
     } finally {
       setPending(false);
@@ -1219,6 +1238,17 @@ function ComposerBar({
             <Send className="size-4" />
             {composer.mode === "change_request" ? "Submit change" : "Send"}
           </button>
+          {canSkip ? (
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md border border-[var(--oc-border-muted)] px-3 py-2 text-sm text-[var(--oc-text-muted)] hover:text-[var(--oc-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => void skip()}
+              disabled={pending}
+              title="跳过本轮澄清，采用系统默认假设直接生成 PRD"
+            >
+              跳过并采用默认假设
+            </button>
+          ) : null}
         </div>
       ) : null}
     </footer>
@@ -1597,7 +1627,11 @@ export function UiV2Shell({
               onOpenStream={() => setMode("stream")}
             />
           )}
-          <ComposerBar projection={projection} onSubmit={actions?.onComposerSubmit} />
+          <ComposerBar
+            projection={projection}
+            onSubmit={actions?.onComposerSubmit}
+            onSkipClarification={actions?.onSkipClarification}
+          />
         </section>
         <section className="min-h-[720px] min-w-0 flex-1 p-3 lg:p-4">
           <WorkspacePanel

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ProjectStatusSchema } from "./project-status.js";
 import { EventEnvelopeSchema } from "./event-envelope.js";
+import { IntegrationConnectionStatusSchema } from "./integration.js";
 
 export const ConsolePhaseSchema = z.object({
   label: z.string(),
@@ -39,6 +40,12 @@ export const ConsoleGateMetadataSchema = z.object({
   operation: z.string().optional(),
 });
 
+export const ConsoleIntegrationSnapshotSchema = z.object({
+  integrationId: z.string(),
+  displayName: z.string(),
+  status: IntegrationConnectionStatusSchema,
+});
+
 export const ConsoleGateSnapshotSchema = z.object({
   id: z.string(),
   gateType: z.string(),
@@ -70,6 +77,7 @@ export const ConsoleSnapshotSchema = z.object({
     })
     .optional(),
   risks: z.array(z.string()),
+  integrations: z.array(ConsoleIntegrationSnapshotSchema).optional(),
   openGates: z.array(ConsoleGateSnapshotSchema),
   pausedFrom: ProjectStatusSchema.optional(),
   events: z.array(EventEnvelopeSchema),

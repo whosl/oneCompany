@@ -90,6 +90,10 @@ export function UiV3Console({ projectId }: { projectId: string }) {
       }
       await refresh();
     },
+    onSkipClarification: async () => {
+      await consoleApi.skipRequirementClarification(projectId);
+      await refresh();
+    },
     onContextualAction: async (actionId) => {
       try {
         if (actionId === "start-development") {

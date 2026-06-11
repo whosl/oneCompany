@@ -1,6 +1,7 @@
 import type { RequirementFixtureProfile } from "@oc/agent-core";
 import {
   resumeRequirementAfterGate,
+  skipRequirementClarification,
   startRequirement,
   submitRequirementAnswers,
   type RequirementRunResult,
@@ -40,6 +41,11 @@ export function createRequirementService(
     ): Promise<RequirementRunResult> {
       const deps = createRequirementDeps(ctx);
       return submitRequirementAnswers(deps, { projectId, answers });
+    },
+
+    async skipClarification(projectId: string): Promise<RequirementRunResult> {
+      const deps = createRequirementDeps(ctx);
+      return skipRequirementClarification(deps, { projectId });
     },
 
     async resumeAfterGate(

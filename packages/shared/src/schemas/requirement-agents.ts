@@ -92,7 +92,7 @@ export const QuestionPlannerOutputSchema = z.object({
   questions: z
     .preprocess(
       (value) => (Array.isArray(value) ? value.map(coerceRequirementQuestionItem) : []),
-      z.array(RequirementQuestionItemSchema).max(10),
+      z.array(RequirementQuestionItemSchema).min(3).max(6),
     ),
 });
 

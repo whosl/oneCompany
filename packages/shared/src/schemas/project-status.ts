@@ -35,4 +35,6 @@ export const STATUS_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
 
 export const DEFAULT_COMPLETENESS_THRESHOLD = 85;
 export const DEFAULT_MAX_QUESTION_ROUNDS = 6;
+/** Minimum cumulative clarification questions before PRD (real engine; waived on skip). */
+export const DEFAULT_MIN_TOTAL_QUESTIONS = 6;
 export const DEFAULT_MAX_SLICE_ATTEMPTS = 4;

@@ -9,8 +9,21 @@ const COMMON_BIN_DIRS = [
   path.join(os.homedir(), ".local", "bin"),
 ];
 
+const CLI_NAMES = ["mimo", "opencode"] as const;
+
+function resolveFromCommonDirs(name: string): string | undefined {
+  for (const dir of COMMON_BIN_DIRS) {
+    const candidate = path.join(dir, name);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 /**
- * Resolve the opencode executable. Honors OC_OPENCODE_BIN, then PATH, then common install dirs.
+ * Resolve the coding harness CLI (mimo preferred, opencode fallback).
+ * Honors OC_OPENCODE_BIN, then PATH, then common install dirs.
  */
 export function resolveOpencodeExecutable(): string | undefined {
   const explicit = process.env.OC_OPENCODE_BIN?.trim();
@@ -21,22 +34,28 @@ export function resolveOpencodeExecutable(): string | undefined {
     return undefined;
   }
 
-  if (commandExists("opencode")) {
-    return "opencode";
-  }
-
-  for (const dir of COMMON_BIN_DIRS) {
-    const candidate = path.join(dir, "opencode");
-    if (fs.existsSync(candidate)) {
-      return candidate;
+  for (const name of CLI_NAMES) {
+    if (commandExists(name)) {
+      return name;
+    }
+    const fromDir = resolveFromCommonDirs(name);
+    if (fromDir) {
+      return fromDir;
     }
   }
 
   return undefined;
 }
 
+export function isMimoCodingCli(executable = resolveOpencodeExecutable()): boolean {
+  if (!executable) {
+    return false;
+  }
+  return path.basename(executable) === "mimo";
+}
+
 /**
- * Ensure the directory containing opencode is on PATH so @opencode-ai/sdk can spawn it.
+ * Ensure the directory containing a non-PATH coding CLI is on PATH (legacy SDK spawn).
  * Call once during API bootstrap (IDE/turbo often omit Homebrew from PATH).
  */
 export function ensureOpencodeOnPath(): string | undefined {
@@ -45,7 +64,7 @@ export function ensureOpencodeOnPath(): string | undefined {
     return undefined;
   }
 
-  if (resolved === "opencode") {
+  if (!path.isAbsolute(resolved)) {
     return resolved;
   }
 

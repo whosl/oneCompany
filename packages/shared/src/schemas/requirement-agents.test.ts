@@ -48,7 +48,7 @@ describe("requirement agent output schemas — M3", () => {
     expect(result.success).toBe(false);
   });
 
-  it("parses QuestionPlannerOutput with at most 10 questions", () => {
+  it("parses QuestionPlannerOutput with 3 to 6 questions", () => {
     const parsed = QuestionPlannerOutputSchema.parse({
       topic: "Users",
       questions: [
@@ -56,27 +56,47 @@ describe("requirement agent output schemas — M3", () => {
           question: "Who is the primary user?",
           suggestedAnswers: ["Developers", "Managers", "Everyone"],
         },
+        {
+          question: "What is the main workflow?",
+          suggestedAnswers: ["Track tasks", "Review history", "Collaborate"],
+        },
+        {
+          question: "Which platform first?",
+          suggestedAnswers: ["Web", "CLI", "Mobile"],
+        },
       ],
     });
-    expect(parsed.questions).toHaveLength(1);
+    expect(parsed.questions).toHaveLength(3);
     expect(parsed.questions[0]?.suggestedAnswers).toHaveLength(3);
   });
 
   it("coerces legacy string questions into structured items with defaults", () => {
     const parsed = QuestionPlannerOutputSchema.parse({
       topic: "Users",
-      questions: ["Who is the primary user?"],
+      questions: [
+        "Who is the primary user?",
+        "What is the main workflow?",
+        "Which platform first?",
+      ],
     });
     expect(parsed.questions[0]?.question).toBe("Who is the primary user?");
     expect(parsed.questions[0]?.suggestedAnswers.length).toBeGreaterThan(0);
+    expect(parsed.questions).toHaveLength(3);
   });
 
-  it("rejects QuestionPlannerOutput with more than 10 questions", () => {
-    const result = QuestionPlannerOutputSchema.safeParse({
-      topic: "Users",
-      questions: Array.from({ length: 11 }, (_, i) => `Q${i}`),
-    });
-    expect(result.success).toBe(false);
+  it("rejects QuestionPlannerOutput with fewer than 3 or more than 6 questions", () => {
+    expect(
+      QuestionPlannerOutputSchema.safeParse({
+        topic: "Users",
+        questions: [{ question: "Only one?", suggestedAnswers: ["A", "B", "C"] }],
+      }).success,
+    ).toBe(false);
+    expect(
+      QuestionPlannerOutputSchema.safeParse({
+        topic: "Users",
+        questions: Array.from({ length: 7 }, (_, i) => `Q${i}`),
+      }).success,
+    ).toBe(false);
   });
 
   it("parses PrdAcceptanceOutput", () => {

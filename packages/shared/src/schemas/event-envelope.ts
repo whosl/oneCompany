@@ -44,6 +44,18 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     summary: z.string(),
     charCount: z.number().optional(),
   }),
+  // Raw token-stream snapshot (bypass channel): broadcast-only, never written
+  // to the events table and never replayed. `text` is the accumulated tail of
+  // the current generation; `streamId` changes when a new message part starts.
+  z.object({
+    type: z.literal("agent.stream_delta"),
+    ...base,
+    agentId: z.string(),
+    streamId: z.string(),
+    text: z.string(),
+    charCount: z.number().optional(),
+    done: z.boolean().optional(),
+  }),
   z.object({
     type: z.literal("agent.error"),
     ...base,
@@ -116,6 +128,17 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     message: z.string(),
     /** Whether the message was delivered into a live coding session. */
     delivered: z.boolean().optional(),
+  }),
+  // Taizi（太子）调度：用户自由输入被分类并分发到目标 agent / service。
+  z.object({
+    type: z.literal("taizi.routed"),
+    ...base,
+    message: z.string(),
+    intent: z.string(),
+    /** 实际执行的动作（如 "development.start", "gate.approve", "noop"） */
+    action: z.string(),
+    reply: z.string(),
+    stateChanged: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("deployment.started"),

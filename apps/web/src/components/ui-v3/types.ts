@@ -67,6 +67,7 @@ export type UiV3Actions = {
     text: string,
     answers?: string[],
   ) => Promise<void>;
+  onSkipClarification?: () => Promise<void>;
   onContextualAction: (actionId: string) => Promise<void>;
   onOpenProjectHub: () => void;
   onOpenSettings: () => void;

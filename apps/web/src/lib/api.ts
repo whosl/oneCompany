@@ -161,6 +161,14 @@ export const consoleApi = {
     });
   },
 
+  skipRequirementClarification(projectId: string) {
+    return requestJson(`/projects/${projectId}/requirement/skip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+  },
+
   startDevelopment(projectId: string) {
     return requestJson(`/projects/${projectId}/development/start`, {
       method: "POST",

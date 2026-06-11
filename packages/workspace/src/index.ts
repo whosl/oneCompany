@@ -13,7 +13,12 @@ export { runLocalCommand } from "./local-exec.js";
 export { commitSlice, initRepo, type CommitSliceInput } from "./git.js";
 export {
   ensureDevRepoScaffold,
+  ensureE2eScaffold,
+  findPlaywrightCli,
+  findPlaywrightModulePaths,
   findVitestMjs,
+  resolvePlaywrightCommand,
+  normalizeSliceTestCommand,
   resolveSliceTestCommand,
   resolveTypecheckCommand,
 } from "./dev-scaffold.js";

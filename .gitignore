@@ -14,3 +14,4 @@ generated-projects/*
 .env.local
 .env.docker
 apps/web/test-results/
+demo-runs/

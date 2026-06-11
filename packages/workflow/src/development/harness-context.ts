@@ -1,5 +1,5 @@
 import type { DevContext } from "@oc/agent-core";
-import { emit, type AgentEvent, type DevState } from "@oc/shared";
+import { emit, ephemeralEnvelope, type AgentEvent, type DevState } from "@oc/shared";
 import { classifyCommandChain, persistOutput } from "@oc/workspace";
 import type { DevelopmentWorkflowDeps } from "./types.js";
 
@@ -90,6 +90,32 @@ export function buildHarnessContext(
       classifyCommandChain(command, { repoPath: deps.repoPath }),
     runGovernedCommand: deps.runGovernedCommand,
     emit: (raw) => {
+      // Bypass channel: token-stream snapshots are broadcast-only — building
+      // an envelope without touching the events table keeps the DB out of the
+      // hot path (these fire every ~250ms during generation).
+      const rawEvent = raw as Record<string, unknown> | null;
+      if (rawEvent && rawEvent.type === "agent.stream_delta") {
+        try {
+          const envelope = ephemeralEnvelope({
+            projectId: state.projectId,
+            agentId,
+            payload: {
+              type: "agent.stream_delta",
+              projectId: state.projectId,
+              agentId,
+              streamId: String(rawEvent.streamId ?? "stream"),
+              text: typeof rawEvent.text === "string" ? rawEvent.text : "",
+              charCount:
+                typeof rawEvent.charCount === "number" ? rawEvent.charCount : undefined,
+              done: rawEvent.done === true ? true : undefined,
+            },
+          });
+          deps.onEvent?.(envelope);
+        } catch {
+          // Streaming is best-effort; never break the harness over it.
+        }
+        return;
+      }
       const payload = toAgentEvent(state.projectId, agentId, raw);
       if (!payload) {
         return;

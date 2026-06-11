@@ -1,11 +1,14 @@
 import { validRequirementState } from "@oc/shared";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   canAskAnotherRound,
+  hasMetQuestionMinimum,
   isBudgetExhausted,
   isReadyForPrd,
   isStuck,
+  minTotalQuestions,
   shouldRaiseStuckGate,
+  totalQuestionsAsked,
 } from "./loop-policy.js";
 
 describe("requirement loop policy — M3", () => {
@@ -103,5 +106,71 @@ describe("requirement loop policy — M3", () => {
       ],
     };
     expect(isStuck(state)).toBe(false);
+  });
+});
+
+describe("requirement loop policy — minimum question floor", () => {
+  afterEach(() => {
+    delete process.env.OC_MIN_TOTAL_QUESTIONS;
+  });
+
+  const round = (count: number, scoreAfter = 90) => ({
+    topic: "t",
+    questions: Array.from({ length: count }, (_, i) => ({
+      question: `q${i}`,
+      suggestedAnswers: ["A"],
+    })),
+    answers: Array.from({ length: count }, () => "a"),
+    scoreAfter,
+  });
+
+  it("counts cumulative questions across rounds", () => {
+    const state = { ...validRequirementState, questionRounds: [round(3), round(2)] };
+    expect(totalQuestionsAsked(state)).toBe(5);
+  });
+
+  it("defaults to 0 in test env and honors OC_MIN_TOTAL_QUESTIONS", () => {
+    expect(minTotalQuestions()).toBe(0);
+    process.env.OC_MIN_TOTAL_QUESTIONS = "6";
+    expect(minTotalQuestions()).toBe(6);
+  });
+
+  it("blocks PRD readiness until the question floor is met", () => {
+    process.env.OC_MIN_TOTAL_QUESTIONS = "6";
+    const state = {
+      ...validRequirementState,
+      completenessScore: 90,
+      gaps: [],
+      questionRounds: [round(3)],
+    };
+    expect(hasMetQuestionMinimum(state)).toBe(false);
+    expect(isReadyForPrd(state)).toBe(false);
+    expect(isReadyForPrd({ ...state, questionRounds: [round(3), round(3)] })).toBe(true);
+  });
+
+  it("waives the floor when clarification was skipped", () => {
+    process.env.OC_MIN_TOTAL_QUESTIONS = "6";
+    const state = {
+      ...validRequirementState,
+      completenessScore: 90,
+      gaps: [],
+      clarificationSkipped: true,
+      questionRounds: [round(2)],
+    };
+    expect(hasMetQuestionMinimum(state)).toBe(true);
+    expect(isReadyForPrd(state)).toBe(true);
+  });
+
+  it("does not raise the stuck gate on a high-score plateau while the floor is unmet", () => {
+    process.env.OC_MIN_TOTAL_QUESTIONS = "9";
+    const state = {
+      ...validRequirementState,
+      completenessScore: 90,
+      gaps: [],
+      questionRounds: [round(3, 89), round(3, 90)],
+    };
+    expect(isStuck(state)).toBe(false);
+    expect(shouldRaiseStuckGate(state)).toBe(false);
+    expect(canAskAnotherRound(state)).toBe(true);
   });
 });

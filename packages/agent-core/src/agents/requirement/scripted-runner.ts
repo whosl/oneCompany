@@ -96,6 +96,14 @@ export function runScriptedRequirementAgent(
               "Review history and audit changes",
             ],
           },
+          {
+            question: "What platform should the MVP target first?",
+            suggestedAnswers: [
+              "Web app in the browser",
+              "CLI for local developers",
+              "Desktop app with offline support",
+            ],
+          },
         ],
       });
 

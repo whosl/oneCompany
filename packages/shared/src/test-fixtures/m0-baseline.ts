@@ -40,6 +40,7 @@ export const validRequirementState: RequirementState = {
   completenessScore: 72,
   completenessThreshold: 85,
   maxQuestionRounds: 6,
+  clarificationSkipped: false,
   questionRounds: [],
 };
 

@@ -63,6 +63,8 @@ export const RequirementStateSchema = z.object({
   completenessScore: z.number(),
   completenessThreshold: z.number().default(DEFAULT_COMPLETENESS_THRESHOLD),
   maxQuestionRounds: z.number().default(DEFAULT_MAX_QUESTION_ROUNDS),
+  /** True when the user skipped clarification and accepted default assumptions. */
+  clarificationSkipped: z.boolean().default(false),
   questionRounds: z.array(QuestionRoundSchema),
   prdVersion: z.string().optional(),
   acceptanceCriteriaVersion: z.string().optional(),

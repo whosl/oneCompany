@@ -14,6 +14,7 @@ import type {
   ProjectStatus,
   TestingSessionMeta,
 } from "@oc/shared";
+import { normalizeSliceTestCommand } from "@oc/workspace";
 
 export type DevelopmentWorkflowPhase =
   | "idle"
@@ -114,13 +115,20 @@ export type HarnessContextFactory = (
   state: DevState,
 ) => DevContext;
 
-export function buildSliceSpec(slice: FunctionSliceTask, state: DevState): SliceSpec {
+export function buildSliceSpec(
+  slice: FunctionSliceTask,
+  state: DevState,
+  repoPath?: string,
+): SliceSpec {
+  const testCommand = repoPath
+    ? normalizeSliceTestCommand(repoPath, slice.testCommand, slice.id)
+    : slice.testCommand;
   return {
     projectId: state.projectId,
     sliceId: slice.id,
     goal: slice.title,
     acceptanceChecks: slice.acceptanceChecks ?? [],
-    testCommand: slice.testCommand,
+    testCommand,
     modelTier: "strong",
   };
 }

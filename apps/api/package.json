@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @oc/agent-core build",
     "dev": "tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts --external @oc/shared --external @oc/agent-core --external @oc/integrations --external @oc/workflow --external @oc/workspace --external drizzle-orm --external better-sqlite3",
     "start": "node dist/index.js",

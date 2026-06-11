@@ -27,6 +27,7 @@ import {
   saveRequirementSession,
   updateSessionMeta,
 } from "./state.js";
+import { applyClarificationSkip, buildDefaultAnswers } from "./skip.js";
 import { applyRequirementIntegrations } from "../integrations/requirement-enable.js";
 import type {
   RequirementRunResult,
@@ -189,7 +190,8 @@ async function decideAndContinue(
 ): Promise<RequirementRunResult> {
   const currentStatus = deps.getProjectStatus(payload.state.projectId);
 
-  if (isReadyForPrd(payload.state)) {
+  // Skip means "stop asking, generate PRD from defaults" regardless of score.
+  if (payload.state.clarificationSkipped || isReadyForPrd(payload.state)) {
     const completed = await runPrdAcceptance(deps, payload);
     const gate = deps.createGate(payload.state.projectId, REQUIREMENT_CONFIRM_GATE_TYPE);
     const waiting = updateSessionMeta(completed, {
@@ -281,6 +283,48 @@ export async function submitRequirementAnswersLegacy(
   saveRequirementSession(deps.db, input.projectId, payload);
 
   return decideAndContinue(deps, payload);
+}
+
+export async function skipRequirementClarificationLegacy(
+  deps: RequirementWorkflowDeps,
+  input: { projectId: string },
+): Promise<RequirementRunResult> {
+  const payload = loadRequirementSession(deps.db, input.projectId);
+  if (payload.meta.phase !== "awaiting_answers") {
+    throw new Error(`Expected awaiting_answers, got ${payload.meta.phase}`);
+  }
+
+  const lastIndex = payload.state.questionRounds.length - 1;
+  if (lastIndex < 0) {
+    throw new Error("No active question round");
+  }
+
+  const answers = buildDefaultAnswers(payload.state);
+  const rounds = [...payload.state.questionRounds];
+  rounds[lastIndex] = { ...rounds[lastIndex]!, answers };
+  payload.state = applyClarificationSkip(
+    { ...payload.state, questionRounds: rounds },
+    lastIndex,
+  );
+  payload.meta.phase = "running";
+
+  await runScorer(deps, payload, lastIndex + 1);
+  saveRequirementSession(deps.db, input.projectId, payload);
+
+  // Skip bypasses the readiness loop: generate the PRD from defaults directly.
+  const currentStatus = deps.getProjectStatus(input.projectId);
+  const completed = await runPrdAcceptance(deps, payload);
+  const gate = deps.createGate(input.projectId, REQUIREMENT_CONFIRM_GATE_TYPE);
+  const waiting = updateSessionMeta(completed, {
+    phase: "awaiting_gate",
+    gateId: gate.id,
+    gateType: REQUIREMENT_CONFIRM_GATE_TYPE,
+  });
+  saveRequirementSession(deps.db, input.projectId, waiting);
+  if (currentStatus === "Draft Requirement" || currentStatus === "Asking Questions") {
+    deps.setStatus(input.projectId, "PRD Ready", "requirement_clarification_skipped");
+  }
+  return toResult(deps, waiting);
 }
 
 export async function resumeRequirementAfterGateLegacy(

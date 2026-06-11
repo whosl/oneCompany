@@ -43,6 +43,7 @@ describe("langchain runner — M9.5", () => {
           normalizedSummary: "todo app",
           completenessThreshold: 85,
           maxQuestionRounds: 6,
+          clarificationSkipped: false,
           questionRounds: [],
           completenessScore: 0,
           targetUsers: [],

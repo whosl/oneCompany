@@ -1,16 +1,21 @@
 export {
   startRequirement,
   submitRequirementAnswers,
+  skipRequirementClarification,
   resumeRequirementAfterGate,
 } from "./requirement/engine.js";
 export {
   canAskAnotherRound,
   hasCriticalGap,
+  hasMetQuestionMinimum,
   isBudgetExhausted,
   isReadyForPrd,
   isStuck,
+  minTotalQuestions,
   shouldRaiseStuckGate,
+  totalQuestionsAsked,
 } from "./requirement/loop-policy.js";
+export { buildDefaultAnswers, applyClarificationSkip } from "./requirement/skip.js";
 export {
   appendRequirementScore,
   createInitialRequirementState,
@@ -87,8 +92,11 @@ export {
   collectProjectRisks,
   assertReportComplete,
   DeliveryReportStatusError,
+  exportSubmissionPackage,
   type FinalAcceptanceDeps,
   type FinalAcceptanceResult,
+  type SubmissionExportInput,
+  type SubmissionExportResult,
 } from "./delivery/index.js";
 export {
   createRequirementChangeRequest,

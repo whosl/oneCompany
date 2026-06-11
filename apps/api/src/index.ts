@@ -12,14 +12,14 @@ const opencodeBin = ensureOpencodeOnPath();
 const readiness = getEngineReadiness();
 if (!readiness.opencodeCliReady) {
   console.warn(
-    "[onecompany] OpenCode CLI not found. Coding slices will fail until opencode is installed or OC_OPENCODE_BIN is set.",
+    "[onecompany] Coding CLI not found. Install mimo (or opencode) or set OC_OPENCODE_BIN before running slices.",
   );
-} else if (opencodeBin && opencodeBin !== "opencode") {
-  console.log(`[onecompany] OpenCode CLI: ${opencodeBin}`);
+} else if (opencodeBin) {
+  console.log(`[onecompany] Coding CLI: ${opencodeBin}`);
 }
 if (!readiness.opencodeModelReady) {
   console.warn(
-    "[onecompany] OpenCode model not configured. Set OC_OPENCODE_MODEL_STRONG=provider/model or configure ~/.local/share/opencode/auth.json.",
+    "[onecompany] Coding model not configured. Set OC_OPENCODE_MODEL_STRONG=provider/model or configure ~/.local/share/mimocode/auth.json (mimo) or opencode/auth.json.",
   );
 }
 

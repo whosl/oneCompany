@@ -85,6 +85,27 @@ function recordRedactionIncidents(
   }
 }
 
+/**
+ * Build a broadcast-only envelope for ephemeral streaming events
+ * (`agent.stream_delta`): no DB write, no sequence number (seq=0 marks it as
+ * ephemeral — SSE consumers must pass it through without cursor tracking).
+ */
+export function ephemeralEnvelope(input: EmitInput): EventEnvelope {
+  const { value: redactedPayload } = redactDeep(input.payload);
+  const payload = AgentEventSchema.parse(redactedPayload);
+  return {
+    eventId: randomUUID(),
+    seq: 0,
+    schemaVersion: SCHEMA_VERSION,
+    projectId: input.projectId,
+    runId: input.runId,
+    agentId: input.agentId,
+    correlationId: input.correlationId,
+    timestamp: new Date().toISOString(),
+    payload,
+  };
+}
+
 export function emit(db: Db, input: EmitInput): EventEnvelope {
   const { value: redactedPayload, incidents } = redactDeep(input.payload);
   const payload = AgentEventSchema.parse(redactedPayload);

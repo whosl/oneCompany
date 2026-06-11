@@ -1,4 +1,7 @@
 import type { NormalizedRunnerResult } from "@oc/shared";
+import fs from "node:fs";
+import path from "node:path";
+import { ensureE2eScaffold, findPlaywrightModulePaths, resolvePlaywrightCommand } from "../dev-scaffold.js";
 import { readOutputText } from "../log-pipeline.js";
 import { runCommand } from "../shell.js";
 import type { RunnerDeps, SuiteSpec } from "./types.js";
@@ -70,21 +73,31 @@ export async function runPlaywright(
     };
   }
 
+  const cwd = spec.cwd ?? deps.repoPath;
+  ensureE2eScaffold(cwd);
+
+  const jsonOutputName = "playwright-report.json";
+  const modulePaths = findPlaywrightModulePaths(cwd);
+  const nodePath = [...modulePaths, process.env.NODE_PATH ?? ""].filter(Boolean).join(path.delimiter);
   const env = {
     ...spec.env,
     BASE_URL: spec.previewUrl,
-    PLAYWRIGHT_JSON_OUTPUT_NAME: "playwright-report.json",
+    PLAYWRIGHT_JSON_OUTPUT_NAME: jsonOutputName,
+    ...(nodePath ? { NODE_PATH: nodePath } : {}),
   };
-  const command = spec.command ?? "pnpm exec playwright test --reporter=json";
+  const command = resolvePlaywrightCommand(cwd, spec.command ?? "pnpm exec playwright test --reporter=json");
 
   const result = await runCommand(deps.shell, {
     projectId: deps.shell.projectId,
     cmd: command,
-    cwd: spec.cwd ?? deps.repoPath,
+    cwd,
     env,
   });
 
-  const output = readOutputText(result.outputRef);
+  const jsonPath = path.join(cwd, jsonOutputName);
+  const output = fs.existsSync(jsonPath)
+    ? fs.readFileSync(jsonPath, "utf8")
+    : readOutputText(result.outputRef);
   const parsed = parsePlaywrightJson(output);
   const passed = result.exitCode === 0 && parsed.passed;
 

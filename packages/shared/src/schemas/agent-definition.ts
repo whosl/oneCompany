@@ -3,7 +3,7 @@ import { z } from "zod";
 export const AgentDefinitionSchema = z.object({
   id: z.string(),
   version: z.string(),
-  group: z.enum(["requirement", "development"]),
+  group: z.enum(["requirement", "development", "orchestration"]),
   role: z.string(),
   description: z.string(),
   inputSchema: z.unknown(),

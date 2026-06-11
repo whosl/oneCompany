@@ -1,5 +1,6 @@
 import {
   enterAwaitingAcceptance,
+  exportSubmissionPackage,
   generateDeliveryReport,
   getFinalAcceptanceStatus,
   handleFinalAcceptanceDecision,
@@ -83,6 +84,20 @@ export function createDeliveryService(
 
     getStatus(projectId: string): FinalAcceptanceResult {
       return getFinalAcceptanceStatus(buildDeps(projectId), projectId);
+    },
+
+    exportSubmission(projectId: string) {
+      const project = projects.getProject(projectId);
+      if (!project) {
+        throw new Error(`Project not found: ${projectId}`);
+      }
+      const paths = workspace.ensureForProject(project);
+      return exportSubmissionPackage(db, {
+        projectId,
+        projectName: project.name,
+        repoPath: paths.repo,
+        artifactsPath: paths.artifacts,
+      });
     },
   };
 }

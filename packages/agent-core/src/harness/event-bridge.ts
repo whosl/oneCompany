@@ -9,6 +9,11 @@ export type HarnessEventPayload = {
   output?: string;
   error?: string;
   diffId?: string;
+  /** agent.stream_delta: id of the message part this snapshot belongs to. */
+  streamId?: string;
+  /** agent.stream_delta: accumulated text tail of the current generation. */
+  text?: string;
+  charCount?: number;
 };
 
 export type EventBridgeContext = {
@@ -36,6 +41,9 @@ export function createEventBridge(
   // Throttled "thinking" forwarding: surfaces the model's narration so the
   // user-facing stream never goes silent for minutes during long generations.
   const thinking = { lastEmitAt: 0, emittedLen: new Map<string, number>() };
+  // Bypass token stream (agent.stream_delta): much tighter throttle — these
+  // are broadcast-only and never hit the database.
+  const streaming = { lastEmitAt: 0 };
   let sessionIdle = false;
   let assistantReply = false;
   let pendingPermissions = 0;
@@ -67,6 +75,7 @@ export function createEventBridge(
           seenToolCalls,
           runningTools,
           thinking,
+          streaming,
           markSessionActive,
           markSessionIdle,
           markAssistantReply: () => {
@@ -98,6 +107,32 @@ export function createEventBridge(
 
 const THINKING_EMIT_INTERVAL_MS = 8_000;
 const THINKING_MIN_NEW_CHARS = 60;
+
+const STREAM_DELTA_INTERVAL_MS = 250;
+const STREAM_DELTA_MAX_TEXT = 1_500;
+
+/**
+ * Live token-stream snapshot for the bypass channel. Sends the accumulated
+ * tail (not a diff) so a dropped frame never corrupts the client's view.
+ */
+function maybeEmitStreamDelta(
+  ctx: EventBridgeContext,
+  streaming: { lastEmitAt: number },
+  partId: string,
+  text: string,
+): void {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const now = Date.now();
+  if (now - streaming.lastEmitAt < STREAM_DELTA_INTERVAL_MS) return;
+  streaming.lastEmitAt = now;
+  ctx.emit({
+    type: "agent.stream_delta",
+    streamId: partId,
+    text: trimmed.slice(-STREAM_DELTA_MAX_TEXT),
+    charCount: trimmed.length,
+  });
+}
 
 /** Forward a snippet of the model's running narration into the event stream. */
 function maybeEmitThinking(
@@ -136,6 +171,7 @@ function handleOpencodeEvent(
     seenToolCalls: Set<string>;
     runningTools: Set<string>;
     thinking: { lastEmitAt: number; emittedLen: Map<string, number> };
+    streaming: { lastEmitAt: number };
     markSessionActive: () => void;
     markSessionIdle: () => void;
     markAssistantReply: () => void;
@@ -189,6 +225,7 @@ function handleOpencodeEvent(
         (Boolean(part.text?.trim()) || Boolean(event.properties.delta?.trim()))
       ) {
         hooks.markAssistantReply();
+        maybeEmitStreamDelta(ctx, hooks.streaming, part.id, part.text ?? "");
         maybeEmitThinking(ctx, hooks.thinking, part.id, part.text ?? "");
       }
       handleToolPart(part, ctx, hooks);

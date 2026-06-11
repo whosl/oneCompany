@@ -189,6 +189,7 @@ export function UiV3Shell({
             pendingQuestions={projection.pendingQuestions}
             disabled={composerInputDisabled}
             onSubmit={(mode, text, answers) => actions.onComposerSubmit(mode, text, answers)}
+            onSkipClarification={actions.onSkipClarification}
           />
         </div>
 

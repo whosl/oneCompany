@@ -12,11 +12,13 @@ export function ComposerPanel({
   pendingQuestions,
   disabled,
   onSubmit,
+  onSkipClarification,
 }: {
   composer: ComposerProjection;
   pendingQuestions: UiV3PendingQuestion[];
   disabled?: boolean;
   onSubmit?: (mode: ComposerProjection["mode"], text: string, answers?: string[]) => Promise<void>;
+  onSkipClarification?: () => Promise<void>;
 }) {
   const [text, setText] = useState("");
   const [answers, setAnswers] = useState<string[]>([]);
@@ -31,6 +33,12 @@ export function ComposerPanel({
     (composer.mode === "question_round"
       ? answers.some((answer) => answer.trim().length > 0)
       : text.trim().length > 0);
+  const canSkip =
+    composer.mode === "question_round" &&
+    !composer.disabled &&
+    !composer.readOnly &&
+    !disabled &&
+    Boolean(onSkipClarification);
 
   async function submit() {
     if (!canSubmit || !onSubmit) return;
@@ -43,6 +51,17 @@ export function ComposerPanel({
         await onSubmit(composer.mode, text.trim());
         setText("");
       }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function skip() {
+    if (!canSkip || !onSkipClarification) return;
+    setPending(true);
+    try {
+      await onSkipClarification();
+      setAnswers([]);
     } finally {
       setPending(false);
     }
@@ -119,6 +138,16 @@ export function ComposerPanel({
                   ? "提交 URL"
                   : "发送"}
           </UiButton>
+          {canSkip ? (
+            <UiButton
+              variant="ghost"
+              disabled={pending}
+              onClick={() => void skip()}
+              title="跳过本轮澄清，采用系统默认假设直接生成 PRD"
+            >
+              跳过并采用默认假设
+            </UiButton>
+          ) : null}
         </div>
       ) : null}
 

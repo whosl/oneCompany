@@ -11,7 +11,7 @@ import {
   sliceSuiteId,
 } from "@oc/shared";
 import { persistRunnerResult } from "../testing/results.js";
-import { DEVELOPMENT_AGENT_IDS } from "@oc/agent-core";
+import { DEVELOPMENT_AGENT_IDS, OPENCODE_NO_FILE_CHANGES_SUMMARY } from "@oc/agent-core";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
 import {
   createSkipChangeRequest,
@@ -91,6 +91,16 @@ function emitPipelineNote(
   );
 }
 
+/** Opencode may finish with zero edits when a prior attempt already landed the code — still verify via platform tests. */
+function harnessOutcomeAllowsAuthoritativeCheck(sliceResult: {
+  passed: boolean;
+  summary: string;
+}): boolean {
+  return (
+    sliceResult.passed || sliceResult.summary === OPENCODE_NO_FILE_CHANGES_SUMMARY
+  );
+}
+
 export async function runSliceIteration(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
@@ -110,12 +120,20 @@ export async function runSliceIteration(
 
   while (state.currentSliceAttempts < maxAttempts) {
     const attempt = state.currentSliceAttempts + 1;
-    const sliceSpec = buildSliceSpec(slice, state);
+    const sliceSpec = buildSliceSpec(slice, state, deps.repoPath);
 
     const sliceResult = await deps.harness.runSlice(sliceSpec, buildHarnessContext(deps, state));
 
     let check: { passed: boolean; details: string };
-    if (sliceResult.passed) {
+    if (harnessOutcomeAllowsAuthoritativeCheck(sliceResult)) {
+      if (!sliceResult.passed) {
+        emitPipelineNote(
+          deps,
+          state.projectId,
+          "agent.observe",
+          "编码 Agent 未改文件（可能上一轮已实现），改由平台权威测试判定是否通过",
+        );
+      }
       emitPipelineNote(
         deps,
         state.projectId,

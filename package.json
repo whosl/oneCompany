@@ -10,6 +10,8 @@
     "typecheck": "turbo run typecheck",
     "migrate": "turbo run migrate --filter=@oc/shared",
     "api": "pnpm --filter @oc/api dev",
+    "tui": "pnpm --filter @oc/tui start",
+    "tui2": "pnpm --filter @oc/tui start",
     "format": "prettier --write ."
   },
   "devDependencies": {

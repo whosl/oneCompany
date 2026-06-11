@@ -25,3 +25,8 @@ export {
   type FinalAcceptanceDeps,
   type FinalAcceptanceResult,
 } from "./final-acceptance.js";
+export {
+  exportSubmissionPackage,
+  type SubmissionExportInput,
+  type SubmissionExportResult,
+} from "./submission-export.js";

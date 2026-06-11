@@ -37,6 +37,8 @@ import {
   createProjectIntegrationRoutes,
 } from "./integrations/routes.js";
 import { createIntegrationService } from "./integrations/service.js";
+import { createTaiziRoutes } from "./taizi/routes.js";
+import { createTaiziService } from "./taizi/service.js";
 
 export type AppDependencies = {
   db: Db;
@@ -88,6 +90,19 @@ export function createApp(deps: AppDependencies) {
   const consoleService = createConsoleService(deps.db, projects, gates);
   const environment = createEnvironmentService();
   const integrations = createIntegrationService(deps.db, projects, gates, workspace, onEvent);
+  const taizi = createTaiziService({
+    db: deps.db,
+    projects,
+    gates,
+    workspace,
+    requirement,
+    development,
+    testing,
+    delivery,
+    changeRequests,
+    consoleService,
+    onEvent,
+  });
   resumeRef.requirement = requirement;
   resumeRef.development = development;
   resumeRef.deployment = deployment;
@@ -109,6 +124,7 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createDeliveryRoutes(delivery));
   app.route("/projects", createChangeRequestRoutes(changeRequests));
   app.route("/projects", createInterruptRoutes(deps.db, onEvent));
+  app.route("/projects", createTaiziRoutes(taizi));
   app.route("/projects", createPanelRoutes(panel));
   app.route("/projects", createConsoleRoutes(consoleService));
   app.route("/projects", createProjectIntegrationRoutes(integrations));

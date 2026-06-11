@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import path from "node:path";
-import { createOpencodeServer, type Config } from "@opencode-ai/sdk";
+import type { Config } from "@opencode-ai/sdk";
 import { buildOcGatewayMcpConfig } from "./opencode-gateway-mcp.js";
+import { resolveOpencodeExecutable } from "../util/opencode-cli.js";
 
 export type ProjectServer = {
   url: string;
@@ -9,6 +11,19 @@ export type ProjectServer = {
 };
 
 const activeServers = new Map<string, ProjectServer>();
+
+const SERVER_LISTENING_RE =
+  /(?:opencode|mimocode) server listening on\s+(https?:\/\/[^\s]+)/;
+
+export function parseCodingServerListeningUrl(output: string): string | undefined {
+  for (const line of output.split("\n")) {
+    const match = line.match(SERVER_LISTENING_RE);
+    if (match) {
+      return match[1];
+    }
+  }
+  return undefined;
+}
 
 function portForRepo(repoPath: string): number {
   const hash = createHash("sha256").update(repoPath).digest();
@@ -29,21 +44,71 @@ function governedConfig(options?: { projectId?: string }) {
   };
 }
 
-async function startServerOnPort(
+async function spawnCodingServer(
   port: number,
-  options?: { projectId?: string },
+  options?: { projectId?: string; timeoutMs?: number },
 ): Promise<ProjectServer> {
-  const server = await createOpencodeServer({
-    hostname: "127.0.0.1",
-    port,
-    timeout: 15_000,
-    config: governedConfig(options),
+  const executable = resolveOpencodeExecutable();
+  if (!executable) {
+    throw new Error(
+      "Coding CLI not found. Install mimo (or opencode) or set OC_OPENCODE_BIN.",
+    );
+  }
+
+  const hostname = "127.0.0.1";
+  const timeoutMs = options?.timeoutMs ?? 15_000;
+  const config = governedConfig(options);
+
+  const proc = spawn(executable, [`serve`, `--hostname=${hostname}`, `--port=${port}`], {
+    env: {
+      ...process.env,
+      OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
+    },
+  });
+
+  const url = await new Promise<string>((resolve, reject) => {
+    const id = setTimeout(() => {
+      reject(new Error(`Timeout waiting for coding server to start after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    let output = "";
+
+    const tryResolve = () => {
+      const parsed = parseCodingServerListeningUrl(output);
+      if (parsed) {
+        clearTimeout(id);
+        resolve(parsed);
+      }
+    };
+
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+      tryResolve();
+    });
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+      tryResolve();
+    });
+
+    proc.on("exit", (code) => {
+      clearTimeout(id);
+      let msg = `Coding server exited with code ${code}`;
+      if (output.trim()) {
+        msg += `\nServer output: ${output}`;
+      }
+      reject(new Error(msg));
+    });
+
+    proc.on("error", (error) => {
+      clearTimeout(id);
+      reject(error);
+    });
   });
 
   return {
-    url: server.url,
+    url,
     async close() {
-      server.close();
+      proc.kill();
     },
   };
 }
@@ -70,7 +135,7 @@ export async function startProjectServer(
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const port = basePort + attempt;
     try {
-      started = await startServerOnPort(port, options);
+      started = await spawnCodingServer(port, options);
       break;
     } catch (error) {
       lastError = error;
@@ -84,7 +149,7 @@ export async function startProjectServer(
   if (!started) {
     throw lastError instanceof Error
       ? lastError
-      : new Error("Failed to start opencode server on loopback");
+      : new Error("Failed to start coding server on loopback");
   }
 
   const server = started;

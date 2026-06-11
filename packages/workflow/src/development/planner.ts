@@ -1,5 +1,6 @@
 import { PlannerOutputSchema } from "@oc/shared";
 import { DEVELOPMENT_AGENT_IDS } from "@oc/agent-core";
+import { normalizeSliceTestCommand } from "@oc/workspace";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
 import { saveDevSession } from "./state.js";
 import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./types.js";
@@ -38,6 +39,7 @@ export async function runPlanner(
   const parsed = PlannerOutputSchema.parse(plannerResult.output);
   const taskQueue = parsed.slices.map((slice) => ({
     ...slice,
+    testCommand: normalizeSliceTestCommand(deps.repoPath, slice.testCommand, slice.id),
     status: "pending" as const,
   }));
   const currentTask = taskQueue[0];

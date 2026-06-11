@@ -28,7 +28,8 @@ const REQUIREMENT_SCHEMA_HINTS: Record<string, string> = {
     "question": "string — 一个聚焦业务的问题（不要问技术实现，用通俗的业务语言）",
     "suggestedAnswers": ["string — 具体可选的建议答案 A", "string — 建议答案 B", "string — 建议答案 C"]
   }]
-}`,
+}
+每轮提出 3 到 6 个问题，覆盖不同的缺口主题；每个问题必须给出可直接选用的建议答案。`,
   [REQUIREMENT_AGENT_IDS.prdAcceptance]: `{
   "prd": "string — markdown 格式的 PRD 正文（中文）",
   "acceptanceCriteria": "string — markdown 列表形式的验收标准",
@@ -45,7 +46,7 @@ const DEVELOPMENT_SCHEMA_HINTS: Record<string, string> = {
   "risks": ["string — 风险"]
 }`,
   [DEVELOPMENT_AGENT_IDS.testDesigner]: `{
-  "testSpecs": [{ "sliceId": "string", "testCommand": "string", "description": "string — 测试说明（中文）" }]
+  "testSpecs": [{ "sliceId": "string", "testCommand": "string — 必须是 pnpm vitest run tests/xxx.test.ts --reporter=json，禁止 pytest", "description": "string — 测试说明（中文）" }]
 }`,
   [DEVELOPMENT_AGENT_IDS.planner]: `{
   "slices": [{

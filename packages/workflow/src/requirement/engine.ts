@@ -2,12 +2,14 @@ import type { RequirementFixtureProfile } from "@oc/agent-core";
 import type { RequirementRunResult, RequirementWorkflowDeps } from "./types.js";
 import {
   resumeRequirementAfterGateGraph,
+  skipRequirementClarificationGraph,
   startRequirementGraph,
   submitRequirementAnswersGraph,
   useGraphRequirementEngine,
 } from "./graph.js";
 import {
   resumeRequirementAfterGateLegacy,
+  skipRequirementClarificationLegacy,
   startRequirementLegacy,
   submitRequirementAnswersLegacy,
 } from "./engine-legacy.js";
@@ -34,6 +36,16 @@ export async function submitRequirementAnswers(
     return submitRequirementAnswersGraph(deps, input);
   }
   return submitRequirementAnswersLegacy(deps, input);
+}
+
+export async function skipRequirementClarification(
+  deps: RequirementWorkflowDeps,
+  input: { projectId: string },
+): Promise<RequirementRunResult> {
+  if (useGraphRequirementEngine()) {
+    return skipRequirementClarificationGraph(deps, input);
+  }
+  return skipRequirementClarificationLegacy(deps, input);
 }
 
 export async function resumeRequirementAfterGate(

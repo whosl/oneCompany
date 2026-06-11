@@ -39,8 +39,10 @@ import {
 import { hasGraphCheckpoint, resolveGraphCheckpointer } from "../graph/checkpointer.js";
 import {
   resumeRequirementAfterGateLegacy,
+  skipRequirementClarificationLegacy,
   submitRequirementAnswersLegacy,
 } from "./engine-legacy.js";
+import { applyClarificationSkip, buildDefaultAnswers } from "./skip.js";
 import { applyRequirementIntegrations } from "../integrations/requirement-enable.js";
 
 const RequirementGraphAnnotation = Annotation.Root({
@@ -196,6 +198,10 @@ async function runPrdAcceptance(
 
 function routeAfterDecide(state: RequirementGraphState): string {
   const payload = state.payload;
+  // Skip means "stop asking, generate PRD from defaults" regardless of score.
+  if (payload.state.clarificationSkipped) {
+    return "prdAcceptance";
+  }
   if (isReadyForPrd(payload.state)) {
     return "prdAcceptance";
   }
@@ -334,10 +340,13 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
   const waitAnswersNode = async (
     state: RequirementGraphState,
   ): Promise<Partial<RequirementGraphState>> => {
-    const answers = interrupt({
+    const resumed = interrupt({
       type: "requirement_answers",
       projectId: state.payload.state.projectId,
-    }) as string[];
+    }) as string[] | { answers: string[]; skipWithDefaults?: boolean };
+
+    const answers = Array.isArray(resumed) ? resumed : resumed.answers;
+    const skipped = !Array.isArray(resumed) && resumed.skipWithDefaults === true;
 
     const payload = { ...state.payload };
     const lastIndex = payload.state.questionRounds.length - 1;
@@ -351,6 +360,9 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
       answers,
     };
     payload.state = { ...payload.state, questionRounds: rounds };
+    if (skipped) {
+      payload.state = applyClarificationSkip(payload.state, lastIndex);
+    }
     payload.meta.phase = "running";
     return {
       payload,
@@ -449,6 +461,34 @@ export async function submitRequirementAnswersGraph(
   const graph = buildRequirementGraph(deps);
   const finalState = (await graph.invoke(
     new Command({ resume: input.answers }),
+    graphConfig(input.projectId),
+  )) as RequirementGraphState;
+
+  if (finalState.result) {
+    return finalState.result;
+  }
+
+  saveRequirementSession(deps.db, input.projectId, finalState.payload);
+  return toResult(deps, finalState.payload);
+}
+
+export async function skipRequirementClarificationGraph(
+  deps: RequirementWorkflowDeps,
+  input: { projectId: string },
+): Promise<RequirementRunResult> {
+  const existing = loadRequirementSession(deps.db, input.projectId);
+  if (existing.meta.phase !== "awaiting_answers") {
+    throw new Error(`Expected awaiting_answers, got ${existing.meta.phase}`);
+  }
+
+  if (!(await hasGraphCheckpoint(input.projectId))) {
+    return skipRequirementClarificationLegacy(deps, input);
+  }
+
+  const answers = buildDefaultAnswers(existing.state);
+  const graph = buildRequirementGraph(deps);
+  const finalState = (await graph.invoke(
+    new Command({ resume: { answers, skipWithDefaults: true } }),
     graphConfig(input.projectId),
   )) as RequirementGraphState;
 

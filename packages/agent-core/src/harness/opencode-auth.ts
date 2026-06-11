@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { OpencodeClient } from "@opencode-ai/sdk";
 import { getManagedApiKeys } from "../engine-mode.js";
+import { isMimoCodingCli } from "../util/opencode-cli.js";
 
 type InjectOpencodeAuthOptions = {
   directory?: string;
@@ -16,9 +17,15 @@ type LocalOpencodeCredential = {
 
 const MODEL_ENV_KEYS = ["OC_MODEL_CHEAP", "OC_MODEL_STANDARD", "OC_MODEL_STRONG"] as const;
 
-const LOCAL_AUTH_PROVIDER_PRIORITY = ["zhipuai-coding-plan", "zai-coding-plan", "openai"] as const;
+const LOCAL_AUTH_PROVIDER_PRIORITY = [
+  "xiaomi-token-plan-cn",
+  "zhipuai-coding-plan",
+  "zai-coding-plan",
+  "openai",
+] as const;
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
+  "xiaomi-token-plan-cn": "mimo-v2.5-pro",
   "zhipuai-coding-plan": "glm-5.1",
   "zai-coding-plan": "glm-5.1",
   openai: "gpt-4.1-mini",
@@ -79,8 +86,13 @@ export function resolveLocalOpencodeAuthPath(authPath?: string): string {
   if (authPath) {
     return authPath;
   }
+  const fromEnv = process.env.OC_OPENCODE_AUTH_PATH?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
   const dataHome = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local", "share");
-  return path.join(dataHome, "opencode", "auth.json");
+  const product = isMimoCodingCli() ? "mimocode" : "opencode";
+  return path.join(dataHome, product, "auth.json");
 }
 
 export function readLocalOpencodeAuth(authPath?: string): Record<string, LocalOpencodeCredential> {

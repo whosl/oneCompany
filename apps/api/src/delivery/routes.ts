@@ -19,6 +19,17 @@ export function createDeliveryRoutes(delivery: DeliveryService) {
     }
   });
 
+  router.post("/:id/delivery/export", (c) => {
+    const projectId = c.req.param("id");
+    try {
+      const result = delivery.exportSubmission(projectId);
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "failed to export submission package";
+      return c.json({ error: message }, 400);
+    }
+  });
+
   router.get("/:id/delivery", (c) => {
     const projectId = c.req.param("id");
     try {

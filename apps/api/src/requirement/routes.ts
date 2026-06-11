@@ -28,5 +28,11 @@ export function createRequirementRoutes(requirement: RequirementService) {
     return c.json(result);
   });
 
+  app.post("/:id/requirement/skip", async (c) => {
+    const projectId = c.req.param("id");
+    const result = await requirement.skipClarification(projectId);
+    return c.json(result);
+  });
+
   return app;
 }

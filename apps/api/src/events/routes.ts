@@ -15,10 +15,12 @@ export function createEventRoutes(db: Db) {
       const seenSeqs = new Set<number>();
 
       const writeEnvelope = async (envelope: EventEnvelope): Promise<void> => {
-        if (envelope.seq <= afterSeq || seenSeqs.has(envelope.seq)) {
+        // seq=0 marks ephemeral (broadcast-only) envelopes: always pass them
+        // through, never dedupe by seq — they are not part of the event log.
+        if (envelope.seq > 0 && (envelope.seq <= afterSeq || seenSeqs.has(envelope.seq))) {
           return;
         }
-        seenSeqs.add(envelope.seq);
+        if (envelope.seq > 0) seenSeqs.add(envelope.seq);
         await stream.writeSSE({ data: JSON.stringify(envelope) });
       };
 

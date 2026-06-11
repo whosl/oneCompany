@@ -20,6 +20,9 @@ import type {
 const DEFAULT_SLICE_TIMEOUT_MS = Number(process.env.OC_OPENCODE_SLICE_TIMEOUT_MS ?? 600_000);
 const DEFAULT_REVIEW_TIMEOUT_MS = Number(process.env.OC_OPENCODE_REVIEW_TIMEOUT_MS ?? 240_000);
 
+/** Harness returns this when opencode exits cleanly but made no edits (retry after prior work). */
+export const OPENCODE_NO_FILE_CHANGES_SUMMARY = "opencode completed without file changes";
+
 function emitPhase(ctx: DevContext, phase: string, summary: string): void {
   ctx.emit({ type: `agent.${phase}`, summary });
 }
@@ -201,7 +204,7 @@ export function createOpencodeHarness(): CodingHarness {
     async runSlice(slice: SliceSpec, ctx: DevContext): Promise<SliceResult> {
       if (!isOpencodeAvailable()) {
         throw new Error(
-          "opencode CLI not found. Install opencode, set OC_OPENCODE_BIN, or ensure /opt/homebrew/bin is on PATH when starting the API.",
+          "Coding CLI not found. Install mimo (or opencode), set OC_OPENCODE_BIN, or ensure /opt/homebrew/bin is on PATH when starting the API.",
         );
       }
 
@@ -279,7 +282,7 @@ export function createOpencodeHarness(): CodingHarness {
         if (changedFiles.length === 0) {
           return {
             passed: false,
-            summary: "opencode completed without file changes",
+            summary: OPENCODE_NO_FILE_CHANGES_SUMMARY,
             changedFiles,
           };
         }
@@ -306,7 +309,7 @@ export function createOpencodeHarness(): CodingHarness {
 
     async runReview(review: ReviewSpec, ctx: DevContext): Promise<ReviewResult> {
       if (!isOpencodeAvailable()) {
-        throw new Error("opencode CLI not found for review run");
+        throw new Error("Coding CLI (mimo/opencode) not found for review run");
       }
 
       emitPhase(ctx, "plan", `审查切片 ${review.sliceId} 的代码改动`);

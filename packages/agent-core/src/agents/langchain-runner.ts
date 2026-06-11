@@ -4,6 +4,7 @@ import {
   CodingOutputSchema,
   DevopsDeliveryOutputSchema,
   emit,
+  ephemeralEnvelope,
   IntakeOutputSchema,
   PlannerOutputSchema,
   PrdAcceptanceOutputSchema,
@@ -57,9 +58,14 @@ const AGENT_GUIDANCE: Record<string, string> = {
     "你的任务：基于已确认的需求撰写 PRD 与验收标准，明确假设与风险；验收标准要可逐条验证。",
   [DEVELOPMENT_AGENT_IDS.architect]:
     "你的任务：产出技术方案——技术栈选型、架构说明与风险；方案需可被后续功能切片直接执行。",
-  [DEVELOPMENT_AGENT_IDS.testDesigner]: "你的任务：为每个功能切片设计可执行、范围清晰的测试。",
+  [DEVELOPMENT_AGENT_IDS.testDesigner]: [
+    "你的任务：为每个功能切片设计可执行、范围清晰的测试。",
+    "生成项目使用 TypeScript + vitest 脚手架（已有 vitest.config.ts），testCommand 必须使用 vitest，",
+    "格式如：pnpm vitest run tests/slice1.test.ts --reporter=json。禁止输出 pytest/python 命令。",
+  ].join("\n"),
   [DEVELOPMENT_AGENT_IDS.planner]: [
     "你的任务：把验收标准拆分为有序的功能切片，每个切片可独立实现、独立验证。",
+    "每个切片的 testCommand 必须使用 vitest（pnpm vitest run <file> --reporter=json），禁止 pytest/python。",
     "切片粒度要求（每个切片都有固定开销：编码会话冷启动 + 测试 + 审查，约 5-8 分钟）：",
     "1. 优先合并：会改动同一批文件、或彼此强依赖的验收点必须合并为一个切片。",
     "2. 小型项目（单页应用、小游戏、工具类）控制在 2-3 个切片；中型项目不超过 5 个。",
@@ -96,6 +102,8 @@ function systemPrompt(
 }
 
 const PROGRESS_EMIT_INTERVAL_MS = 2_500;
+const STREAM_DELTA_INTERVAL_MS = 250;
+const STREAM_DELTA_MAX_TEXT = 1_500;
 
 /**
  * Throttled streaming-progress callback: forwards "the model is producing
@@ -107,6 +115,36 @@ function createProgressCallback(runCtx: AgentRunContext, agentIdAtVersion: strin
   // Start the throttle window at creation: the very first token would
   // otherwise emit a useless "1 char" event.
   let lastEmitAt = Date.now();
+  // Bypass token stream: broadcast-only envelopes, no DB write — safe to send
+  // far more often than the persisted progress summaries.
+  let lastStreamAt = 0;
+  const streamId = `${agentIdAtVersion}-${Date.now()}`;
+
+  const flushStream = (): void => {
+    const now = Date.now();
+    if (now - lastStreamAt < STREAM_DELTA_INTERVAL_MS || buffer.length === 0) {
+      return;
+    }
+    lastStreamAt = now;
+    try {
+      runCtx.onEvent?.(
+        ephemeralEnvelope({
+          projectId: runCtx.projectId,
+          agentId: agentIdAtVersion,
+          payload: {
+            type: "agent.stream_delta",
+            projectId: runCtx.projectId,
+            agentId: agentIdAtVersion,
+            streamId,
+            text: buffer.slice(-STREAM_DELTA_MAX_TEXT),
+            charCount: buffer.length,
+          },
+        }),
+      );
+    } catch {
+      // Streaming is best-effort; never fail the agent run over it.
+    }
+  };
 
   const flush = (): void => {
     const now = Date.now();
@@ -149,6 +187,7 @@ function createProgressCallback(runCtx: AgentRunContext, agentIdAtVersion: strin
   return {
     handleLLMNewToken(token: string): void {
       buffer += token;
+      flushStream();
       flush();
     },
   };
