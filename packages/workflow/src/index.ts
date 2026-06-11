@@ -42,6 +42,7 @@ export {
   getDevelopmentStatus,
   runSliceIteration,
 } from "./development/engine.js";
+export { isSliceLoopActive } from "./development/slice-loop-registry.js";
 export {
   allSlicesPassed,
   getCurrentSlice,

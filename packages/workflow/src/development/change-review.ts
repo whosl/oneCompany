@@ -11,6 +11,7 @@ import {
   type EventEnvelope,
 } from "@oc/shared";
 import { analyzeChangeImpact } from "./change-request-impact.js";
+import { isSliceLoopActive } from "./slice-loop-registry.js";
 import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
 import { loadDevSession, resetSliceForRetry, saveDevSession, skipSlice } from "./state.js";
 import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./types.js";
@@ -211,6 +212,14 @@ export function startRequirementChangeReview(
   deps: DevelopmentWorkflowDeps,
   input: { projectId: string; summary: string; details?: string },
 ): DevelopmentSessionPayload {
+  // A live slice loop holds its own in-memory session payload and re-saves it
+  // on every iteration — raising a gate here would be silently overwritten
+  // (last-write-wins), leaving an open gate nobody can ever resolve.
+  if (isSliceLoopActive(input.projectId)) {
+    throw new Error(
+      "开发循环正在运行，无法开启变更评审 — 请等当前切片完成，或先「暂停」项目",
+    );
+  }
   const payload = loadDevSessionForChange(deps, input.projectId);
   const { changeRequestId } = createRequirementChangeRequest(
     deps.db,

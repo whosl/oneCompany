@@ -39,12 +39,15 @@ export function derivePhaseFromStatus(
   }
 
   if (status === "Developing" || status === "Change Review") {
+    // sliceIndex equals the passed-count when no slice is in flight, so the
+    // 1-based display must clamp to the total ("Slice 4 / 3" otherwise).
     const sliceIndex = input.sliceIndex ?? 0;
     const sliceTotal = input.sliceTotal ?? 0;
+    const current = Math.min(sliceIndex + 1, sliceTotal);
     return {
       label: status,
       activeGroup: "Development Group",
-      progressLabel: sliceTotal > 0 ? `Slice ${sliceIndex + 1} / ${sliceTotal}` : undefined,
+      progressLabel: sliceTotal > 0 ? `Slice ${current} / ${sliceTotal}` : undefined,
     };
   }
 

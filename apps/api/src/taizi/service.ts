@@ -14,6 +14,7 @@ import {
   type TaiziDecision,
   type TaiziDispatchResult,
 } from "@oc/shared";
+import { isSliceLoopActive } from "@oc/workflow";
 import type { ChangeRequestService } from "../change-requests/service.js";
 import type { ConsoleService } from "../console/service.js";
 import type { DeliveryService } from "../delivery/service.js";
@@ -74,6 +75,7 @@ export function createTaiziService(deps: TaiziServiceDeps) {
       openGates,
       pendingQuestionCount,
       hasLiveSession: getActiveHarnessSession(projectId) !== undefined,
+      devLoopActive: isSliceLoopActive(projectId),
     };
   };
 
@@ -509,6 +511,17 @@ export function createTaiziService(deps: TaiziServiceDeps) {
           }
         }
         if (status === "Developing" || status === "Testing") {
+          // 切片循环活着但 opencode 会话恰好在间隙（权威测试/类型检查/审查中）：
+          // 此刻开 change_review 门禁会被循环的 saveDevSession 覆写成孤儿门禁。
+          if (isSliceLoopActive(projectId)) {
+            return {
+              intent: "change_request",
+              action: "noop",
+              reply:
+                "开发循环正在运行（平台测试/审查阶段，暂无法插话）。等当前切片完成后再说一次，或先说「暂停」停下来再提变更。",
+              stateChanged: false,
+            };
+          }
           runInBackground(projectId, message, "change_request.create", async () =>
             deps.changeRequests.create(projectId, { summary: text }),
           );

@@ -947,7 +947,12 @@ function buildLiveLine(state: ConsoleState, width: number): HitLine[] {
       active.status === "tool" && active.lastTool
         ? `⚙ ${toolVerb(active.lastTool)}${lastCall?.summary ? ` ${lastCall.summary}` : ""}`
         : (active.act ?? active.plan ?? "思考中");
-    const activeNote = idleSec >= 5 ? pc.dim(` · 已运行 ${idleSec}s`) : "";
+    // Timer must track THIS agent's last event — the global lastEventAtMs
+    // resets on unrelated traffic (e.g. Taizi tool calls), faking liveness.
+    const agentIdleSec = active.lastSeenAtMs
+      ? Math.floor((Date.now() - active.lastSeenAtMs) / 1000)
+      : idleSec;
+    const activeNote = agentIdleSec >= 5 ? pc.dim(` · 已运行 ${agentIdleSec}s`) : "";
     return [
       { text: "" },
       {

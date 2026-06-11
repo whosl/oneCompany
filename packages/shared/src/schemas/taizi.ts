@@ -53,6 +53,8 @@ export const TaiziContextSchema = z.object({
   pendingQuestionCount: z.number().int().min(0),
   /** 是否有活跃的编码会话（可被插话/打断） */
   hasLiveSession: z.boolean(),
+  /** 开发切片循环是否在本进程内运行（含平台测试/审查等无 opencode 会话的间隙） */
+  devLoopActive: z.boolean().optional(),
 });
 
 export type TaiziContext = z.infer<typeof TaiziContextSchema>;

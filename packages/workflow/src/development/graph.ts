@@ -168,9 +168,14 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
   ): Promise<Partial<DevelopmentGraphState>> => {
     const current = { ...state.payload };
     if (allSlicesPassed(current.state)) {
-      deps.setStatus(current.state.projectId, "Testing", "development_slices_complete");
+      const projectId = current.state.projectId;
+      // Status may have moved while slices ran (e.g. paused); forcing
+      // "Testing" then is an illegal transition that kills the loop silently.
+      if (deps.getProjectStatus(projectId) === "Developing") {
+        deps.setStatus(projectId, "Testing", "development_slices_complete");
+      }
       const completed = updateDevSessionMeta(current, { phase: "completed" });
-      saveDevSession(deps.db, current.state.projectId, completed);
+      saveDevSession(deps.db, projectId, completed);
       return { payload: completed, result: toResult(deps, completed) };
     }
     return { payload: current, result: toResult(deps, current) };

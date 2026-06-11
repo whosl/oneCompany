@@ -34,6 +34,7 @@ export function buildTaiziAnswerPrompt(context: TaiziContext): string {
     `打开中的门禁:\n${gateLines}`,
     `待回答澄清问题: ${context.pendingQuestionCount}`,
     `活跃编码会话: ${context.hasLiveSession ? "是" : "否"}`,
+    `开发循环运行中: ${context.devLoopActive ? "是（平台正在执行测试/审查等步骤，Agent 并非空闲）" : "否"}`,
     "",
     "== 作答要求 ==",
     "1. 先按需调用工具收集事实，再作答；不要编造未查证的数据。",

@@ -33,6 +33,8 @@ export type AgentView = {
   errors: number;
   /** Set when the agent enters running/tool state (for elapsed display). */
   activeSinceMs?: number;
+  /** Last time any event touched this agent (drives the liveline timer). */
+  lastSeenAtMs?: number;
   /** Accumulated active working time across runs (ms). */
   totalActiveMs: number;
   /** Number of tool calls attributed to this agent. */
@@ -57,6 +59,19 @@ function setAgentStatus(agent: AgentView, status: AgentStatus, atMs: number): vo
     agent.activeSinceMs = atMs;
   }
   agent.status = status;
+  agent.lastSeenAtMs = atMs;
+}
+
+/**
+ * Pipeline roles (e.g. review) emit plan/act without an `agent.started`, so
+ * the previous agent would stay "running" forever. Retire it on handover.
+ */
+function retirePreviousAgent(state: ConsoleState, nextKey: string, atMs: number): void {
+  if (!state.lastAgentId || state.lastAgentId === nextKey) return;
+  const previous = state.agents.get(state.lastAgentId);
+  if (previous && (previous.status === "running" || previous.status === "tool")) {
+    setAgentStatus(previous, "done", atMs);
+  }
 }
 
 export type ToolCallView = {
@@ -578,12 +593,7 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
     case "agent.started": {
       const agentId = String(payload.agentId ?? envelope.agentId ?? "agent");
       const key = normalizeAgentId(agentId) ?? agentId;
-      if (state.lastAgentId && state.lastAgentId !== key) {
-        const previous = state.agents.get(state.lastAgentId);
-        if (previous && (previous.status === "running" || previous.status === "tool")) {
-          setAgentStatus(previous, "done", tMs);
-        }
-      }
+      retirePreviousAgent(state, key, tMs);
       const agent = ensureAgent(state, agentId);
       setAgentStatus(agent, "running", tMs);
       state.lastAgentId = agent.id;
@@ -610,6 +620,7 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
     case "agent.observe":
     case "agent.reflect": {
       const agentId = String(payload.agentId ?? envelope.agentId ?? state.lastAgentId ?? "agent");
+      retirePreviousAgent(state, normalizeAgentId(agentId) ?? agentId, tMs);
       const agent = ensureAgent(state, agentId);
       const summary = typeof payload.summary === "string" ? payload.summary : "";
       if (type === "agent.plan") agent.plan = summary;
@@ -651,7 +662,13 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
     }
 
     case "run.failed": {
-      const agentName = agentDisplayName(String(payload.agentId ?? ""));
+      const rawAgentId = String(payload.agentId ?? "");
+      const agentName = agentDisplayName(rawAgentId);
+      if (rawAgentId) {
+        const agent = ensureAgent(state, rawAgentId);
+        setAgentStatus(agent, "failed", tMs);
+        agent.errors += 1;
+      }
       pushTimeline(state, {
         seq,
         at,

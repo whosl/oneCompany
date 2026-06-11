@@ -18,6 +18,11 @@ import {
   handleChangeReviewDecision,
   raiseChangeReviewGate,
 } from "./change-review.js";
+import {
+  isSliceLoopActive,
+  markSliceLoopActive,
+  markSliceLoopInactive,
+} from "./slice-loop-registry.js";
 import { captureDiff } from "./diffs.js";
 import { runPlanner } from "./planner.js";
 import {
@@ -303,26 +308,42 @@ export async function runSliceIteration(
   return { kind: "gate", state, gateId: gate.id };
 }
 
-/** Projects with a slice loop currently running in this process. */
-const ACTIVE_SLICE_LOOPS = new Set<string>();
-
-export function isSliceLoopActive(projectId: string): boolean {
-  return ACTIVE_SLICE_LOOPS.has(projectId);
-}
+export { isSliceLoopActive } from "./slice-loop-registry.js";
 
 export async function runSliceLoopUntilHalt(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
 ): Promise<DevelopmentRunResult> {
   const projectId = payload.state.projectId;
-  if (ACTIVE_SLICE_LOOPS.has(projectId)) {
+  if (isSliceLoopActive(projectId)) {
     throw new Error(`Slice loop already running for project: ${projectId}`);
   }
-  ACTIVE_SLICE_LOOPS.add(projectId);
+  markSliceLoopActive(projectId);
   try {
     return await runSliceLoopUntilHaltInner(deps, payload);
+  } catch (error) {
+    // A crash here previously vanished into a long-dead HTTP request — the
+    // console kept showing "running" forever. Surface it as a stream event.
+    const message = error instanceof Error ? error.message : String(error);
+    try {
+      deps.onEvent?.(
+        emit(deps.db, {
+          projectId,
+          payload: {
+            type: "run.failed",
+            projectId,
+            agentId: "coding",
+            runId: projectId,
+            reason: `开发循环异常终止：${message.slice(0, 300)}`,
+          },
+        }),
+      );
+    } catch {
+      /* event emission is best-effort during crash handling */
+    }
+    throw error;
   } finally {
-    ACTIVE_SLICE_LOOPS.delete(projectId);
+    markSliceLoopInactive(projectId);
   }
 }
 
@@ -335,7 +356,7 @@ export async function resumeOrphanedSliceLoop(
   deps: DevelopmentWorkflowDeps,
   projectId: string,
 ): Promise<DevelopmentRunResult> {
-  if (ACTIVE_SLICE_LOOPS.has(projectId)) {
+  if (isSliceLoopActive(projectId)) {
     // Resuming on top of a live loop is how slices end up executed twice
     // (observed: every slice of a project ran twice, interleaved).
     throw new Error("开发循环正在运行中，无需恢复 — 请等待当前切片完成");
@@ -415,9 +436,22 @@ async function runSliceLoopUntilHaltInner(
   }
 
   if (allSlicesPassed(current.state)) {
-    deps.setStatus(current.state.projectId, "Testing", "development_slices_complete");
+    const projectId = current.state.projectId;
+    const status = deps.getProjectStatus(projectId);
+    if (status === "Developing") {
+      deps.setStatus(projectId, "Testing", "development_slices_complete");
+    } else {
+      // Status moved while the loop ran (e.g. paused). Forcing "Testing" here
+      // is an illegal transition and used to crash the loop silently.
+      emitPipelineNote(
+        deps,
+        projectId,
+        "agent.observe",
+        `切片已全部完成，但项目状态为「${status}」，未自动进入 Testing — 恢复到开发状态后即可进入测试`,
+      );
+    }
     const completed = updateDevSessionMeta(current, { phase: "completed" });
-    saveDevSession(deps.db, current.state.projectId, completed);
+    saveDevSession(deps.db, projectId, completed);
     return toResult(deps, completed);
   }
 
