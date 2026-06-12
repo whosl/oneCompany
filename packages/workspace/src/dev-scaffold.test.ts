@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ensureDevRepoScaffold,
+  ensurePackageRunnable,
   findVitestMjs,
   normalizeSliceTestCommand,
   resolveSliceTestCommand,
@@ -18,6 +19,32 @@ afterEach(() => {
 });
 
 describe("dev repo scaffold", () => {
+  it("patches an agent-written package.json with runnable devDependencies", () => {
+    const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "oc-scaffold-patch-"));
+    tempDirs.push(repoPath);
+    fs.writeFileSync(
+      path.join(repoPath, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "generated-app",
+          scripts: { test: "vitest run" },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    ensurePackageRunnable(repoPath);
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoPath, "package.json"), "utf8")) as {
+      devDependencies: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+    expect(pkg.devDependencies.typescript).toBeTruthy();
+    expect(pkg.devDependencies.vitest).toBeTruthy();
+    expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
+    expect(pkg.scripts.build).toBe("tsc");
+  });
+
   it("writes a minimal TypeScript + vitest layout once", () => {
     const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "oc-scaffold-"));
     tempDirs.push(repoPath);
@@ -27,6 +54,11 @@ describe("dev repo scaffold", () => {
     expect(fs.existsSync(path.join(repoPath, "tsconfig.json"))).toBe(true);
     expect(fs.existsSync(path.join(repoPath, "vitest.config.ts"))).toBe(true);
     expect(fs.existsSync(path.join(repoPath, "src"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, "scripts", "dev-server.mjs"))).toBe(true);
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoPath, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts.dev).toBe("node scripts/dev-server.mjs");
 
     const before = fs.readFileSync(path.join(repoPath, "package.json"), "utf8");
     ensureDevRepoScaffold(repoPath);

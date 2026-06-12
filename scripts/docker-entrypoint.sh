@@ -18,23 +18,4 @@ pnpm migrate
 
 echo "[onecompany] starting API on :3001..."
 cd "${ROOT}/apps/api"
-node dist/index.js &
-API_PID=$!
-
-echo "[onecompany] starting Web on :${PORT}..."
-cd "${ROOT}/apps/web"
-pnpm exec next start --hostname "${HOSTNAME}" --port "${PORT}" &
-WEB_PID=$!
-
-shutdown() {
-  echo "[onecompany] shutting down..."
-  kill "${API_PID}" "${WEB_PID}" 2>/dev/null || true
-  wait "${API_PID}" "${WEB_PID}" 2>/dev/null || true
-}
-
-trap shutdown SIGTERM SIGINT
-
-wait -n
-EXIT_CODE=$?
-shutdown
-exit "${EXIT_CODE}"
+exec node dist/index.js

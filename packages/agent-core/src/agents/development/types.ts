@@ -13,6 +13,7 @@ export type DevAgentTask = {
   prd?: string;
   acceptance?: string;
   techPlan?: string;
+  techPlanVersion?: string;
   testingContext?: {
     failedSuites: string[];
     previewUrl?: string;

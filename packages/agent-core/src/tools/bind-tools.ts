@@ -27,6 +27,7 @@ export function bindAgentTools(
         const toolCtx: ToolExecutionContext = {
           ...execCtx,
           task: execCtx.task,
+          agentId: execCtx.agentId ?? agent.id,
         };
 
         const result = await callTool(toolCtx, {

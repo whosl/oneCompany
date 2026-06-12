@@ -60,6 +60,16 @@ export type ConsoleIntegrationSnapshot = {
   status: string;
 };
 
+export type PreviewStatus = {
+  previewUrl?: string;
+  deploymentUrl?: string;
+  health: {
+    reachable: boolean;
+    statusCode?: number;
+    playwrightReady?: boolean;
+  };
+};
+
 export type ConsoleSnapshot = {
   project: ProjectRecord;
   phase: { label: string; activeGroup: string; progressLabel?: string };

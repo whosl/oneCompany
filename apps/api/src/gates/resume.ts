@@ -29,7 +29,7 @@ function isStaleGateError(error: unknown): error is Error {
   );
 }
 
-async function invokeResume(fn: () => Promise<void> | void): Promise<void> {
+async function invokeResume(fn: () => Promise<unknown> | unknown): Promise<void> {
   try {
     await fn();
   } catch (error) {

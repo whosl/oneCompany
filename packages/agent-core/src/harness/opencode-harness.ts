@@ -7,7 +7,7 @@ import { injectOpencodeAuth } from "./opencode-auth.js";
 import { createEventBridge } from "./event-bridge.js";
 import { handlePermission } from "./permission-bridge.js";
 import { registerHarnessSession, unregisterHarnessSession } from "./session-registry.js";
-import { releaseProjectServer, startProjectServer } from "./opencode-server.js";
+import { startProjectServer } from "./opencode-server.js";
 import { DEFAULT_SDK_CALL_TIMEOUT_MS, withTimeout } from "./sdk-timeout.js";
 import { waitForSessionCompletion } from "./wait-for-session.js";
 import type {
@@ -236,7 +236,6 @@ export function createOpencodeHarness(): CodingHarness {
       } finally {
         if (activeSessionId) unregisterHarnessSession(ctx.projectId, activeSessionId);
         bridge?.stop();
-        await releaseProjectServer(directory, { projectId: ctx.projectId });
       }
     },
 
@@ -359,7 +358,6 @@ export function createOpencodeHarness(): CodingHarness {
       } finally {
         if (activeSessionId) unregisterHarnessSession(ctx.projectId, activeSessionId);
         bridge?.stop();
-        await releaseProjectServer(directory, { projectId: ctx.projectId });
       }
     },
   };

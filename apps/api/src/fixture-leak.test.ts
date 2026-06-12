@@ -10,9 +10,9 @@ function readSource(relativePath: string): string {
 }
 
 describe("fixture leak guard — M9.5", () => {
-  it("web api client does not send fixture profile", () => {
+  it("TUI2 API client does not hardcode a fixture profile", () => {
     const apiTs = readFileSync(
-      fileURLToPath(new URL("../../web/src/lib/api.ts", import.meta.url)),
+      fileURLToPath(new URL("../../tui/src/api.ts", import.meta.url)),
       "utf8",
     );
     expect(apiTs).not.toContain('profile: "happy_path"');

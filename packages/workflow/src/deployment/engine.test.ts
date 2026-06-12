@@ -4,7 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { deployments, projects } from "@oc/shared";
-import { initRepo } from "@oc/workspace";
+import { initRepo, ensureDevRepoScaffold } from "@oc/workspace";
+import { writeMinimalProductWeb } from "@oc/workspace";
 import {
   handleDeploymentGateDecision,
   startDeploymentPhase,
@@ -53,6 +54,7 @@ describe("deployment engine", () => {
         projectId,
         url: "https://demo.trycloudflare.com",
       });
+      writeMinimalProductWeb(repoPath, "Deploy App");
       const result = await handleDeploymentGateDecision(deps, {
         projectId,
         decision: "approve",
@@ -79,6 +81,7 @@ describe("deployment engine", () => {
         projectId,
         url: "https://demo.trycloudflare.com",
       });
+      writeMinimalProductWeb(repoPath, "Reject App");
       const rejected = await handleDeploymentGateDecision(deps, {
         projectId,
         decision: "reject",
@@ -91,6 +94,32 @@ describe("deployment engine", () => {
       const restarted = startDeploymentPhase(deps, { projectId });
       expect(restarted.phase).toBe("awaiting_gate");
       expect(restarted.gateId).toBeTruthy();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("blocks approval when repo still has scaffold placeholder UI", async () => {
+    const { db, cleanup } = setupTestDb();
+    const repoPath = mkdtempSync(path.join(tmpdir(), "oc-deploy-web-"));
+    initRepo(repoPath);
+    ensureDevRepoScaffold(repoPath);
+    const { projectId } = seedTestingProject(db, repoPath);
+    db.update(projects).set({ status: "Deploying" }).where(eq(projects.id, projectId)).run();
+
+    const deps = createDeploymentDeps(db, repoPath);
+    try {
+      startDeploymentPhase(deps, { projectId });
+      submitDeploymentUrl(deps, {
+        projectId,
+        url: "https://demo.trycloudflare.com",
+      });
+      await expect(
+        handleDeploymentGateDecision(deps, {
+          projectId,
+          decision: "approve",
+        }),
+      ).rejects.toThrow(/Deployment blocked/i);
     } finally {
       cleanup();
     }
@@ -115,6 +144,7 @@ describe("deployment engine", () => {
         projectId,
         url: "https://demo.trycloudflare.com",
       });
+      writeMinimalProductWeb(repoPath, "Fail App");
       await expect(
         handleDeploymentGateDecision(deps, {
           projectId,

@@ -55,29 +55,8 @@ echo "[onecompany-dev] applying database schema..."
 cd "${ROOT}/packages/shared"
 OC_DB_PATH="${OC_DB_PATH:-/opt/onecompany/data/app.sqlite}" pnpm migrate
 
-export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-/api}"
-export NEXT_PUBLIC_API_BASE="${NEXT_PUBLIC_API_BASE:-/api}"
 export API_URL="${API_URL:-http://127.0.0.1:3001}"
 
 echo "[onecompany-dev] starting API dev server on :3001..."
 cd "${ROOT}/apps/api"
-pnpm dev &
-API_PID=$!
-
-echo "[onecompany-dev] starting Web dev server on :3000..."
-cd "${ROOT}/apps/web"
-pnpm dev --hostname 0.0.0.0 --port 3000 &
-WEB_PID=$!
-
-shutdown() {
-  echo "[onecompany-dev] shutting down..."
-  kill "${API_PID}" "${WEB_PID}" 2>/dev/null || true
-  wait "${API_PID}" "${WEB_PID}" 2>/dev/null || true
-}
-
-trap shutdown SIGTERM SIGINT
-
-wait -n
-EXIT_CODE=$?
-shutdown
-exit "${EXIT_CODE}"
+exec pnpm dev

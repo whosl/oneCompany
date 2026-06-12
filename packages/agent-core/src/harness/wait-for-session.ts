@@ -14,7 +14,8 @@ export type WaitForSessionOptions = {
 
 /**
  * Block until the opencode session is genuinely idle, or throw on timeout.
- * Never treats "assistant text exists" as completion — only session.idle + no running tools.
+ * Completion requires session.idle (via the event bridge) — never "no running
+ * tools" alone, which fires falsely while the model is still between turns.
  */
 export async function waitForSessionCompletion(
   client: OpencodeClient,
@@ -68,15 +69,17 @@ export async function waitForSessionCompletion(
     await new Promise((resolve) => setTimeout(resolve, 1500));
   }
 
-  // Final poll: bridge may have missed session.idle while we slept.
   if (bridge.isIdle()) {
     return;
   }
 
-  // Last-resort check against the server (bounded — must not hang forever).
-  const idleOnServer = await sessionReportsIdle(client, sessionId, directory, sdkCallTimeoutMs);
-  if (idleOnServer && bridge.isIdle()) {
-    return;
+  // Bridge missed session.idle (rare after session.diff fix) — only trust the
+  // server when we did observe idle at least once for this session.
+  if (bridge.hasSeenSessionIdle()) {
+    const idleOnServer = await sessionReportsIdle(client, sessionId, directory, sdkCallTimeoutMs);
+    if (idleOnServer) {
+      return;
+    }
   }
 
   throw new Error(

@@ -9,6 +9,8 @@ export type ToolContext = {
   projectId: string;
   logsPath?: string;
   onEvent?: (envelope: EventEnvelope) => void;
+  /** Agent attribution for tool_call.* events (e.g. taizi vs coding). */
+  agentId?: string;
 };
 
 export type CallToolInput = {
@@ -94,6 +96,7 @@ export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<
 
   const started = emit(ctx.db, {
     projectId: ctx.projectId,
+    agentId: ctx.agentId,
     payload: {
       type: "tool_call.started",
       projectId: ctx.projectId,
@@ -119,6 +122,7 @@ export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<
 
     const completed = emit(ctx.db, {
       projectId: ctx.projectId,
+      agentId: ctx.agentId,
       payload: {
         type: "tool_call.output",
         projectId: ctx.projectId,
@@ -136,6 +140,7 @@ export async function callTool(ctx: ToolContext, input: CallToolInput): Promise<
 
     const failed = emit(ctx.db, {
       projectId: ctx.projectId,
+      agentId: ctx.agentId,
       payload: {
         type: "tool_call.failed",
         projectId: ctx.projectId,

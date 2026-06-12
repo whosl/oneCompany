@@ -1,16 +1,19 @@
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import type { TaiziContext } from "@oc/shared";
+import type { TaiziChatTurn, TaiziContext } from "@oc/shared";
 import { getOpenAiApiKey } from "../../engine-mode.js";
 import { createChatModel } from "../../llm/langchain-model.js";
 import { bindAgentTools } from "../../tools/bind-tools.js";
 import type { ToolExecutionContext } from "../../tools/registry.js";
 import { TAIZI_AGENT_DEFINITION } from "./definitions.js";
 import { ensureTaiziToolsRegistered } from "./local-tools.js";
+import { buildTaiziChatMessages } from "./messages.js";
 import { runTaiziToolLoop } from "./tool-loop.js";
 
 export type TaiziAnswerInput = {
   message: string;
   context: TaiziContext;
+  /** Prior user↔Taizi turns from persisted events (oldest first). */
+  history?: TaiziChatTurn[];
   execCtx: ToolExecutionContext;
   /** Static fallback when LLM/tools unavailable (e.g. summarizeStatus output). */
   fallbackReply?: string;
@@ -99,7 +102,7 @@ export function isWeakTaiziAnswer(text: string): boolean {
  * LLM 不可用或失败时返回 fallbackReply。
  */
 export async function answerTaiziWithTools(input: TaiziAnswerInput): Promise<string> {
-  const { message, context, execCtx, fallbackReply } = input;
+  const { message, context, history = [], execCtx, fallbackReply } = input;
   if (!getOpenAiApiKey()) {
     return fallbackReply ?? "当前未配置 LLM，无法调研项目详情。";
   }
@@ -109,10 +112,7 @@ export async function answerTaiziWithTools(input: TaiziAnswerInput): Promise<str
   try {
     const model = createChatModel("cheap");
     const tools = bindAgentTools(TAIZI_AGENT_DEFINITION, execCtx);
-    const messages = [
-      new SystemMessage(buildTaiziAnswerPrompt(context)),
-      new HumanMessage(message),
-    ];
+    const messages = buildTaiziChatMessages(buildTaiziAnswerPrompt(context), history, message);
     const afterTools = await runTaiziToolLoop(model, messages, tools);
 
     let text = "";

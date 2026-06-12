@@ -12,6 +12,15 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     runId: z.string(),
   }),
   z.object({
+    type: z.literal("agent.prompt"),
+    ...base,
+    agentId: z.string(),
+    system: z.string().optional(),
+    human: z.string().optional(),
+    text: z.string().optional(),
+    sliceId: z.string().optional(),
+  }),
+  z.object({
     type: z.literal("agent.plan"),
     ...base,
     agentId: z.string(),
@@ -139,6 +148,8 @@ export const AgentEventSchema = z.discriminatedUnion("type", [
     action: z.string(),
     reply: z.string(),
     stateChanged: z.boolean().optional(),
+    /** 客户端应自动打开的本机路径（如导出提交包目录） */
+    openPath: z.string().optional(),
   }),
   z.object({
     type: z.literal("deployment.started"),

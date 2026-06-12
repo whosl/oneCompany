@@ -5,6 +5,7 @@ import {
   LIFECYCLE_STEPS,
   gateDefinition,
   lifecycleIndex,
+  toolInProgressSuffix,
   toolVerb,
 } from "./catalog.js";
 import { buildAgentThreadTask, buildCodexStream } from "./codex-stream.js";
@@ -14,9 +15,12 @@ import {
   agentWorkMs,
   filterPaletteActions,
   filterTimelineForAgentFocus,
+  isPreviewDeployed,
+  isProjectDeployReady,
   pushTaiziReply,
   type AgentStatus,
   type AgentView,
+  type AgentPaorEntry,
   type ConsoleState,
   type FocusZone,
   type TimelineEntry,
@@ -280,7 +284,11 @@ export function rosterOrder(state: ConsoleState): AgentView[] {
   ];
 }
 
-type HitLine = { text: string; hit?: Hit };
+type HitLine = {
+  text: string;
+  hit?: Hit;
+  hits?: Array<{ x: number; w: number; hit: Hit }>;
+};
 
 function buildAgentsColumn(state: ConsoleState, width: number, height: number): HitLine[] {
   const lines: HitLine[] = [];
@@ -377,34 +385,83 @@ function buildAgentsColumn(state: ConsoleState, width: number, height: number): 
       lines.push({ text: padW(`      ${pc.red(`错误 ${detail.errors} 次`)}`, width) });
     }
 
-    // Reserve a couple of rows for the recent tool calls at the bottom,
-    // and let PAOR use everything else in full.
-    const tools = state.toolCalls.filter((tc) => tc.agentId === detail.id).slice(-2);
+    // Reserve rows for recent tool calls; PAOR history uses the rest.
+    const agentTools = state.toolCalls.filter((tc) => tc.agentId === detail.id);
+    const tools = agentTools.slice(-3);
     const paorBudget = height - tools.length;
 
-    if (lines.length < paorBudget) {
-      lines.push({ text: padW(pc.dim(`─ PAOR `.padEnd(width - 1, "─")), width) });
-    }
-    const sections: Array<[string, string | undefined]> = [
-      ["计划", detail.plan],
-      ["执行", detail.act],
-      ["观察", detail.observe],
-      ["反思", detail.reflect],
-    ];
-    for (const [label, value] of sections) {
-      if (!value || lines.length >= paorBudget) continue;
-      const wrapped = wrapW(value, width - 7, 99);
-      lines.push({ text: padW(`${pc.cyan(label)}  ${wrapped[0] ?? ""}`, width) });
-      for (const cont of wrapped.slice(1)) {
+    if (lines.length < paorBudget && detail.paorLog.length > 0) {
+      lines.push({
+        text: padW(
+          pc.dim(`─ 历史 · ${detail.paorLog.length} 条 `.padEnd(width - 1, "─")),
+          width,
+        ),
+      });
+      const PAOR_PHASE_LABEL: Record<AgentPaorEntry["phase"], string> = {
+        plan: "计划",
+        act: "执行",
+        observe: "观察",
+        reflect: "反思",
+        progress: "进度",
+      };
+      const visible: AgentPaorEntry[] = [];
+      let usedRows = 0;
+      for (let i = detail.paorLog.length - 1; i >= 0; i -= 1) {
+        const entry = detail.paorLog[i]!;
+        const wrapped = wrapW(entry.text, width - 7, 4);
+        const blockRows = 1 + wrapped.length;
+        if (usedRows + blockRows > paorBudget - lines.length) break;
+        visible.unshift(entry);
+        usedRows += blockRows;
+      }
+      for (const entry of visible) {
         if (lines.length >= paorBudget) break;
-        lines.push({ text: padW(`      ${cont}`, width) });
+        const label = PAOR_PHASE_LABEL[entry.phase];
+        const wrapped = wrapW(entry.text, width - 7, 4);
+        const time = entry.at ? pc.dim(` ${entry.at.slice(11, 19)}`) : "";
+        lines.push({
+          text: padW(`${pc.cyan(label)}${time}  ${wrapped[0] ?? ""}`, width),
+        });
+        for (const cont of wrapped.slice(1)) {
+          if (lines.length >= paorBudget) break;
+          lines.push({ text: padW(`      ${cont}`, width) });
+        }
+      }
+      if (detail.paorLog.length > visible.length && lines.length < paorBudget) {
+        lines.push({
+          text: padW(
+            pc.dim(`      … 另有 ${detail.paorLog.length - visible.length} 条，见信息流`),
+            width,
+          ),
+        });
+      }
+    } else if (lines.length < paorBudget) {
+      lines.push({ text: padW(pc.dim(`─ PAOR `.padEnd(width - 1, "─")), width) });
+      const sections: Array<[string, string | undefined]> = [
+        ["计划", detail.plan],
+        ["执行", detail.act],
+        ["观察", detail.observe],
+        ["反思", detail.reflect],
+      ];
+      for (const [label, value] of sections) {
+        if (!value || lines.length >= paorBudget) continue;
+        const wrapped = wrapW(value, width - 7, 99);
+        lines.push({ text: padW(`${pc.cyan(label)}  ${wrapped[0] ?? ""}`, width) });
+        for (const cont of wrapped.slice(1)) {
+          if (lines.length >= paorBudget) break;
+          lines.push({ text: padW(`      ${cont}`, width) });
+        }
       }
     }
 
     for (const tool of tools) {
       if (lines.length >= height) break;
       const mark =
-        tool.status === "ok" ? pc.green("✓") : tool.status === "failed" ? pc.red("✗") : pc.cyan("…");
+        tool.status === "ok"
+          ? pc.green("✓")
+          : tool.status === "failed"
+            ? pc.red("✗")
+            : pc.cyan(toolInProgressSuffix(tool.toolName));
       const duration = tool.endedAt
         ? pc.dim(` ${((tool.endedAt - tool.startedAt) / 1000).toFixed(1)}s`)
         : "";
@@ -643,7 +700,10 @@ function buildGateBox(state: ConsoleState, width: number): HitLine[] {
   }
   options.forEach((option, i) => {
     const active = composer.gateId === gate.id && composer.gateCursor === i;
-    const zh = GATE_OPTION_LABELS[option];
+    const zh =
+      gate.gateType === "final_acceptance" && option === "reject_and_redo"
+        ? "驳回重做（说明问题）"
+        : GATE_OPTION_LABELS[option];
     const label = `${active ? "❯" : " "} ${i + 1}. ${option}${zh ? ` — ${zh}` : ""}`;
     lines.push({
       text: boxRow(active ? pc.inverse(padW(label, width - 4)) : tint(label), tint, width),
@@ -651,7 +711,11 @@ function buildGateBox(state: ConsoleState, width: number): HitLine[] {
     });
   });
   if (composer.mode === "gate_custom") {
-    lines.push({ text: boxRow(pc.cyan("自定义 — 在下方输入框输入你的意见，Enter 发送"), tint, width) });
+    const hint =
+      composer.pendingGateDecision === "reject_and_redo"
+        ? "驳回反馈 — 在下方输入框说明问题，Enter 发送"
+        : "自定义 — 在下方输入框输入你的意见，Enter 发送";
+    lines.push({ text: boxRow(pc.cyan(hint), tint, width) });
   }
   if ((state.snapshot?.openGates.length ?? 0) > 1) {
     lines.push({
@@ -1034,6 +1098,59 @@ function integrationStatusLabel(status: string): string {
   return pc.dim(status);
 }
 
+/** Match console phase progress: sliceIndex is 0-based queue position / passed count. */
+function formatSliceProgress(sliceIndex: number, sliceTotal: number): string {
+  const current = Math.min(sliceIndex + 1, sliceTotal);
+  return `${current}/${sliceTotal}`;
+}
+
+function formatPanelButton(label: string, cellW: number, enabled: boolean): { plain: string; text: string } {
+  const inner = Math.max(strWidth(label) + 2, cellW);
+  const bodyInner = inner - 2;
+  const gap = Math.max(0, bodyInner - strWidth(label));
+  const left = Math.floor(gap / 2);
+  const body = `${" ".repeat(left)}${label}${" ".repeat(gap - left)}`;
+  const plain = `[${body}]`;
+  const tint = enabled ? pc.cyan : pc.dim;
+  return { plain, text: tint(plain) };
+}
+
+/** Side-by-side deploy + export buttons under the PROJECT metadata block. */
+function buildProjectActionButtons(state: ConsoleState, width: number): HitLine[] {
+  const ready = isProjectDeployReady(state);
+  const deployed = isPreviewDeployed(state);
+  const deployBusy = [...state.busy].some((label) => /preview|部署/.test(label));
+  const exportBusy = state.busy.has("export submission");
+
+  const deployLabel = deployBusy ? "…" : deployed ? "取消部署" : "部署";
+  const exportLabel = exportBusy ? "…" : "导出包";
+  const deployActionId = deployed ? "stop_preview" : "start_preview";
+
+  const gap = 2;
+  const cellW = Math.max(8, Math.floor((width - gap - 2) / 2));
+  const left = formatPanelButton(deployLabel, cellW, ready && !deployBusy);
+  const right = formatPanelButton(exportLabel, cellW, ready && !exportBusy);
+  const rowText = ` ${left.text}${" ".repeat(gap)}${right.text}`;
+
+  const hits: Array<{ x: number; w: number; hit: Hit }> = [];
+  if (ready && !deployBusy) {
+    hits.push({
+      x: 1,
+      w: strWidth(` ${left.plain}`),
+      hit: { type: "action", id: deployActionId },
+    });
+  }
+  if (ready && !exportBusy) {
+    hits.push({
+      x: strWidth(` ${left.plain}${" ".repeat(gap)}`) + 1,
+      w: strWidth(right.plain) + 1,
+      hit: { type: "action", id: "export_submission" },
+    });
+  }
+
+  return [{ text: "" }, { text: padW(rowText, width), hits: hits.length ? hits : undefined }];
+}
+
 function buildInspectorColumn(
   state: ConsoleState,
   width: number,
@@ -1064,7 +1181,7 @@ function buildInspectorColumn(
       push(
         kv(
           "slices",
-          `${snapshot.dev.sliceIndex}/${snapshot.dev.sliceTotal}${snapshot.dev.currentSliceId ? ` · ${snapshot.dev.currentSliceId}` : ""}`,
+          `${formatSliceProgress(snapshot.dev.sliceIndex, snapshot.dev.sliceTotal)}${snapshot.dev.currentSliceId ? ` · ${snapshot.dev.currentSliceId}` : ""}`,
           width,
         ),
       );
@@ -1072,13 +1189,23 @@ function buildInspectorColumn(
     if (snapshot.testing && snapshot.testing.suiteTotal > 0) {
       push(kv("tests", `${snapshot.testing.suitePassed}/${snapshot.testing.suiteTotal} passed`, width));
     }
-    const preview = snapshot.testing?.previewUrl ?? snapshot.dev?.previewUrl;
-    if (preview) push(kv("preview", preview, width));
+    if (isProjectDeployReady(state)) {
+      if (isPreviewDeployed(state)) {
+        const preview = snapshot.testing?.previewUrl ?? snapshot.dev?.previewUrl;
+        if (preview) push(kv("preview", preview, width));
+      } else {
+        push(kv("preview", pc.dim("未部署"), width));
+      }
+    }
     if (snapshot.openGates.length > 0) {
       push(kv("gates", pc.yellow(`${snapshot.openGates.length} open`), width));
     }
   } else {
     push(padW(pc.dim("loading…"), width));
+  }
+
+  for (const line of buildProjectActionButtons(state, width)) {
+    lines.push(line);
   }
 
   const integrations = snapshot?.integrations ?? [];
@@ -1311,7 +1438,13 @@ export function renderConsole(state: ConsoleState): void {
     );
   }
   right.forEach((line, i) => {
-    if (line.hit) addHit(rx, bodyTop + i, rightW, 1, line.hit);
+    if (line.hits) {
+      for (const span of line.hits) {
+        addHit(rx + span.x, bodyTop + i, span.w, 1, span.hit);
+      }
+    } else if (line.hit) {
+      addHit(rx, bodyTop + i, rightW, 1, line.hit);
+    }
   });
 
   const body: string[] = [];

@@ -26,7 +26,7 @@ export const GATE_DEFINITIONS: Record<GateTypeId, GateDefinition> = {
     id: "slice_failure",
     title: "Slice Failure",
     descriptionTemplate: "A function slice could not be completed within the retry budget.",
-    allowedOptions: ["retry", "replan", "request_skip_slice", "fail"],
+    allowedOptions: ["retry", "replan", "replan_slices", "request_skip_slice", "fail"],
     allowsCustom: false,
   },
   change_review: {
@@ -54,8 +54,8 @@ export const GATE_DEFINITIONS: Record<GateTypeId, GateDefinition> = {
     id: "final_acceptance",
     title: "Final Acceptance",
     descriptionTemplate: "Accept or reject the final delivery.",
-    allowedOptions: ["accept", "reject_and_redo", "custom"],
-    allowsCustom: true,
+    allowedOptions: ["accept", "reject_and_redo"],
+    allowsCustom: false,
   },
 };
 

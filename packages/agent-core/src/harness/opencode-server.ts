@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import type { Config } from "@opencode-ai/sdk";
 import { buildOcGatewayMcpConfig } from "./opencode-gateway-mcp.js";
@@ -10,7 +10,13 @@ export type ProjectServer = {
   close(): Promise<void>;
 };
 
-const activeServers = new Map<string, ProjectServer>();
+type CachedServer = {
+  url: string;
+  /** When set, this process was spawned by us and may be killed on release. */
+  proc?: ChildProcess;
+};
+
+const activeServers = new Map<string, CachedServer>();
 
 const SERVER_LISTENING_RE =
   /(?:opencode|mimocode) server listening on\s+(https?:\/\/[^\s]+)/;
@@ -44,10 +50,23 @@ function governedConfig(options?: { projectId?: string }) {
   };
 }
 
+function isRetriableServerStartError(message: string): boolean {
+  return /port|ServeError|database|locked|EADDRINUSE|EBUSY|exit/i.test(message);
+}
+
+async function probeServerHealth(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(2_000) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function spawnCodingServer(
   port: number,
   options?: { projectId?: string; timeoutMs?: number },
-): Promise<ProjectServer> {
+): Promise<CachedServer> {
   const executable = resolveOpencodeExecutable();
   if (!executable) {
     throw new Error(
@@ -107,14 +126,27 @@ async function spawnCodingServer(
 
   return {
     url,
-    async close() {
-      proc.kill();
-    },
+    proc,
   };
 }
 
 function normalizeRepoPath(repoPath: string): string {
   return path.resolve(repoPath);
+}
+
+function serverCacheKey(repoPath: string, projectId?: string): string {
+  return `${repoPath}:${projectId ?? ""}`;
+}
+
+function toHandle(cached: CachedServer): ProjectServer {
+  return {
+    url: cached.url,
+    async close() {
+      if (cached.proc) {
+        cached.proc.kill();
+      }
+    },
+  };
 }
 
 export async function startProjectServer(
@@ -124,23 +156,32 @@ export async function startProjectServer(
   const resolved = normalizeRepoPath(repoPath);
   const cacheKey = serverCacheKey(resolved, options?.projectId);
   const existing = activeServers.get(cacheKey);
+  if (existing && (await probeServerHealth(existing.url))) {
+    return toHandle(existing);
+  }
   if (existing) {
-    return existing;
+    activeServers.delete(cacheKey);
+    await toHandle(existing).close();
   }
 
   const basePort = portForRepo(resolved);
   let lastError: unknown;
-  let started: ProjectServer | undefined;
+  let started: CachedServer | undefined;
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const port = basePort + attempt;
+    const url = `http://127.0.0.1:${port}`;
+    if (await probeServerHealth(url)) {
+      started = { url };
+      break;
+    }
     try {
       started = await spawnCodingServer(port, options);
       break;
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("port") && !message.includes("ServeError")) {
+      if (!isRetriableServerStartError(message)) {
         throw error;
       }
     }
@@ -152,27 +193,11 @@ export async function startProjectServer(
       : new Error("Failed to start coding server on loopback");
   }
 
-  const server = started;
-
-  const handle: ProjectServer = {
-    url: server.url,
-    async close() {
-      if (activeServers.get(cacheKey) !== handle) {
-        return;
-      }
-      activeServers.delete(cacheKey);
-      await server.close();
-    },
-  };
-
-  activeServers.set(cacheKey, handle);
-  return handle;
+  activeServers.set(cacheKey, started);
+  return toHandle(started);
 }
 
-function serverCacheKey(repoPath: string, projectId?: string): string {
-  return `${repoPath}:${projectId ?? ""}`;
-}
-
+/** Drop a cached server without killing externally-owned listeners. */
 export async function releaseProjectServer(
   repoPath: string,
   options?: { projectId?: string },
@@ -183,5 +208,15 @@ export async function releaseProjectServer(
     return;
   }
   activeServers.delete(cacheKey);
-  await server.close();
+  if (server.proc) {
+    server.proc.kill();
+  }
+}
+
+/** Force-stop any cached coding server for a project (e.g. when development halts). */
+export async function shutdownProjectServer(
+  repoPath: string,
+  options?: { projectId?: string },
+): Promise<void> {
+  await releaseProjectServer(repoPath, options);
 }

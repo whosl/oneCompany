@@ -5,7 +5,9 @@ services:
       dockerfile: Dockerfile
     image: onecompany:local
     ports:
-      - "3000:3000"
+      - "3001:3001"
+    stdin_open: true
+    tty: true
     environment:
       # Required for real agent workflows (mount via env_file)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

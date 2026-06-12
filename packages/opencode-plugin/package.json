@@ -1,0 +1,54 @@
+{
+  "name": "@onecompany/opencode",
+  "version": "0.1.0",
+  "description": "OneCompany delivery pipeline as OpenCode server + TUI plugins (sidecar architecture)",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "onecompany": "./dist/cli.js"
+  },
+  "exports": {
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "import": "./dist/tui.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsup --watch",
+    "onecompany": "node dist/cli.js"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.5",
+    "zod": "^4.1.8"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.16.2 <1.18",
+    "@opentui/core": ">=0.3.4",
+    "@opentui/solid": ">=0.3.4"
+  },
+  "peerDependenciesMeta": {
+    "@opentui/core": { "optional": true },
+    "@opentui/solid": { "optional": true }
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.17.4",
+    "@opentui/core": "^0.3.4",
+    "@opentui/solid": "^0.3.4",
+    "@types/node": "^22.10.7",
+    "tsup": "^8.3.6",
+    "typescript": "^5.7.3"
+  },
+  "onecompany": {
+    "opencodeVersionRange": ">=1.16.2 <1.18"
+  }
+}

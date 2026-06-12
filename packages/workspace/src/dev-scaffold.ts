@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { initRepo } from "./git.js";
+import { SCAFFOLD_PLACEHOLDER_TITLE } from "./web-layer.js";
 
 export function findVitestMjs(startDir: string): string | undefined {
   let dir = path.resolve(startDir);
@@ -224,23 +225,95 @@ export default {
 
 const E2E_SMOKE_SPEC = `import { test, expect } from "@playwright/test";
 
-test("app shell loads", async ({ page }) => {
+test("app shell loads with product UI (not scaffold placeholder)", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByTestId("app-shell")).toBeVisible();
   await expect(page.getByTestId("app-title")).toBeVisible();
+  await expect(page.getByTestId("app-title")).not.toHaveText("${SCAFFOLD_PLACEHOLDER_TITLE}");
+  await expect(page.getByTestId("app-page")).toBeVisible();
 });
+`;
+
+const DEV_SERVER_SCRIPT = `import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+
+const host = process.env.PREVIEW_HOST || process.env.HOST || "127.0.0.1";
+const port = Number(process.env.PORT || process.env.PREVIEW_PORT || 3000);
+const root = process.env.PREVIEW_ROOT || process.cwd();
+
+// Module scripts require a JavaScript MIME type; missing Content-Type breaks ESM in browsers.
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".ico": "image/x-icon",
+  ".map": "application/json",
+  ".txt": "text/plain; charset=utf-8",
+};
+
+const server = http.createServer((req, res) => {
+  const urlPath = String(req.url || "/").split("?")[0];
+  const rel = urlPath === "/" ? "index.html" : urlPath.replace(/^\\//, "");
+  const filePath = path.join(root, rel);
+
+  if (filePath.startsWith(root) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+    const type = MIME[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+    res.writeHead(200, { "Content-Type": type });
+    res.end(fs.readFileSync(filePath));
+    return;
+  }
+
+  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("Not found");
+});
+
+server.listen(port, host);
 `;
 
 const INDEX_HTML = `<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <title>generated-app</title>
+    <title>${SCAFFOLD_PLACEHOLDER_TITLE}</title>
   </head>
-  <body>
-    <h1 data-testid="app-title">generated-app</h1>
+  <body data-testid="app-shell">
+    <h1 data-testid="app-title">${SCAFFOLD_PLACEHOLDER_TITLE}</h1>
+    <p data-testid="scaffold-notice">Coding Agent 须替换此占位页为产品 UI。</p>
   </body>
 </html>
 `;
+
+function ensureWebDevScript(repoPath: string): void {
+  const scriptsDir = path.join(repoPath, "scripts");
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  const devServerPath = path.join(scriptsDir, "dev-server.mjs");
+  if (!fs.existsSync(devServerPath)) {
+    fs.writeFileSync(devServerPath, DEV_SERVER_SCRIPT);
+  }
+
+  const pkgPath = path.join(repoPath, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    return;
+  }
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
+    scripts?: Record<string, string>;
+  };
+  const scripts = { ...pkg.scripts };
+  if (!scripts.dev) {
+    scripts.dev = "node scripts/dev-server.mjs";
+  }
+  if (!scripts.preview) {
+    scripts.preview = "node scripts/dev-server.mjs";
+  }
+  const next = { ...pkg, scripts };
+  fs.writeFileSync(pkgPath, `${JSON.stringify(next, null, 2)}\n`);
+}
 
 /** Symlink workspace Playwright packages so generated repos can import @playwright/test. */
 function linkPlaywrightPackages(repoPath: string): void {
@@ -290,6 +363,41 @@ export function ensureE2eScaffold(repoPath: string): void {
   if (!fs.existsSync(indexHtml)) {
     fs.writeFileSync(indexHtml, INDEX_HTML);
   }
+
+  ensureWebDevScript(repoPath);
+}
+
+export const GENERATED_APP_DEV_DEPS = {
+  typescript: "^5.7.3",
+  vitest: "^3.0.4",
+  "@types/node": "^22.10.7",
+} as const;
+
+/** Ensure a generated repo can `install && typecheck && test && build` standalone. */
+export function ensurePackageRunnable(repoPath: string): void {
+  const pkgPath = path.join(repoPath, "package.json");
+  if (!fs.existsSync(pkgPath)) return;
+
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
+    scripts?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  const devDeps = { ...GENERATED_APP_DEV_DEPS, ...pkg.devDependencies };
+  const scripts: Record<string, string> = {
+    dev: "node scripts/dev-server.mjs",
+    preview: "node scripts/dev-server.mjs",
+    build: "tsc",
+    test: "vitest run",
+    typecheck: "tsc --noEmit",
+    verify: "npm run typecheck && npm test && npm run build",
+    ...pkg.scripts,
+  };
+
+  const next = { ...pkg, scripts, devDependencies: devDeps };
+  const serialized = `${JSON.stringify(next, null, 2)}\n`;
+  if (fs.readFileSync(pkgPath, "utf8") !== serialized) {
+    fs.writeFileSync(pkgPath, serialized);
+  }
 }
 
 export function ensureDevRepoScaffold(repoPath: string): void {
@@ -306,7 +414,9 @@ export function ensureDevRepoScaffold(repoPath: string): void {
 
   const pkgPath = path.join(repoPath, "package.json");
   if (fs.existsSync(pkgPath)) {
+    ensurePackageRunnable(repoPath);
     ensureE2eScaffold(repoPath);
+    ensureWebDevScript(repoPath);
     return;
   }
 
@@ -322,6 +432,8 @@ export function ensureDevRepoScaffold(repoPath: string): void {
         type: "module",
         bin: { app: "./dist/index.js" },
         scripts: {
+          dev: "node scripts/dev-server.mjs",
+          preview: "node scripts/dev-server.mjs",
           build: "tsc",
           test: "vitest run",
           typecheck: "tsc --noEmit",
@@ -353,7 +465,7 @@ export function ensureDevRepoScaffold(repoPath: string): void {
           skipLibCheck: true,
           types: ["node"],
         },
-        include: ["src"],
+        include: ["src", "tests"],
       },
       null,
       2,
@@ -370,6 +482,13 @@ export function ensureDevRepoScaffold(repoPath: string): void {
       "```bash",
       "pnpm install",
       "pnpm verify",
+      "```",
+      "",
+      "## Browser preview",
+      "",
+      "```bash",
+      "pnpm dev",
+      "# open http://127.0.0.1:3000 (or the PORT shown in the terminal)",
       "```",
       "",
       "Individual steps:",
@@ -397,4 +516,5 @@ export function ensureDevRepoScaffold(repoPath: string): void {
   );
 
   ensureE2eScaffold(repoPath);
+  ensureWebDevScript(repoPath);
 }

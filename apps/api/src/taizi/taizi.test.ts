@@ -1,6 +1,6 @@
-import { classifyTaiziWithRules, isStatusInquiry } from "@oc/agent-core";
+import { classifyTaiziWithRules, isStatusInquiry, loadTaiziChatHistory } from "@oc/agent-core";
 import { eq } from "drizzle-orm";
-import { events, type TaiziContext } from "@oc/shared";
+import { emit, events, type TaiziContext } from "@oc/shared";
 import { describe, expect, it } from "vitest";
 import { setupTestApp } from "../test-utils.js";
 
@@ -141,7 +141,12 @@ describe("POST /projects/:id/taizi/message", () => {
         body: JSON.stringify({ message: "进度" }),
       });
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { intent: string; reply: string; stateChanged: boolean };
+      const body = (await response.json()) as {
+        intent: string;
+        action: string;
+        reply: string;
+        stateChanged: boolean;
+      };
       expect(body.intent).toBe("status_query");
       expect(body.action).toBe("taizi.research");
       expect(body.reply).toContain("Draft Requirement");
@@ -161,6 +166,47 @@ describe("POST /projects/:id/taizi/message", () => {
         body: JSON.stringify({ message: "继续" }),
       });
       expect(response.status).toBe(404);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("loads prior taizi.routed events as conversation history", async () => {
+    const { app, projects, db, cleanup } = setupTestApp();
+    try {
+      const project = projects.createProject("Taizi Memory");
+      emit(db, {
+        projectId: project.id,
+        agentId: "taizi",
+        payload: {
+          type: "taizi.routed",
+          projectId: project.id,
+          message: "我们刚才聊了什么主题",
+          intent: "chat",
+          action: "taizi.research",
+          reply: "主题是导出 Excel 功能",
+        },
+      });
+
+      expect(loadTaiziChatHistory(db, project.id)).toEqual([
+        { role: "user", content: "我们刚才聊了什么主题" },
+        { role: "assistant", content: "主题是导出 Excel 功能" },
+      ]);
+
+      const response = await app.request(`/projects/${project.id}/taizi/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "那按刚才说的做" }),
+      });
+      expect(response.status).toBe(200);
+
+      const routed = db
+        .select()
+        .from(events)
+        .where(eq(events.project_id, project.id))
+        .all()
+        .filter((row) => row.type === "taizi.routed");
+      expect(routed.length).toBeGreaterThanOrEqual(2);
     } finally {
       cleanup();
     }

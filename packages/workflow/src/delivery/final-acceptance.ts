@@ -16,6 +16,11 @@ export type FinalAcceptanceDeps = DeliveryReportDeps & {
   getProjectStatus: (projectId: string) => ProjectStatus;
   loadSession: (projectId: string) => DevelopmentSessionPayload;
   saveSession: (projectId: string, payload: DevelopmentSessionPayload) => void;
+  /** When provided, reject feedback opens a change-review gate instead of bare rework. */
+  startChangeReview?: (
+    projectId: string,
+    input: { summary: string; details?: string },
+  ) => void;
 };
 
 export type FinalAcceptanceResult = {
@@ -96,10 +101,24 @@ export function handleFinalAcceptanceDecision(
     deps.setStatus(input.projectId, "Developing", "final_acceptance_rejected");
     const next: DevelopmentSessionPayload = {
       ...payload,
+      state: {
+        ...payload.state,
+        risks: appendCustomGateNote(payload.state.risks, "final_acceptance", customText),
+      },
       delivery: { phase: "idle", reportGenerated: false },
       meta: { ...payload.meta, phase: "slicing" },
     };
     deps.saveSession(input.projectId, next);
+
+    const feedback = customText?.trim();
+    if (feedback && deps.startChangeReview) {
+      deps.startChangeReview(input.projectId, {
+        summary: feedback,
+        details: "Rejected at final acceptance — rework requested",
+      });
+      return toResult(deps, deps.loadSession(input.projectId));
+    }
+
     return toResult(deps, next);
   }
 

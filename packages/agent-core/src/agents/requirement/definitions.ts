@@ -73,7 +73,7 @@ export const REQUIREMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     version: AGENT_VERSION,
     group: "requirement",
     role: "PRD 与验收 Agent",
-    description: "产出 PRD 与可验证的验收标准",
+    description: "产出 PRD 与可验证的验收标准（须含浏览器 UI 行为）",
     inputSchema: { type: "object" },
     outputSchema: { type: "object" },
     tools: [],

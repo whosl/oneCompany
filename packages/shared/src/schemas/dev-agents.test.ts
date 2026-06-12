@@ -6,7 +6,6 @@ import {
   PlannerOutputSchema,
   QaOutputSchema,
   ReviewOutputSchema,
-  TestDesignerOutputSchema,
 } from "./dev-agents.js";
 
 describe("dev agent output schemas", () => {
@@ -32,26 +31,13 @@ describe("dev agent output schemas", () => {
     expect(parsed.risks).toEqual(["scope creep from optional features"]);
   });
 
-  it("parses test designer output", () => {
-    const parsed = TestDesignerOutputSchema.parse({
-      testSpecs: [
-        {
-          sliceId: "slice-1",
-          testCommand: "pnpm vitest run src/a.test.ts --reporter=json",
-          description: "scaffold test",
-        },
-      ],
-    });
-    expect(parsed.testSpecs[0]?.sliceId).toBe("slice-1");
-  });
-
   it("parses planner output with required testCommand", () => {
     const parsed = PlannerOutputSchema.parse({
       slices: [
         {
           id: "slice-1",
           title: "Scaffold",
-          testCommand: "pnpm vitest run src/scaffold.test.ts --reporter=json",
+          testCommand: "pnpm vitest run tests/scaffold.test.ts --reporter=json",
         },
       ],
     });

@@ -78,6 +78,14 @@ describe("tool registry — M9.5", () => {
 
       expect(types).toContain("tool_call.started");
       expect(types).toContain("tool_call.output");
+
+      const started = db
+        .select()
+        .from(events)
+        .where(eq(events.project_id, projectId))
+        .all()
+        .find((row) => row.type === "tool_call.started");
+      expect(started?.agent_id).toBe("test");
     } finally {
       cleanup();
     }

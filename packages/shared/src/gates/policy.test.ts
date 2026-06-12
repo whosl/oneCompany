@@ -59,11 +59,25 @@ describe("gate policy — M4", () => {
     });
   });
 
-  it("maps custom to accept for final_acceptance", () => {
+  it("maps custom to reject_and_redo for final_acceptance", () => {
     expect(resolveGateDecision("final_acceptance", "custom:note")).toEqual({
-      effective: "accept",
+      effective: "reject_and_redo",
       customText: "note",
     });
+  });
+
+  it("parses reject_and_redo feedback decisions", () => {
+    expect(parseDecision("reject_and_redo:fix gomoku")).toEqual({
+      raw: "reject_and_redo:fix gomoku",
+      kind: "reject_and_redo",
+      customText: "fix gomoku",
+      isCustom: false,
+    });
+    expect(resolveGateDecision("final_acceptance", "reject_and_redo:fix gomoku")).toEqual({
+      effective: "reject_and_redo",
+      customText: "fix gomoku",
+    });
+    expect(isAllowedDecision("final_acceptance", "reject_and_redo:fix gomoku")).toBe(true);
   });
 
   it("rejects skip_risk_and_continue on high-risk dangerous_operation at execution layer", () => {

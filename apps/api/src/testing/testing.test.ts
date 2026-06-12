@@ -66,6 +66,47 @@ describe("testing API — M7", () => {
     }
   });
 
+  it("POST preview/stop clears stored previewUrl", async () => {
+    const { app, db, cleanup } = setupTestApp();
+    try {
+      const projectId = randomUUID();
+      const repoPath = mkdtempSync(path.join(tmpdir(), "oc-api-testing-"));
+      initRepo(repoPath);
+      seedTestingSession(db, projectId, repoPath);
+
+      const start = await app.request(`/projects/${projectId}/preview/start`, {
+        method: "POST",
+      });
+      expect(start.status).toBe(200);
+      const started = (await start.json()) as { url: string };
+
+      const stop = await app.request(`/projects/${projectId}/preview/stop`, {
+        method: "POST",
+      });
+      expect(stop.status).toBe(200);
+
+      const status = await app.request(`/projects/${projectId}/preview/status`);
+      expect(status.status).toBe(200);
+      const statusBody = (await status.json()) as {
+        previewUrl?: string;
+        health: { reachable: boolean };
+      };
+      expect(statusBody.previewUrl).toBeUndefined();
+      expect(statusBody.health.reachable).toBe(false);
+
+      const snapshot = await app.request(`/projects/${projectId}/console/snapshot`);
+      const snapshotBody = (await snapshot.json()) as {
+        dev?: { previewUrl?: string };
+        testing?: { previewUrl?: string };
+      };
+      expect(snapshotBody.dev?.previewUrl).toBeUndefined();
+      expect(snapshotBody.testing?.previewUrl).toBeUndefined();
+      expect(started.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    } finally {
+      cleanup();
+    }
+  });
+
   it("GET testing/status returns session summary", async () => {
     const { app, db, cleanup } = setupTestApp();
     try {

@@ -1,5 +1,10 @@
 import pc from "picocolors";
-import { agentCollapsedIcon, agentCollapsedIconByName, toolVerb } from "./catalog.js";
+import {
+  agentCollapsedIcon,
+  agentCollapsedIconByName,
+  toolInProgressSuffix,
+  toolVerb,
+} from "./catalog.js";
 import {
   buildStreamBlocks,
   formatDuration,
@@ -273,7 +278,9 @@ function renderActivityEntry(
       break;
     }
     case "tool":
-      out.push({ text: `${indent}${pc.magenta("◉")} ${toolTitle(entry, width)} ${pc.dim("…")}` });
+      out.push({
+        text: `${indent}${pc.magenta("◉")} ${toolTitle(entry, width)} ${pc.dim(toolInProgressSuffix(entry.tool))}`,
+      });
       break;
     case "tool_ok": {
       if (isReadTool(entry) && !expanded) {

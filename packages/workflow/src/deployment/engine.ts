@@ -1,7 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { appendCustomGateNote, deployments, emit, resolveGateDecision } from "@oc/shared";
+import { assertWebLayerDelivered } from "@oc/workspace";
 import { loadDevSession, saveDevSession } from "../development/state.js";
+import type { DevelopmentSessionPayload } from "../development/types.js";
 import type { DeploymentRunResult, DeploymentWorkflowDeps } from "./types.js";
+
+/** URL staged for deployment: explicit submit > testing preview > dev preview. */
+function resolveStagedDeploymentUrl(payload: DevelopmentSessionPayload): string | undefined {
+  return (
+    payload.deployment?.pendingUrl?.trim() ||
+    payload.state.previewUrl?.trim() ||
+    payload.testing?.previewUrl?.trim() ||
+    undefined
+  );
+}
 
 export function startDeploymentPhase(
   deps: DeploymentWorkflowDeps,
@@ -24,11 +36,13 @@ export function startDeploymentPhase(
   });
   deps.onEvent?.(envelope);
 
+  const stagedUrl = resolveStagedDeploymentUrl(payload);
   const next = {
     ...payload,
     deployment: {
       phase: "awaiting_gate" as const,
       gateId: gate.id,
+      ...(stagedUrl ? { pendingUrl: stagedUrl } : {}),
     },
   };
   deps.saveSession(input.projectId, next);
@@ -91,9 +105,16 @@ export async function handleDeploymentGateDecision(
     throw new Error(`Unsupported deployment decision: ${input.decision}`);
   }
 
-  const url = payload.deployment.pendingUrl;
+  const url = resolveStagedDeploymentUrl(payload);
   if (!url) {
-    throw new Error("Deployment URL must be submitted before approval");
+    throw new Error(
+      "Deployment URL must be submitted before approval — paste the preview URL in the composer or say it to Taizi first",
+    );
+  }
+
+  const webLayer = assertWebLayerDelivered(payload.state.repoPath, { allowPlaceholder: false });
+  if (!webLayer.ok) {
+    throw new Error(`Deployment blocked — ${webLayer.details}`);
   }
 
   const now = new Date().toISOString();

@@ -35,6 +35,12 @@ export function normalizeDecision(input: ResolveGateInput): string {
     }
     return `custom:${customText}`;
   }
+  if (decision === "reject_and_redo") {
+    const feedback = input.customText?.trim();
+    if (feedback) {
+      return `reject_and_redo:${feedback}`;
+    }
+  }
   return decision;
 }
 
@@ -49,6 +55,9 @@ export function isAllowedDecision(
   }
   if (decision.startsWith("custom:")) {
     return allowed.includes("custom");
+  }
+  if (decision.startsWith("reject_and_redo:")) {
+    return allowed.includes("reject_and_redo");
   }
   return false;
 }
@@ -79,6 +88,10 @@ export function parseDecision(decision: string): ParsedDecision {
     const customText = decision.slice("custom:".length);
     return { raw: decision, kind: "custom", customText, isCustom: true };
   }
+  if (decision.startsWith("reject_and_redo:")) {
+    const customText = decision.slice("reject_and_redo:".length);
+    return { raw: decision, kind: "reject_and_redo", customText, isCustom: false };
+  }
   return { raw: decision, kind: decision, isCustom: false };
 }
 
@@ -89,7 +102,7 @@ export function resolveGateDecision(
 ): { effective: string; customText?: string } {
   const parsed = parseDecision(decision);
   if (!parsed.isCustom) {
-    return { effective: parsed.kind };
+    return { effective: parsed.kind, customText: parsed.customText };
   }
 
   switch (gateType) {
@@ -99,7 +112,7 @@ export function resolveGateDecision(
     case "dangerous_operation":
       return { effective: "approve", customText: parsed.customText };
     case "final_acceptance":
-      return { effective: "accept", customText: parsed.customText };
+      return { effective: "reject_and_redo", customText: parsed.customText };
     default:
       throw new Error(`Custom decision not supported for gate type: ${gateType}`);
   }

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { listEvents, type Db } from "@oc/shared";
+import { ensurePackageRunnable } from "@oc/workspace";
 import { loadDevSession } from "../development/state.js";
 import { loadRequirementSession } from "../requirement/state.js";
 
@@ -88,6 +89,7 @@ export function exportSubmissionPackage(
   } else {
     fs.mkdirSync(generatedApp, { recursive: true });
   }
+  ensurePackageRunnable(generatedApp);
 
   const toolLog = buildToolCallLog(db, input.projectId);
   fs.writeFileSync(path.join(logsDir, "tool-call-log.json"), JSON.stringify(toolLog, null, 2));
@@ -162,10 +164,11 @@ export function exportSubmissionPackage(
     "",
     "```bash",
     "cd generated_app",
-    "pnpm install",
-    "pnpm typecheck",
-    "pnpm test",
-    "pnpm build",
+    "npm install   # standalone; use pnpm install if pnpm-lock.yaml is present",
+    "npm run typecheck",
+    "npm test",
+    "npm run build",
+    "# or: npm run verify",
     "```",
     "",
     `导出时间：${new Date().toISOString()}`,

@@ -1,5 +1,7 @@
 import path from "node:path";
+import fs from "node:fs";
 import { and, desc, eq } from "drizzle-orm";
+import { MINIMAL_PNG } from "@oc/integrations";
 import {
   acceptanceCriteriaVersions,
   diffs,
@@ -27,6 +29,41 @@ export type WorkspaceServiceOptions = {
   generatedProjectsRoot?: string;
   onEvent?: (envelope: EventEnvelope) => void;
 };
+
+const BINARY_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp)$/i;
+
+function findNewestPlaywrightScreenshot(integrationsDir: string): string | undefined {
+  if (!fs.existsSync(integrationsDir)) return undefined;
+  const candidates = fs
+    .readdirSync(integrationsDir)
+    .filter((name) => /^playwright-.*\.png$/i.test(name))
+    .map((name) => path.join(integrationsDir, name))
+    .filter((full) => fs.existsSync(full))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  return candidates[0];
+}
+
+/**
+ * Resolve an artifact relative path to an on-disk file. Handles legacy mock
+ * paths (`playwright-screenshot.png`) that were advertised but never written.
+ */
+function resolveArtifactDiskPath(artifactsRoot: string, artifactRelative: string): string | undefined {
+  const direct = path.join(artifactsRoot, artifactRelative);
+  if (fs.existsSync(direct)) return direct;
+
+  if (artifactRelative === "playwright-screenshot.png" || artifactRelative === "figma-export.png") {
+    const integrationsDir = path.join(artifactsRoot, "integrations");
+    const newest = findNewestPlaywrightScreenshot(integrationsDir);
+    if (newest) return newest;
+
+    // Last resort: materialize a placeholder so mock-era runs become openable.
+    fs.mkdirSync(artifactsRoot, { recursive: true });
+    fs.writeFileSync(direct, MINIMAL_PNG);
+    return direct;
+  }
+
+  return undefined;
+}
 
 /**
  * Resolves DB-backed virtual artifacts (`artifacts/{projectId}/{version}.md`)
@@ -129,7 +166,13 @@ export function createWorkspaceService(
       projectId: string,
       relativePath: string,
       scope: "repo" | "artifacts" = "repo",
-    ): { path: string; scope: "repo" | "artifacts"; content: string } {
+    ): {
+      path: string;
+      scope: "repo" | "artifacts";
+      content: string;
+      binary?: boolean;
+      absolutePath?: string;
+    } {
       const project = projects.getProject(projectId);
       if (!project) {
         throw new Error(`Project not found: ${projectId}`);
@@ -138,20 +181,28 @@ export function createWorkspaceService(
 
       if (scope === "artifacts" || relativePath.startsWith("artifacts/")) {
         const artifactPath = relativePath.replace(/^artifacts\//, "");
-        try {
+        const diskPath = resolveArtifactDiskPath(workspace.artifacts, artifactPath);
+        if (diskPath) {
+          if (BINARY_ARTIFACT_EXT.test(artifactPath)) {
+            return {
+              path: relativePath,
+              scope: "artifacts",
+              content: "",
+              binary: true,
+              absolutePath: diskPath,
+            };
+          }
           return {
             path: relativePath,
             scope: "artifacts",
-            content: readFile(workspace.artifacts, artifactPath),
+            content: fs.readFileSync(diskPath, "utf8"),
           };
-        } catch (error) {
-          // Virtual artifacts (PRD / acceptance criteria) live in the DB, not on disk.
-          const dbContent = readDbArtifact(db, projectId, relativePath);
-          if (dbContent !== undefined) {
-            return { path: relativePath, scope: "artifacts", content: dbContent };
-          }
-          throw error;
         }
+        const dbContent = readDbArtifact(db, projectId, relativePath);
+        if (dbContent !== undefined) {
+          return { path: relativePath, scope: "artifacts", content: dbContent };
+        }
+        throw new Error(`Artifact not found: ${relativePath}`);
       }
 
       return {

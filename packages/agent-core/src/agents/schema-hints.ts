@@ -6,12 +6,12 @@ const REQUIREMENT_SCHEMA_HINTS: Record<string, string> = {
   "normalizedSummary": "string — 简洁规范的需求概述（中文）",
   "targetUsers": ["string — 目标用户"],
   "userGoals": ["string — 用户目标"],
-  "appType": "string — 例如 cli、web、api",
+  "appType": "string — 默认 web；仅当用户明确只要 CLI/API 库时用 cli 或 api",
   "missingContext": ["string — 仍需澄清的疑点"]
 }`,
   [REQUIREMENT_AGENT_IDS.analyst]: `{
   "coreFeatures": ["string — 核心功能"],
-  "pagesAndFlows": [{ "name": "string", "purpose": "string", "userActions": ["string"] }],
+  "pagesAndFlows": [{ "name": "string — 浏览器页面名", "purpose": "string", "userActions": ["string — 页面上可执行操作"] }],
   "dataObjects": [{ "name": "string", "fields": ["string"], "relationships": ["string"] }],
   "rolesAndPermissions": ["string — 角色与权限"],
   "integrations": ["string — 外部集成"],
@@ -31,8 +31,8 @@ const REQUIREMENT_SCHEMA_HINTS: Record<string, string> = {
 }
 每轮提出 3 到 6 个问题，覆盖不同的缺口主题；每个问题必须给出可直接选用的建议答案。`,
   [REQUIREMENT_AGENT_IDS.prdAcceptance]: `{
-  "prd": "string — markdown 格式的 PRD 正文（中文）",
-  "acceptanceCriteria": "string — markdown 列表形式的验收标准",
+  "prd": "string — markdown 格式的 PRD 正文（中文），须含页面/流程说明",
+  "acceptanceCriteria": "string — markdown 列表；至少一半条目描述浏览器中可见/可操作的 UI 行为",
   "assumptions": ["string — 假设"],
   "risks": ["string — 风险"]
 }`,
@@ -40,22 +40,19 @@ const REQUIREMENT_SCHEMA_HINTS: Record<string, string> = {
 
 const DEVELOPMENT_SCHEMA_HINTS: Record<string, string> = {
   [DEVELOPMENT_AGENT_IDS.architect]: `{
-  "techPlan": "string — markdown 格式的技术方案（中文）",
-  "stack": ["string — 技术栈"],
-  "architectureNotes": ["string — 架构说明"],
+  "techPlan": "string — markdown 技术方案（中文），须含 Web 前端层、页面结构、dev/preview 启动方式",
+  "stack": ["string — 须含前端与 dev 服务器相关技术"],
+  "architectureNotes": ["string — 含前后端/UI 分层说明"],
   "risks": ["string — 风险"]
-}`,
-  [DEVELOPMENT_AGENT_IDS.testDesigner]: `{
-  "testSpecs": [{ "sliceId": "string", "testCommand": "string — 必须是 pnpm vitest run tests/xxx.test.ts --reporter=json，禁止 pytest", "description": "string — 测试说明（中文）" }]
 }`,
   [DEVELOPMENT_AGENT_IDS.planner]: `{
   "slices": [{
     "id": "string",
     "title": "string — 切片标题（中文）",
     "description": "string — 切片说明（中文）",
-    "acceptanceChecks": ["string — 验收检查项"],
-    "testCommand": "string — 例如 pnpm vitest run src/slice.test.ts --reporter=json",
-    "expectedFiles": ["string"]
+    "acceptanceChecks": ["string — 至少一条描述浏览器 UI 行为"],
+    "testCommand": "string — 例如 pnpm vitest run tests/slice1.test.ts --reporter=json",
+    "expectedFiles": ["string — 规划提示（须与技术方案目录一致，含 Web/UI 路径）；权威验收以 vitest + Web UI 为准"]
   }],
   "planningNotes": ["string — 规划说明"]
 }`,
@@ -76,8 +73,8 @@ const DEVELOPMENT_SCHEMA_HINTS: Record<string, string> = {
 }`,
   [DEVELOPMENT_AGENT_IDS.devopsDelivery]: `{
   "artifacts": ["string"],
-  "deploymentNotes": "string — 部署说明（中文）",
-  "previewHints": ["string — 预览提示"]
+  "deploymentNotes": "string — 部署说明（中文），含 pnpm dev 与浏览器访问方式",
+  "previewHints": ["string — 提示用户在浏览器打开 Preview 并验证关键页面"]
 }`,
 };
 

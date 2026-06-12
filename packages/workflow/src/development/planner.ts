@@ -1,7 +1,7 @@
 import { PlannerOutputSchema } from "@oc/shared";
 import { DEVELOPMENT_AGENT_IDS } from "@oc/agent-core";
 import { normalizeSliceTestCommand } from "@oc/workspace";
-import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
+import { loadLatestAcceptance, loadLatestPrd, loadLatestTechPlan } from "./artifacts.js";
 import { saveDevSession } from "./state.js";
 import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./types.js";
 
@@ -11,29 +11,21 @@ export async function runPlanner(
 ): Promise<DevelopmentSessionPayload> {
   const prd = loadLatestPrd(deps.db, payload.state.projectId);
   const acceptance = loadLatestAcceptance(deps.db, payload.state.projectId);
+  const techPlan = loadLatestTechPlan(deps.db, payload.state.projectId);
 
-  await deps.runAgent({
-    projectId: payload.state.projectId,
-    agentIdAtVersion: DEVELOPMENT_AGENT_IDS.testDesigner,
-    task: {
-      state: payload.state,
-      profile: payload.meta.profile,
-      prd: prd.content,
-      acceptance: acceptance.content,
-      techPlan: payload.state.techPlanVersion,
-    },
-  });
+  const agentTask = {
+    state: payload.state,
+    profile: payload.meta.profile,
+    prd: prd.content,
+    acceptance: acceptance.content,
+    techPlan: techPlan.content,
+    techPlanVersion: techPlan.version,
+  };
 
   const plannerResult = await deps.runAgent({
     projectId: payload.state.projectId,
     agentIdAtVersion: DEVELOPMENT_AGENT_IDS.planner,
-    task: {
-      state: payload.state,
-      profile: payload.meta.profile,
-      prd: prd.content,
-      acceptance: acceptance.content,
-      techPlan: payload.state.techPlanVersion,
-    },
+    task: agentTask,
   });
 
   const parsed = PlannerOutputSchema.parse(plannerResult.output);

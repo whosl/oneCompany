@@ -6,12 +6,14 @@ import {
   handleFinalAcceptanceDecision,
   loadDevSession,
   saveDevSession,
+  startRequirementChangeReview,
   type FinalAcceptanceResult,
 } from "@oc/workflow";
 import type { Db, EventEnvelope } from "@oc/shared";
 import type { GateService } from "../gates/service.js";
 import type { ProjectService } from "../projects/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
+import { createDevelopmentDeps } from "../development/deps.js";
 
 export function createDeliveryService(
   db: Db,
@@ -46,6 +48,13 @@ export function createDeliveryService(
       loadSession: (pid: string) => loadDevSession(db, pid),
       saveSession: (pid: string, payload: ReturnType<typeof loadDevSession>) =>
         saveDevSession(db, pid, payload),
+      startChangeReview: (pid: string, input: { summary: string; details?: string }) => {
+        const devDeps = createDevelopmentDeps(
+          { db, projects, gates, workspace, onEvent },
+          pid,
+        );
+        startRequirementChangeReview(devDeps, { projectId: pid, ...input });
+      },
       paths,
     };
   };

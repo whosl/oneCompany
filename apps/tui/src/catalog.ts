@@ -110,6 +110,14 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     group: "development",
     capabilities: ["LLM 结构化输出", "产物: 交付报告"],
   },
+  {
+    id: "taizi",
+    name: "太子",
+    role: "调度 / 问答",
+    description: "接收自由输入，路由工作流动作；信息类问题调用只读工具调研后作答。",
+    group: "requirement",
+    capabilities: ["意图分类", "只读工具调研", "工作流调度"],
+  },
 ];
 
 export const GROUP_LABEL: Record<AgentGroup, string> = {
@@ -150,6 +158,7 @@ export const AGENT_COLLAPSED_ICONS: Record<string, string> = {
   review: "⧉",
   qa: "▤",
   "devops-delivery": "↗",
+  taizi: "◆",
 };
 
 export function agentCollapsedIcon(agentId?: string): string | undefined {
@@ -235,8 +244,8 @@ export const GATE_DEFINITIONS: Record<string, GateDefinition> = {
   },
   final_acceptance: {
     title: "最终验收",
-    description: "项目已交付，请验收或驳回。",
-    options: ["accept", "reject_and_redo", "custom"],
+    description: "项目已交付，请验收通过或驳回重做（需说明问题）。",
+    options: ["accept", "reject_and_redo"],
   },
 };
 
@@ -280,6 +289,17 @@ const TOOL_VERBS: Record<string, string> = {
   webfetch: "抓取网页",
   task: "派发子任务",
 };
+
+const WRITE_TOOL_NAMES = new Set(["write", "edit", "multiedit", "patch"]);
+
+export function isWriteTool(toolName: string): boolean {
+  return WRITE_TOOL_NAMES.has(toolName.toLowerCase());
+}
+
+/** In-progress suffix for tool rows in the activity stream. */
+export function toolInProgressSuffix(toolName?: string): string {
+  return isWriteTool(toolName ?? "") ? "写入中…" : "…";
+}
 
 /** Human-readable Chinese verb for a tool call ("运行命令" / "写入文件" …). */
 export function toolVerb(toolName: string): string {

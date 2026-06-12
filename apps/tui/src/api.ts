@@ -4,6 +4,7 @@ import type {
   DevelopmentRunResult,
   GateInfo,
   Json,
+  PreviewStatus,
   ProjectRecord,
   Readiness,
   RequirementRunResult,
@@ -105,6 +106,21 @@ export class ApiClient {
       generatedAppPath: string;
       files: string[];
     }>;
+  }
+
+  startPreview(projectId: string): Promise<{ url: string; health: { reachable: boolean } }> {
+    return this.post(`/projects/${projectId}/preview/start`, {}) as Promise<{
+      url: string;
+      health: { reachable: boolean };
+    }>;
+  }
+
+  stopPreview(projectId: string): Promise<{ ok: boolean }> {
+    return this.post(`/projects/${projectId}/preview/stop`, {}) as Promise<{ ok: boolean }>;
+  }
+
+  previewStatus(projectId: string): Promise<PreviewStatus> {
+    return this.get(`/projects/${projectId}/preview/status`) as Promise<PreviewStatus>;
   }
 
   /* -- development / testing / deployment --------------------------- */

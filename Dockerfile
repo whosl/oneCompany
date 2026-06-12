@@ -1,4 +1,4 @@
-# OneCompany — minimal Ubuntu 22.04 image (API + Web in one container)
+# OneCompany — API runtime for the TUI2 submission build
 # syntax=docker/dockerfile:1
 
 FROM ubuntu:22.04 AS builder
@@ -93,12 +93,9 @@ ENV OC_SKILL_PACKS_ROOT=/opt/onecompany/skill-packs
 ENV OC_INTEGRATION_ADAPTER_MODE=real
 ENV OC_TESTING_INTEGRATION_CHECKS=1
 ENV API_URL=http://127.0.0.1:3001
-ENV NEXT_PUBLIC_API_URL=/api
-ENV NEXT_PUBLIC_API_BASE=/api
-ENV HOSTNAME=0.0.0.0
-ENV PORT=3000
+ENV PORT=3001
 
-EXPOSE 3000
+EXPOSE 3001
 
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

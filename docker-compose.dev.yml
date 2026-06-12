@@ -6,13 +6,9 @@ services:
       target: builder
     image: onecompany:dev
     ports:
-      - "3000:3000"
       - "3001:3001"
     environment:
       NODE_ENV: development
-      # Browser must use same-origin /api proxy — direct :3001 calls fail CORS in the browser.
-      NEXT_PUBLIC_API_URL: /api
-      NEXT_PUBLIC_API_BASE: /api
       API_URL: http://127.0.0.1:3001
       PLAYWRIGHT_BROWSERS_PATH: /opt/playwright-browsers
       OC_INTEGRATION_ADAPTER_MODE: ${OC_INTEGRATION_ADAPTER_MODE:-real}

@@ -26,6 +26,7 @@ import {
   pushNotice,
   pushUserMessage,
   pushTaiziReply,
+  markTaiziActive,
   refreshComposer,
   toggleFileDir,
   type ConsoleState,
@@ -212,6 +213,12 @@ export class App {
         state.repoFiles = await this.api.listFiles(state.projectId, "repo");
       } catch {
         /* best-effort */
+      }
+      try {
+        const preview = await this.api.previewStatus(state.projectId);
+        state.previewReachable = preview.health.reachable;
+      } catch {
+        state.previewReachable = undefined;
       }
       this.yoloSweep();
       this.markDirty();
@@ -550,6 +557,7 @@ export class App {
     const text = raw.trim();
     if (!text) return;
     pushUserMessage(state, text);
+    markTaiziActive(state);
     state.localUserEchoes.add(text);
     this.runAction(
       "taizi",
@@ -604,6 +612,42 @@ export class App {
           this.openSubmissionPackage(result.packagePath);
           return `submission exported → ${result.packagePath}`;
         });
+        break;
+      case "start_preview":
+        this.runAction(
+          "start preview",
+          async () => {
+            const result = await this.api.startPreview(state.projectId);
+            if (this.console) {
+              this.console.previewReachable = result.health.reachable;
+              if (this.console.snapshot?.dev) {
+                this.console.snapshot.dev.previewUrl = result.url;
+              }
+              if (this.console.snapshot?.testing) {
+                this.console.snapshot.testing.previewUrl = result.url;
+              }
+            }
+            return `preview started → ${result.url}`;
+          },
+          { hint: "正在启动预览部署…" },
+        );
+        break;
+      case "stop_preview":
+        this.runAction(
+          "stop preview",
+          async () => {
+            await this.api.stopPreview(state.projectId);
+            return "preview stopped";
+          },
+          {
+            hint: "正在取消部署…",
+            apply: (s) => {
+              s.previewReachable = false;
+              if (s.snapshot?.dev) s.snapshot.dev.previewUrl = undefined;
+              if (s.snapshot?.testing) s.snapshot.testing.previewUrl = undefined;
+            },
+          },
+        );
         break;
       case "skip_clarification":
         this.skipClarification();
@@ -754,6 +798,9 @@ export class App {
         break;
       }
       case "timeline_focus_back":
+        if (state.timelineFocusAgentId) {
+          state.agentStreamScroll.set(state.timelineFocusAgentId, state.timelineScroll);
+        }
         state.timelineFocusAgentId = undefined;
         state.timelineScroll = 0;
         state.focus = "timeline";
@@ -905,6 +952,7 @@ export class App {
 
   private handleTimelineKey(state: ConsoleState, key: Key): void {
     if (key.type === "esc" && state.timelineFocusAgentId) {
+      state.agentStreamScroll.set(state.timelineFocusAgentId, state.timelineScroll);
       state.timelineFocusAgentId = undefined;
       state.timelineScroll = 0;
       return;
@@ -920,9 +968,12 @@ export class App {
   }
 
   private focusAgentStream(state: ConsoleState, agentId: string): void {
+    if (state.timelineFocusAgentId) {
+      state.agentStreamScroll.set(state.timelineFocusAgentId, state.timelineScroll);
+    }
     state.timelineFocusAgentId = agentId;
     state.inspectorAgentId = agentId;
-    state.timelineScroll = 0;
+    state.timelineScroll = state.agentStreamScroll.get(agentId) ?? 0;
     state.focus = "timeline";
   }
 
@@ -1061,8 +1112,10 @@ export class App {
           if (composer.mode === "requirement") this.submitRequirement(text);
           else if (composer.mode === "change_request") this.sendToTaizi(text);
           else if (composer.gateId) {
-            pushUserMessage(state, `custom decision: ${text}`);
-            this.resolveGate(composer.gateId, "custom", text);
+            const decision = composer.pendingGateDecision ?? "custom";
+            pushUserMessage(state, `reject: ${text}`);
+            this.resolveGate(composer.gateId, decision, text);
+            composer.pendingGateDecision = undefined;
           }
         }
         return;
@@ -1092,8 +1145,16 @@ export class App {
   private chooseGateOption(state: ConsoleState, option: string): void {
     const composer = state.composer;
     if (!composer.gateId) return;
+    if (option === "reject_and_redo" && composer.gateType === "final_acceptance") {
+      composer.mode = "gate_custom";
+      composer.pendingGateDecision = "reject_and_redo";
+      composer.input = "";
+      composer.reason = "驳回重做 — 在下方说明问题或修改意见，Enter 发送";
+      return;
+    }
     if (option === "custom") {
       composer.mode = "gate_custom";
+      composer.pendingGateDecision = "custom";
       composer.input = "";
       composer.reason = "Custom decision — describe what should happen instead.";
       return;

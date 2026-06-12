@@ -17,6 +17,13 @@ import type { ConsoleSnapshot, EventEnvelope, GateInfo, PendingQuestion } from "
 
 export type AgentStatus = "idle" | "waiting" | "running" | "tool" | "blocked" | "done" | "failed";
 
+export type AgentPaorEntry = {
+  phase: "plan" | "act" | "observe" | "reflect" | "progress";
+  text: string;
+  at: string;
+  seq?: number;
+};
+
 export type AgentView = {
   id: string;
   name: string;
@@ -30,6 +37,8 @@ export type AgentView = {
   act?: string;
   observe?: string;
   reflect?: string;
+  /** Append-only PAOR / progress log — survives agent switches and later overwrites. */
+  paorLog: AgentPaorEntry[];
   lastTool?: string;
   steps: number;
   errors: number;
@@ -164,6 +173,8 @@ export type ComposerState = {
   gateType?: string;
   gateOptions: string[];
   gateCursor: number;
+  /** When gate_custom collects text for a non-custom option (e.g. reject_and_redo). */
+  pendingGateDecision?: string;
   questions: PendingQuestion[];
   /** Parallel draft answers — one slot per question; supports back-navigation. */
   draftAnswers: string[];
@@ -202,6 +213,8 @@ export type ConsoleState = {
   inspectorAgentId?: string;
   /** When set, center stream shows only this agent's work + strongly related events. */
   timelineFocusAgentId?: string;
+  /** Per-agent timeline scroll offset preserved when switching agent focus. */
+  agentStreamScroll: Map<string, number>;
   composer: ComposerState;
   busy: Set<string>;
   notice?: Notice;
@@ -260,6 +273,8 @@ export type ConsoleState = {
   serverOpenGates: GateInfo[];
   /** Ctrl+P command palette (opencode-style). */
   commandPalette?: { query: string; cursor: number };
+  /** Latest preview health from panel API (drives deploy / undeploy label). */
+  previewReachable?: boolean;
 };
 
 export type LiveDraft = {
@@ -277,6 +292,43 @@ export const REVEAL_CPS = 100;
 
 const MAX_TIMELINE = 500;
 const MAX_TOOLCALLS = 120;
+const MAX_PAOR_LOG = 200;
+
+function appendPaorLog(
+  agent: AgentView,
+  phase: AgentPaorEntry["phase"],
+  text: string,
+  at: string,
+  seq?: number,
+): void {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  if (seq !== undefined && agent.paorLog.some((entry) => entry.seq === seq)) return;
+  const last = agent.paorLog.at(-1);
+  if (last && last.phase === phase && last.text === trimmed) return;
+  agent.paorLog.push({ phase, text: trimmed, at, seq });
+  if (agent.paorLog.length > MAX_PAOR_LOG) {
+    agent.paorLog.splice(0, agent.paorLog.length - MAX_PAOR_LOG);
+  }
+}
+
+/** Rebuild PAOR history from timeline reason rows (for sessions already hydrated). */
+export function backfillAgentPaorLogs(state: ConsoleState): void {
+  const tagToPhase: Record<string, AgentPaorEntry["phase"]> = {
+    PLAN: "plan",
+    ACT: "act",
+    OBSRV: "observe",
+    REFLT: "reflect",
+  };
+  for (const entry of state.timeline) {
+    if (entry.kind !== "reason" || !entry.agent) continue;
+    const phase = tagToPhase[entry.tag];
+    if (!phase) continue;
+    const agent = [...state.agents.values()].find((item) => item.name === entry.agent);
+    if (!agent) continue;
+    appendPaorLog(agent, phase, entry.text, entry.at, entry.seq);
+  }
+}
 
 /**
  * Agent detail stream: own events plus a few workflow events that lack agent_id
@@ -312,6 +364,7 @@ export function createConsoleState(projectId: string, theme: TuiTheme = "dark"):
       totalActiveMs: 0,
       toolRuns: 0,
       artifactCount: 0,
+      paorLog: [],
     });
   }
   return {
@@ -326,6 +379,7 @@ export function createConsoleState(projectId: string, theme: TuiTheme = "dark"):
     sseConnected: false,
     focus: "composer",
     timelineScroll: 0,
+    agentStreamScroll: new Map(),
     agentCursor: 0,
     composer: emptyComposer("read_only", "Loading project…"),
     busy: new Set(),
@@ -460,6 +514,7 @@ function settleToolEntry(
   toolCallId: string,
   kind: "tool_ok" | "tool_err" | "tool_redirect",
   text: string,
+  toolSummary?: string,
 ): boolean {
   for (let i = state.timeline.length - 1; i >= 0; i -= 1) {
     const entry = state.timeline[i]!;
@@ -468,12 +523,32 @@ function settleToolEntry(
       entry.tag =
         kind === "tool_ok" ? "OK" : kind === "tool_redirect" ? "GOV" : "FAIL";
       entry.text = text;
+      if (toolSummary && !entry.toolSummary) {
+        entry.toolSummary = toolSummary;
+      }
       // Keep the original bornAtMs: the title line is already on screen, only
       // the output snippet pops in (no re-queued typewriter for merged lines).
       return true;
     }
   }
   return false;
+}
+
+function inferToolSummaryFromOutput(toolName: string, output: string): string | undefined {
+  const trimmed = output.trim();
+  if (!trimmed) return undefined;
+  const pathTag = trimmed.match(/<path>([^<]+)<\/path>/i);
+  if (pathTag?.[1]) {
+    return pathTag[1].trim().slice(0, 160);
+  }
+  const key = toolName.toLowerCase();
+  if (key === "read" || key === "glob" || key === "grep" || key === "list" || key === "ls") {
+    const firstLine = trimmed.split("\n")[0]?.trim() ?? "";
+    if (/^\/|^\.\/|^[a-zA-Z]:[\\/]/.test(firstLine)) {
+      return firstLine.slice(0, 160);
+    }
+  }
+  return undefined;
 }
 
 function isGovernedRedirect(toolName: string, error: string): boolean {
@@ -595,9 +670,24 @@ function ensureAgent(state: ConsoleState, rawId: string): AgentView {
       totalActiveMs: 0,
       toolRuns: 0,
       artifactCount: 0,
+      paorLog: [],
     };
     state.agents.set(key, agent);
   }
+  return agent;
+}
+
+/** Mark Taizi as the active agent before tool_call events arrive from research. */
+export function markTaiziActive(state: ConsoleState): void {
+  const agent = ensureAgent(state, "taizi");
+  state.lastAgentId = agent.id;
+}
+
+function resolveEventAgent(state: ConsoleState, envelope: EventEnvelope): AgentView | undefined {
+  const rawId = envelope.agentId ?? state.lastAgentId;
+  if (!rawId) return undefined;
+  const agent = ensureAgent(state, rawId);
+  state.lastAgentId = agent.id;
   return agent;
 }
 
@@ -725,6 +815,7 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
       const summary = typeof payload.summary === "string" ? payload.summary : "";
       if (summary && agent.status !== "tool") {
         agent.act = summary;
+        appendPaorLog(agent, "progress", summary, at, seq);
         setAgentStatus(agent, "running", tMs);
       }
       state.lastAgentId = agent.id;
@@ -739,11 +830,21 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
       retirePreviousAgent(state, normalizeAgentId(agentId) ?? agentId, tMs);
       const agent = ensureAgent(state, agentId);
       const summary = typeof payload.summary === "string" ? payload.summary : "";
-      if (type === "agent.plan") agent.plan = summary;
-      if (type === "agent.act") agent.act = summary;
-      if (type === "agent.observe") agent.observe = summary;
+      if (type === "agent.plan") {
+        agent.plan = summary;
+        appendPaorLog(agent, "plan", summary, at, seq);
+      }
+      if (type === "agent.act") {
+        agent.act = summary;
+        appendPaorLog(agent, "act", summary, at, seq);
+      }
+      if (type === "agent.observe") {
+        agent.observe = summary;
+        appendPaorLog(agent, "observe", summary, at, seq);
+      }
       if (type === "agent.reflect") {
         agent.reflect = summary;
+        appendPaorLog(agent, "reflect", summary, at, seq);
         agent.steps += 1;
         setAgentStatus(agent, "done", tMs);
       } else if (agent.status !== "tool") {
@@ -802,7 +903,7 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
       const summary = typeof payload.summary === "string" ? payload.summary : undefined;
       state.toolNames.set(toolCallId, toolName);
       if (summary) state.toolSummaries.set(toolCallId, summary);
-      const agent = state.lastAgentId ? state.agents.get(state.lastAgentId) : undefined;
+      const agent = resolveEventAgent(state, envelope);
       if (agent) {
         setAgentStatus(agent, "tool", tMs);
         agent.lastTool = toolName;
@@ -852,17 +953,23 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
       const toolCallId = String(payload.toolCallId ?? "");
       const toolName = state.toolNames.get(toolCallId) ?? "tool";
       const output = typeof payload.output === "string" ? payload.output : "";
+      let summary = state.toolSummaries.get(toolCallId);
+      if (!summary) {
+        summary = inferToolSummaryFromOutput(toolName, output);
+        if (summary) state.toolSummaries.set(toolCallId, summary);
+      }
       const record =
         state.toolCalls.find((tc) => tc.id === toolCallId) ?? state.toolCalls.at(-1);
       if (record) {
         record.status = "ok";
         record.output = output;
         record.endedAt = Date.now();
+        if (summary && !record.summary) record.summary = summary;
       }
-      const agent = state.lastAgentId ? state.agents.get(state.lastAgentId) : undefined;
+      const agent = resolveEventAgent(state, envelope);
       if (agent && agent.status === "tool") setAgentStatus(agent, "running", tMs);
       applyTodoUpdate(state, toolName, output);
-      if (!settleToolEntry(state, toolCallId, "tool_ok", oneLine(output, 200))) {
+      if (!settleToolEntry(state, toolCallId, "tool_ok", oneLine(output, 200), summary)) {
         pushTimeline(state, {
           seq,
           at,
@@ -870,7 +977,8 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
           tag: "OK",
           agent: agent?.name,
           tool: toolName,
-          toolSummary: state.toolSummaries.get(toolCallId),
+          toolCallId,
+          toolSummary: summary,
           text: oneLine(output, 200),
         });
       }
@@ -887,7 +995,7 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
         record.error = error;
         record.endedAt = Date.now();
       }
-      const agent = state.lastAgentId ? state.agents.get(state.lastAgentId) : undefined;
+      const agent = resolveEventAgent(state, envelope);
       const governed = isGovernedRedirect(toolName, error);
       if (agent && !governed) {
         agent.errors += 1;
@@ -1153,6 +1261,7 @@ export function hydrateSnapshot(state: ConsoleState, snapshot: ConsoleSnapshot):
   }
 
   state.hydratedOnce = true;
+  backfillAgentPaorLogs(state);
   refreshComposer(state);
 }
 
@@ -1179,10 +1288,17 @@ function computeComposer(state: ConsoleState): ComposerState {
     );
   }
 
-  if (status === "Delivered" || status === "Failed") {
+  if (status === "Delivered") {
+    return emptyComposer(
+      "change_request",
+      "项目已交付 — 输入变更需求可重新打开开发（如：落点应在交叉点）",
+    );
+  }
+
+  if (status === "Failed") {
     return emptyComposer(
       "read_only",
-      status === "Delivered" ? "Project delivered. 🎉" : "Project failed — see timeline for details.",
+      "Project failed — see timeline for details.",
     );
   }
 
@@ -1249,6 +1365,7 @@ export function refreshComposer(state: ConsoleState): void {
   if (current.mode === "gate_custom" && next.mode === "gate_decision" && sameGate) {
     current.reason = next.reason;
     current.gateOptions = next.gateOptions;
+    current.gateType = next.gateType;
     return;
   }
 
@@ -1265,6 +1382,38 @@ export function refreshComposer(state: ConsoleState): void {
   }
 
   state.composer = next;
+}
+
+/* ------------------------------------------------------------------ */
+/* Project panel actions (deploy / export)                              */
+/* ------------------------------------------------------------------ */
+
+/** True when development is far enough along to deploy or export. */
+export function isProjectDeployReady(state: ConsoleState): boolean {
+  const status = state.snapshot?.project.status;
+  if (!status) return false;
+  if (
+    [
+      "Draft Requirement",
+      "Asking Questions",
+      "PRD Ready",
+      "Tech Plan Review",
+      "Failed",
+      "Paused",
+    ].includes(status)
+  ) {
+    return false;
+  }
+  const dev = state.snapshot?.dev;
+  if (dev && dev.sliceTotal > 0) {
+    return dev.sliceIndex >= dev.sliceTotal;
+  }
+  return ["Testing", "Deploying", "Awaiting Acceptance", "Delivered"].includes(status);
+}
+
+/** True when the preview server is running and reachable. */
+export function isPreviewDeployed(state: ConsoleState): boolean {
+  return state.previewReachable === true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1301,12 +1450,6 @@ export function deriveActions(state: ConsoleState): ActionDef[] {
   }
   if (status === "Delivered") {
     actions.push({ label: "delivery report", id: "delivery_report" });
-  }
-  if (
-    status &&
-    !["Draft Requirement", "Failed"].includes(status)
-  ) {
-    actions.push({ label: "导出提交包", id: "export_submission" });
   }
   if (state.composer.mode === "question_round") {
     actions.push({ label: "跳过澄清", id: "skip_clarification" });

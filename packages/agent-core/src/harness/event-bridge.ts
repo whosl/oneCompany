@@ -27,6 +27,8 @@ export type EventBridgeContext = {
 export type EventBridgeHandle = {
   changedFiles: Set<string>;
   isIdle(): boolean;
+  /** Latches true once session.idle (or status idle) was observed for this session. */
+  hasSeenSessionIdle(): boolean;
   hasAssistantReply(): boolean;
   stop(): void;
 };
@@ -45,6 +47,7 @@ export function createEventBridge(
   // are broadcast-only and never hit the database.
   const streaming = { lastEmitAt: 0 };
   let sessionIdle = false;
+  let seenSessionIdle = false;
   let assistantReply = false;
   let pendingPermissions = 0;
   let aborted = false;
@@ -55,6 +58,7 @@ export function createEventBridge(
 
   const markSessionIdle = () => {
     sessionIdle = true;
+    seenSessionIdle = true;
   };
 
   const isEffectivelyIdle = () =>
@@ -95,6 +99,9 @@ export function createEventBridge(
     changedFiles,
     isIdle() {
       return isEffectivelyIdle();
+    },
+    hasSeenSessionIdle() {
+      return seenSessionIdle;
     },
     hasAssistantReply() {
       return assistantReply;
@@ -211,12 +218,31 @@ function handleOpencodeEvent(
       hooks.markSessionIdle();
       return;
     }
+    case "session.status": {
+      if (event.properties.sessionID !== ctx.sessionId) {
+        return;
+      }
+      if (event.properties.status.type === "idle") {
+        hooks.markSessionIdle();
+      } else {
+        hooks.markSessionActive();
+      }
+      return;
+    }
     case "message.updated": {
       return;
     }
     case "message.part.updated": {
       const part = event.properties.part;
       if (part.sessionID !== ctx.sessionId) {
+        return;
+      }
+      if (part.type === "tool") {
+        const toolStatus = part.state?.status;
+        if (toolStatus === "pending" || toolStatus === "running") {
+          hooks.markSessionActive();
+        }
+        handleToolPart(part, ctx, hooks);
         return;
       }
       hooks.markSessionActive();
@@ -228,7 +254,6 @@ function handleOpencodeEvent(
         maybeEmitStreamDelta(ctx, hooks.streaming, part.id, part.text ?? "");
         maybeEmitThinking(ctx, hooks.thinking, part.id, part.text ?? "");
       }
-      handleToolPart(part, ctx, hooks);
       return;
     }
     case "command.executed": {
@@ -246,7 +271,7 @@ function handleOpencodeEvent(
       if (event.properties.sessionID !== ctx.sessionId) {
         return;
       }
-      hooks.markSessionActive();
+      // Diff is emitted after session.idle on mimocode; must not flip back to active.
       for (const file of event.properties.diff) {
         hooks.changedFiles.add(file.file);
       }
@@ -285,6 +310,9 @@ function summarizeToolInput(state: { title?: string; input?: unknown }): string 
     input.filePath,
     input.filepath,
     input.path,
+    input.file,
+    input.target,
+    input.relativePath,
     input.pattern,
     input.url,
     input.description,
@@ -296,6 +324,46 @@ function summarizeToolInput(state: { title?: string; input?: unknown }): string 
     }
   }
   return undefined;
+}
+
+/** Extract a display path from completed tool output (e.g. opencode read `<path>` tags). */
+function summarizeToolOutput(toolName: string, output: unknown): string | undefined {
+  if (typeof output !== "string") return undefined;
+  const trimmed = output.trim();
+  if (!trimmed) return undefined;
+
+  const pathTag = trimmed.match(/<path>([^<]+)<\/path>/i);
+  if (pathTag?.[1]) {
+    return pathTag[1].trim().slice(0, 160);
+  }
+
+  const key = toolName.toLowerCase();
+  if (key === "read" || key === "glob" || key === "grep" || key === "list" || key === "ls") {
+    const firstLine = trimmed.split("\n")[0]?.trim() ?? "";
+    if (/^\/|^\.\/|^[a-zA-Z]:[\\/]/.test(firstLine)) {
+      return firstLine.slice(0, 160);
+    }
+  }
+  return undefined;
+}
+
+function emitToolStarted(
+  ctx: EventBridgeContext,
+  hooks: { seenToolCalls: Set<string> },
+  part: Part,
+  summary: string | undefined,
+): void {
+  const toolCallId = part.callID;
+  if (hooks.seenToolCalls.has(toolCallId)) {
+    return;
+  }
+  hooks.seenToolCalls.add(toolCallId);
+  ctx.emit({
+    type: "tool_call.started",
+    toolCallId,
+    toolName: part.tool,
+    summary,
+  });
 }
 
 function handleToolPart(
@@ -314,23 +382,25 @@ function handleToolPart(
   const toolCallId = part.callID;
   const state = part.state;
 
-  if (state.status === "running") {
+  if (state.status === "pending" || state.status === "running") {
     hooks.markSessionActive();
-    if (!hooks.seenToolCalls.has(toolCallId)) {
-      hooks.seenToolCalls.add(toolCallId);
-      ctx.emit({
-        type: "tool_call.started",
-        toolCallId,
-        toolName: part.tool,
-        summary: summarizeToolInput(state),
-      });
-    }
     hooks.runningTools.add(toolCallId);
+    const summary = summarizeToolInput(state);
+    // Pending often arrives before opencode fills tool input — defer started until
+    // we have a summary or the tool transitions to running.
+    if (!hooks.seenToolCalls.has(toolCallId) && (summary || state.status === "running")) {
+      emitToolStarted(ctx, hooks, part, summary);
+    }
     return;
   }
 
   if (state.status === "completed") {
     hooks.runningTools.delete(toolCallId);
+    const summary =
+      summarizeToolInput(state) ?? summarizeToolOutput(part.tool, state.output);
+    if (!hooks.seenToolCalls.has(toolCallId)) {
+      emitToolStarted(ctx, hooks, part, summary);
+    }
     ctx.emit({
       type: "tool_call.output",
       toolCallId,

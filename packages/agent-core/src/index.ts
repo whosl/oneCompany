@@ -53,6 +53,13 @@ export {
 export { runScriptedDevAgent } from "./agents/development/scripted-runner.js";
 export type { DevAgentTask, DevFixtureProfile } from "./agents/development/types.js";
 export {
+  buildAgentSystemPrompt,
+  buildReviewPrompt,
+  buildStructuredAgentPrompts,
+  buildTddPrompt,
+  type AgentPromptContent,
+} from "./agents/prompt-builder.js";
+export {
   registerTaiziAgent,
   TAIZI_AGENT_DEFINITION,
   TAIZI_AGENT_ID,
@@ -64,6 +71,16 @@ export {
   isStatusInquiry,
   type TaiziClassifyInput,
 } from "./agents/taizi/runner.js";
+export {
+  DEFAULT_TAIZI_HISTORY_TURNS,
+  loadTaiziChatHistory,
+  MAX_TAIZI_TURN_CHARS,
+  taiziRoutedPayloadsToTurns,
+} from "./agents/taizi/history.js";
+export {
+  appendHistorySection,
+  buildTaiziChatMessages,
+} from "./agents/taizi/messages.js";
 export {
   answerTaiziWithTools,
   buildTaiziAnswerPrompt,

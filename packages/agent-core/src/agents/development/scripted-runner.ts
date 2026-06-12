@@ -5,25 +5,24 @@ import {
   PlannerOutputSchema,
   QaOutputSchema,
   ReviewOutputSchema,
-  TestDesignerOutputSchema,
 } from "@oc/shared";
 import { DEVELOPMENT_AGENT_IDS } from "./definitions.js";
 import type { DevAgentTask, DevFixtureProfile } from "./types.js";
 
 function slicesForProfile(profile: DevFixtureProfile) {
-  const baseTest = "pnpm vitest run src/slice.test.ts --reporter=json";
+  const baseTest = "pnpm vitest run tests/slice.test.ts --reporter=json";
   if (profile === "two_slices") {
     return [
       {
         id: "slice-1",
         title: "Scaffold app",
-        testCommand: "pnpm vitest run src/scaffold.test.ts --reporter=json",
+        testCommand: "pnpm vitest run tests/scaffold.test.ts --reporter=json",
         acceptanceChecks: ["app boots"],
       },
       {
         id: "slice-2",
         title: "Add feature",
-        testCommand: "pnpm vitest run src/feature.test.ts --reporter=json",
+        testCommand: "pnpm vitest run tests/feature.test.ts --reporter=json",
         acceptanceChecks: ["feature works"],
       },
     ];
@@ -50,15 +49,6 @@ export function runScriptedDevAgent(agentIdAtVersion: string, task: DevAgentTask
         stack: ["typescript", "vitest", "hono"],
         architectureNotes: ["monorepo workspace", "scripted CI path"],
         risks: profile === "always_fail_slice" ? ["slice may fail authoritative checks"] : [],
-      });
-
-    case DEVELOPMENT_AGENT_IDS.testDesigner:
-      return TestDesignerOutputSchema.parse({
-        testSpecs: slices.map((slice) => ({
-          sliceId: slice.id,
-          testCommand: slice.testCommand,
-          description: `Scoped test for ${slice.title}`,
-        })),
       });
 
     case DEVELOPMENT_AGENT_IDS.planner:

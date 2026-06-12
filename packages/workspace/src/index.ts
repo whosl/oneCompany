@@ -14,6 +14,8 @@ export { commitSlice, initRepo, type CommitSliceInput } from "./git.js";
 export {
   ensureDevRepoScaffold,
   ensureE2eScaffold,
+  ensurePackageRunnable,
+  GENERATED_APP_DEV_DEPS,
   findPlaywrightCli,
   findPlaywrightModulePaths,
   findVitestMjs,
@@ -22,6 +24,15 @@ export {
   resolveSliceTestCommand,
   resolveTypecheckCommand,
 } from "./dev-scaffold.js";
+export {
+  assertSliceWebExpectedFiles,
+  assertWebLayerDelivered,
+  isPlaceholderWebPage,
+  readPrimaryIndexHtml,
+  SCAFFOLD_PLACEHOLDER_TITLE,
+  shouldEnforceWebLayer,
+  writeMinimalProductWeb,
+} from "./web-layer.js";
 export { getGitPatch } from "./git-diff.js";
 export { classifyCommandChain, splitShellSegments } from "./command-chain.js";
 export {

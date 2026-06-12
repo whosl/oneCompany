@@ -190,6 +190,14 @@ export function createTestingService(
 
     async stopPreview(projectId: string): Promise<void> {
       await stopPreview(projectId);
+      const payload = loadDevSession(db, projectId);
+      saveDevSession(db, projectId, {
+        ...payload,
+        state: { ...payload.state, previewUrl: undefined },
+        testing: payload.testing
+          ? { ...payload.testing, previewUrl: undefined }
+          : payload.testing,
+      });
     },
   };
 }

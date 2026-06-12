@@ -96,7 +96,7 @@ describe("change review", () => {
       const reviewPayload = loadDevSession(db, projectId);
       const rejected = handleChangeReviewDecision(deps, reviewPayload, "reject");
       expect(rejected.meta.phase).toBe("slicing");
-      expect(rejected.gateId).toBeUndefined();
+      expect(rejected.meta.gateId).toBeUndefined();
       expect(rejected.state.taskQueue[0]?.status).toBe("pending");
       expect(db.select().from(changeRequests).all()[0]?.status).toBe("resolved");
     } finally {

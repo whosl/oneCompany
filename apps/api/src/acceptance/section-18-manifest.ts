@@ -39,10 +39,10 @@ export const SECTION_18_ACCEPTANCE: AcceptanceCriterion[] = [
     probe: "packages/workflow/src/development/tech-plan.test.ts",
   },
   {
-    id: "figma-console-baseline",
-    criterion: "Console implements top nav, Stream, Swimlane, right tabs, Settings, and Project Hub.",
+    id: "tui2-console-baseline",
+    criterion: "TUI2 exposes Project Hub, workflow stream, agent swimlanes, gates, and artifacts.",
     mode: "manual",
-    probe: "apps/web/e2e/console-baseline.spec.ts",
+    probe: "apps/tui/src/render.ts",
   },
   {
     id: "dev-slices-events",
@@ -113,8 +113,8 @@ export const SECTION_18_ACCEPTANCE: AcceptanceCriterion[] = [
   {
     id: "no-high-risk-open",
     criterion: "No unresolved high-risk issue remains.",
-    mode: "manual",
-    probe: "handbook/acceptance/section-18-checklist.md",
+    mode: "automated",
+    probe: "packages/workspace/src/risk.regression.test.ts",
   },
 ];
 

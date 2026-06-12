@@ -20,16 +20,6 @@ export const ArchitectOutputSchema = z.object({
   risks: stringArrayField(),
 });
 
-export const TestDesignerOutputSchema = z.object({
-  testSpecs: z.array(
-    z.object({
-      sliceId: z.string(),
-      testCommand: z.string(),
-      description: z.string(),
-    }),
-  ),
-});
-
 export const PlannerSliceSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -69,7 +59,6 @@ export const DevopsDeliveryOutputSchema = z.object({
 });
 
 export type ArchitectOutput = z.infer<typeof ArchitectOutputSchema>;
-export type TestDesignerOutput = z.infer<typeof TestDesignerOutputSchema>;
 export type PlannerOutput = z.infer<typeof PlannerOutputSchema>;
 export type CodingOutput = z.infer<typeof CodingOutputSchema>;
 export type ReviewOutput = z.infer<typeof ReviewOutputSchema>;

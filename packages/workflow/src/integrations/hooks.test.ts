@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { integrationToolCalls } from "@oc/shared";
-import { seedTestProject, setupIntegrationTestDb } from "../../../integrations/src/test-utils.js";
 import { runPreviewIntegrationChecks } from "./hooks.js";
+import { seedIntegrationTestProject, setupIntegrationTestDb } from "./test-utils.js";
 
 describe("runPreviewIntegrationChecks", () => {
   it("auto-enables playwright and records mock verification artifacts", async () => {
@@ -9,7 +9,7 @@ describe("runPreviewIntegrationChecks", () => {
     process.env.OC_INTEGRATION_ADAPTER_MODE = "mock";
     const { db, cleanup } = setupIntegrationTestDb();
     try {
-      const projectId = seedTestProject(db);
+      const projectId = seedIntegrationTestProject(db);
       const summary = await runPreviewIntegrationChecks(
         {
           db,
@@ -19,6 +19,9 @@ describe("runPreviewIntegrationChecks", () => {
         "http://127.0.0.1:4173",
         "baseline",
       );
+      if (!summary) {
+        throw new Error("Expected Playwright integration summary");
+      }
 
       expect(summary.artifacts).toHaveLength(2);
       expect(summary.artifacts.map((item) => item.toolName).sort()).toEqual([

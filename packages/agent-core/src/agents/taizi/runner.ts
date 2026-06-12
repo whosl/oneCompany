@@ -1,15 +1,18 @@
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import {
   TaiziDecisionSchema,
+  type TaiziChatTurn,
   type TaiziContext,
   type TaiziDecision,
 } from "@oc/shared";
 import { getOpenAiApiKey } from "../../engine-mode.js";
 import { createChatModel } from "../../llm/langchain-model.js";
+import { buildTaiziChatMessages } from "./messages.js";
 
 export type TaiziClassifyInput = {
   message: string;
   context: TaiziContext;
+  /** Prior user↔Taizi turns from persisted events (oldest first). */
+  history?: TaiziChatTurn[];
 };
 
 /* ------------------------------------------------------------------ */
@@ -208,10 +211,13 @@ export function classifyTaiziWithRules(
 export async function classifyTaiziWithLlm(input: TaiziClassifyInput): Promise<TaiziDecision> {
   const model = createChatModel("cheap");
   const structured = model.withStructuredOutput(TaiziDecisionSchema, { method: "jsonMode" });
-  const raw = await structured.invoke([
-    new SystemMessage(buildTaiziSystemPrompt(input.context)),
-    new HumanMessage(input.message),
-  ]);
+  const raw = await structured.invoke(
+    buildTaiziChatMessages(
+      buildTaiziSystemPrompt(input.context),
+      input.history ?? [],
+      input.message,
+    ),
+  );
   return TaiziDecisionSchema.parse(raw);
 }
 

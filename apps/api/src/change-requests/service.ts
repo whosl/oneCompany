@@ -4,11 +4,11 @@ import {
   CreateChangeRequestInputSchema,
   type Db,
 } from "@oc/shared";
-import { startRequirementChangeReview } from "@oc/workflow";
+import { loadDevSession, saveDevSession, startRequirementChangeReview } from "@oc/workflow";
 import { createDevelopmentDeps, type DevelopmentServiceContext } from "../development/deps.js";
 import type { ProjectService } from "../projects/service.js";
 
-const CHANGE_ALLOWED_STATUSES = new Set(["Developing", "Testing"]);
+const CHANGE_ALLOWED_STATUSES = new Set(["Developing", "Testing", "Delivered"]);
 
 export function createChangeRequestService(
   db: Db,
@@ -30,6 +30,13 @@ export function createChangeRequestService(
       }
 
       const deps = createDevelopmentDeps(ctx, projectId);
+      if (project.status === "Delivered") {
+        const payload = loadDevSession(db, projectId);
+        saveDevSession(db, projectId, {
+          ...payload,
+          delivery: { phase: "idle", reportGenerated: false },
+        });
+      }
       const payload = startRequirementChangeReview(deps, {
         projectId,
         summary: parsed.summary,

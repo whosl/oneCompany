@@ -59,6 +59,20 @@ export const TaiziContextSchema = z.object({
 
 export type TaiziContext = z.infer<typeof TaiziContextSchema>;
 
+/** One turn in Taizi ↔ user chat history (for multi-turn LLM context). */
+export const TaiziChatTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+});
+
+export type TaiziChatTurn = z.infer<typeof TaiziChatTurnSchema>;
+
+/** Default number of prior user↔Taizi exchanges to inject into LLM context. */
+export const DEFAULT_TAIZI_HISTORY_TURNS = 10;
+
+/** Max characters per history turn before truncation. */
+export const MAX_TAIZI_TURN_CHARS = 2_000;
+
 /** Taizi 的结构化输出：意图 + 给用户的回复 + 动作参数。 */
 export const TaiziDecisionSchema = z.object({
   intent: TaiziIntentSchema,
@@ -87,6 +101,8 @@ export const TaiziDispatchResultSchema = z.object({
   reply: z.string(),
   /** 动作是否真正改变了系统状态 */
   stateChanged: z.boolean(),
+  /** 客户端应自动打开的本机路径（如导出提交包目录） */
+  openPath: z.string().optional(),
 });
 
 export type TaiziDispatchResult = z.infer<typeof TaiziDispatchResultSchema>;

@@ -58,11 +58,20 @@ export async function closeMcpClientsForTests(): Promise<void> {
 }
 
 function formatToolResult(result: Awaited<ReturnType<Client["callTool"]>>): unknown {
-  const textParts =
-    result.content
-      ?.filter((part) => part.type === "text")
-      .map((part) => ("text" in part ? part.text : ""))
-      .filter(Boolean) ?? [];
+  const content: unknown[] = Array.isArray(result.content) ? result.content : [];
+  const textParts = content.flatMap((part) => {
+    if (
+      typeof part === "object" &&
+      part !== null &&
+      "type" in part &&
+      part.type === "text" &&
+      "text" in part &&
+      typeof part.text === "string"
+    ) {
+      return [part.text];
+    }
+    return [];
+  });
   if (textParts.length === 1) {
     try {
       return JSON.parse(textParts[0]!);

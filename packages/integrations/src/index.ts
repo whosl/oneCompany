@@ -48,6 +48,7 @@ export {
   isSecretConfigured,
 } from "./adapters/readiness.js";
 export { MOCK_CONNECTOR_ADAPTERS } from "./adapters/mock-adapter.js";
+export { MINIMAL_PNG, writeMockPng } from "./adapters/mock-artifact.js";
 export {
   isIntegrationAuthorizePending,
   isIntegrationAuthorizeAllowed,

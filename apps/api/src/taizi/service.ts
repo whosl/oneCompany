@@ -3,6 +3,7 @@ import {
   classifyTaiziMessage,
   getActiveHarnessSession,
   isStatusInquiry,
+  loadTaiziChatHistory,
   registerTaiziAgent,
   steerHarnessSession,
 } from "@oc/agent-core";
@@ -10,6 +11,7 @@ import {
   emit,
   type Db,
   type EventEnvelope,
+  type TaiziChatTurn,
   type TaiziContext,
   type TaiziDecision,
   type TaiziDispatchResult,
@@ -95,6 +97,7 @@ export function createTaiziService(deps: TaiziServiceDeps) {
         action: result.action,
         reply: result.reply,
         stateChanged: result.stateChanged,
+        openPath: result.openPath,
       },
     });
     deps.onEvent(envelope);
@@ -120,6 +123,9 @@ export function createTaiziService(deps: TaiziServiceDeps) {
     const gate = context.openGates[0];
     if (gate?.gateType === "change_review") {
       return `下一步：对变更评审回复「继续」或「批准」放行（${gate.options.join("/")}），或「拒绝」撤销。`;
+    }
+    if (gate?.gateType === "deployment") {
+      return "下一步：测试已生成 Preview URL，直接说「批准部署」或按 Enter 确认 URL 后放行。";
     }
     if (gate) {
       return `下一步：对「${gate.gateType}」门禁表态（可选：${gate.options.join(" / ")}），或直接说「批准」「继续」。`;
@@ -170,11 +176,13 @@ export function createTaiziService(deps: TaiziServiceDeps) {
     message: string,
     context: TaiziContext,
     decision: TaiziDecision,
+    history: TaiziChatTurn[],
   ): Promise<string> => {
     const fallback = summarizeStatus(projectId, context);
     return answerTaiziWithTools({
       message,
       context,
+      history,
       execCtx: buildResearchExecCtx(projectId),
       fallbackReply: fallback,
     });
@@ -246,6 +254,7 @@ export function createTaiziService(deps: TaiziServiceDeps) {
     message: string,
     decision: TaiziDecision,
     context: TaiziContext,
+    history: TaiziChatTurn[],
   ): Promise<TaiziDispatchResult> => {
     const status = context.projectStatus;
     const firstGate = context.openGates[0];
@@ -414,7 +423,7 @@ export function createTaiziService(deps: TaiziServiceDeps) {
         }
         if (status === "Developing" || status === "Testing") {
           // 项目已在开发——新「需求」按变更请求处理。
-          return dispatch(projectId, message, { ...decision, intent: "change_request" }, context);
+          return dispatch(projectId, message, { ...decision, intent: "change_request" }, context, history);
         }
         return {
           intent: "new_requirement",
@@ -486,7 +495,7 @@ export function createTaiziService(deps: TaiziServiceDeps) {
             ...decision,
             intent: "status_query",
             reply: "",
-          });
+          }, history);
           return {
             intent: "status_query",
             action: "taizi.research",
@@ -532,8 +541,19 @@ export function createTaiziService(deps: TaiziServiceDeps) {
             stateChanged: true,
           };
         }
+        if (status === "Delivered") {
+          runInBackground(projectId, message, "change_request.create", async () =>
+            deps.changeRequests.create(projectId, { summary: text }),
+          );
+          return {
+            intent: "change_request",
+            action: "change_request.create",
+            reply: "项目已交付 — 已提交变更请求，重新进入开发评审。",
+            stateChanged: true,
+          };
+        }
         if (status === "Draft Requirement") {
-          return dispatch(projectId, message, { ...decision, intent: "new_requirement" }, context);
+          return dispatch(projectId, message, { ...decision, intent: "new_requirement" }, context, history);
         }
         if (status === "Asking Questions") {
           return {
@@ -546,7 +566,7 @@ export function createTaiziService(deps: TaiziServiceDeps) {
         return {
           intent: "change_request",
           action: "noop",
-          reply: `当前状态「${status}」暂不支持变更请求（支持阶段：开发中 / 测试中）。`,
+          reply: `当前状态「${status}」暂不支持变更请求（支持阶段：开发中 / 测试中 / 已交付）。`,
           stateChanged: false,
         };
       }
@@ -609,11 +629,12 @@ export function createTaiziService(deps: TaiziServiceDeps) {
           action: "delivery.export",
           reply: `提交包已导出：${result.packagePath}`,
           stateChanged: true,
+          openPath: result.packagePath,
         };
       }
 
       case "status_query": {
-        const reply = await researchAndReply(projectId, message, context, decision);
+        const reply = await researchAndReply(projectId, message, context, decision, history);
         return {
           intent: "status_query",
           action: "taizi.research",
@@ -629,7 +650,7 @@ export function createTaiziService(deps: TaiziServiceDeps) {
           reply:
             decision.reply ||
             "我不确定你想做什么。可以说「继续」「暂停」「加一个xxx功能」「导出提交包」或「现在到哪了」。",
-        });
+        }, history);
         return {
           intent: "chat",
           action: "taizi.research",
@@ -647,12 +668,13 @@ export function createTaiziService(deps: TaiziServiceDeps) {
         throw new Error("message is required");
       }
       const context = buildContext(projectId);
-      let decision = await classifyTaiziMessage({ message: trimmed, context });
+      const history = loadTaiziChatHistory(deps.db, projectId);
+      let decision = await classifyTaiziMessage({ message: trimmed, context, history });
       // 进度/下一步类问句绝不创建变更单（用户直觉：在问状态，不是在改需求）。
       if (decision.intent === "change_request" && isStatusInquiry(trimmed)) {
         decision = { ...decision, intent: "status_query", reply: "" };
       }
-      const result = await dispatch(projectId, trimmed, decision, context);
+      const result = await dispatch(projectId, trimmed, decision, context, history);
       emitRouted(projectId, trimmed, result);
       return result;
     },

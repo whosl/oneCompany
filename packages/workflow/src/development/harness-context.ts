@@ -24,6 +24,15 @@ function toAgentEvent(projectId: string, agentId: string, raw: unknown): AgentEv
   const base = { projectId, agentId };
 
   switch (type) {
+    case "agent.prompt":
+      return {
+        type,
+        ...base,
+        system: typeof event.system === "string" ? event.system : undefined,
+        human: typeof event.human === "string" ? event.human : undefined,
+        text: typeof event.text === "string" ? event.text : undefined,
+        sliceId: typeof event.sliceId === "string" ? event.sliceId : undefined,
+      };
     case "agent.plan":
     case "agent.act":
     case "agent.observe":
