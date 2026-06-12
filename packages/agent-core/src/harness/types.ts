@@ -4,6 +4,8 @@ export interface SliceSpec {
   goal: string;
   acceptanceChecks: string[];
   testCommand: string;
+  /** Planner hints — coding agent should create these when feasible. */
+  expectedFiles?: string[];
   modelTier: "cheap" | "standard" | "strong";
 }
 
@@ -45,6 +47,8 @@ export interface ReviewSpec {
   sliceId: string;
   goal: string;
   acceptanceChecks: string[];
+  /** Planner hints — reviewer may note path mismatches but must not reject solely on these. */
+  expectedFiles?: string[];
   /** Commit summary / diff stat shown to the reviewer for orientation. */
   diffSummary?: string;
   modelTier: "cheap" | "standard" | "strong";

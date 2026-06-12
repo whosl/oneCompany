@@ -6,6 +6,8 @@ import {
   normalizeAgentId,
   type AgentGroup,
 } from "./catalog.js";
+import { entryDefaults, isExecutionKind } from "./codex-turns.js";
+import type { TuiTheme } from "./theme.js";
 import { oneLine } from "./text.js";
 import type { ConsoleSnapshot, EventEnvelope, GateInfo, PendingQuestion } from "./types.js";
 
@@ -105,7 +107,9 @@ export type TimelineKind =
   | "deploy"
   | "artifact"
   | "error"
-  | "info";
+  | "info"
+  /** Persisted agent.start prompt — shown in agent focus stream only. */
+  | "prompt";
 
 export type TodoItem = {
   content: string;
@@ -132,6 +136,14 @@ export type TimelineEntry = {
   text: string;
   /** Set for live entries: drives the typewriter reveal animation. */
   bornAtMs?: number;
+  /** Codex turn grouping — user message opens a turn. */
+  turnId?: string;
+  /** Execution activities within a turn share this id. */
+  activityGroupId?: string;
+  /** Main thread or agent id for sub-thread filtering. */
+  threadId?: string;
+  importance?: "primary" | "execution" | "critical";
+  defaultExpanded?: boolean;
 };
 
 export type ComposerMode =
@@ -170,7 +182,7 @@ export type ViewerState = {
   loading: boolean;
 };
 
-export type ActionDef = { key: string; label: string; id: string };
+export type ActionDef = { key?: string; label: string; id: string };
 
 export type ConsoleState = {
   projectId: string;
@@ -188,6 +200,8 @@ export type ConsoleState = {
   timelineScroll: number;
   agentCursor: number;
   inspectorAgentId?: string;
+  /** When set, center stream shows only this agent's work + strongly related events. */
+  timelineFocusAgentId?: string;
   composer: ComposerState;
   busy: Set<string>;
   notice?: Notice;
@@ -220,6 +234,8 @@ export type ConsoleState = {
   todos: TodoItem[];
   /** Auto-approve dangerous_operation gates (with visible warning). */
   yoloMode: boolean;
+  /** Taizi panel and accent colors — dark (default) or light. */
+  theme: TuiTheme;
   /**
    * Live token-stream draft (agent.stream_delta bypass channel): the text the
    * model is producing right now. Rendered as a growing block at the bottom of
@@ -228,6 +244,22 @@ export type ConsoleState = {
   liveDraft?: LiveDraft;
   inspectorTab: InspectorTab;
   repoFiles: string[];
+  /** Expanded directory paths in the Files panel tree. */
+  expandedFileDirs: Set<string>;
+  /** Scroll offset (rows from top) for the Files panel tree. */
+  fileTreeScroll: number;
+  /** Monotonic turn counter for Codex-style grouping. */
+  turnCounter: number;
+  /** Active turn opened by the latest user message (or orphan execution). */
+  currentTurnId?: string;
+  /** User toggled collapsed activity groups (by turn id). */
+  collapsedTurns: Set<string>;
+  /** User manually expanded groups — do not auto-collapse. */
+  pinnedTurns: Set<string>;
+  /** Open gates from API snapshot before client dismiss filtering. */
+  serverOpenGates: GateInfo[];
+  /** Ctrl+P command palette (opencode-style). */
+  commandPalette?: { query: string; cursor: number };
 };
 
 export type LiveDraft = {
@@ -246,11 +278,30 @@ export const REVEAL_CPS = 100;
 const MAX_TIMELINE = 500;
 const MAX_TOOLCALLS = 120;
 
+/**
+ * Agent detail stream: own events plus a few workflow events that lack agent_id
+ * but are strongly tied to development (tests, commits, gates).
+ */
+export function timelineEntryForAgentFocus(entry: TimelineEntry, agent: AgentView): boolean {
+  if (entry.agent === agent.name) return true;
+  if (entry.kind === "gate" || entry.kind === "gate_ok") return true;
+  if (agent.group !== "development") return false;
+  if (entry.kind === "test") return true;
+  return entry.kind === "artifact" && entry.tag === "DIFF";
+}
+
+export function filterTimelineForAgentFocus(
+  timeline: TimelineEntry[],
+  agent: AgentView,
+): TimelineEntry[] {
+  return timeline.filter((entry) => timelineEntryForAgentFocus(entry, agent));
+}
+
 /* ------------------------------------------------------------------ */
 /* Construction                                                         */
 /* ------------------------------------------------------------------ */
 
-export function createConsoleState(projectId: string): ConsoleState {
+export function createConsoleState(projectId: string, theme: TuiTheme = "dark"): ConsoleState {
   const agents = new Map<string, AgentView>();
   for (const entry of AGENT_CATALOG) {
     agents.set(entry.id, {
@@ -287,8 +338,15 @@ export function createConsoleState(projectId: string): ConsoleState {
     localUserEchoes: new Set(),
     todos: [],
     yoloMode: false,
+    theme,
     inspectorTab: "artifacts",
     repoFiles: [],
+    expandedFileDirs: new Set(),
+    fileTreeScroll: 0,
+    turnCounter: 0,
+    collapsedTurns: new Set(),
+    pinnedTurns: new Set(),
+    serverOpenGates: [],
   };
 }
 
@@ -316,6 +374,36 @@ function clock(timestamp?: string): string {
     : date.toLocaleTimeString("en-GB", { hour12: false });
 }
 
+function assignTurnMeta(
+  state: ConsoleState,
+  kind: TimelineKind,
+  tag: string,
+  agent?: string,
+): Pick<TimelineEntry, "turnId" | "activityGroupId" | "threadId" | "importance" | "defaultExpanded"> {
+  const { importance, defaultExpanded } = entryDefaults(kind, tag);
+  const threadId = agent ? (normalizeAgentId(agent) ?? agent) : "main";
+
+  if (kind === "user") {
+    state.turnCounter += 1;
+    state.currentTurnId = `t${state.turnCounter}`;
+  } else if (kind === "taizi" || (kind === "reason" && tag === "REFLT")) {
+    // Conclusion closes the active activity group; next execution opens a fresh one.
+    state.currentTurnId = undefined;
+  } else if (kind === "agent") {
+    state.turnCounter += 1;
+    state.currentTurnId = `t${state.turnCounter}`;
+  } else if (!state.currentTurnId && isExecutionKind(kind)) {
+    state.turnCounter += 1;
+    state.currentTurnId = `t${state.turnCounter}`;
+  }
+
+  const turnId = state.currentTurnId;
+  const activityGroupId =
+    turnId && importance === "execution" ? `${turnId}-act` : undefined;
+
+  return { turnId, activityGroupId, threadId, importance, defaultExpanded };
+}
+
 function pushTimeline(
   state: ConsoleState,
   entry: {
@@ -331,6 +419,7 @@ function pushTimeline(
     text: string;
   },
 ): void {
+  const meta = assignTurnMeta(state, entry.kind, entry.tag, entry.agent);
   state.timeline.push({
     seq: entry.seq ?? state.lastSeq,
     at: entry.at ?? clock(),
@@ -343,6 +432,7 @@ function pushTimeline(
     metaAction: entry.metaAction,
     text: entry.text,
     bornAtMs: nextBornAt(state, entry.kind, entry.text),
+    ...meta,
   });
   if (state.timeline.length > MAX_TIMELINE) {
     state.timeline.splice(0, state.timeline.length - MAX_TIMELINE);
@@ -598,6 +688,32 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
       setAgentStatus(agent, "running", tMs);
       state.lastAgentId = agent.id;
       pushTimeline(state, { seq, at, kind: "agent", tag: "AGENT", agent: agent.name, text: `${agent.name} started` });
+      break;
+    }
+
+    case "agent.prompt": {
+      const agentId = String(payload.agentId ?? envelope.agentId ?? state.lastAgentId ?? "agent");
+      const agent = ensureAgent(state, agentId);
+      const parts: string[] = [];
+      if (typeof payload.system === "string" && payload.system.trim()) {
+        parts.push(`[System]\n${payload.system}`);
+      }
+      if (typeof payload.human === "string" && payload.human.trim()) {
+        parts.push(`[Human]\n${payload.human}`);
+      }
+      if (typeof payload.text === "string" && payload.text.trim()) {
+        parts.push(payload.text);
+      }
+      const sliceId = typeof payload.sliceId === "string" ? payload.sliceId : undefined;
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "prompt",
+        tag: sliceId ? `PROMPT · ${sliceId}` : "PROMPT",
+        agent: agent.name,
+        text: parts.join("\n\n"),
+      });
+      state.lastAgentId = agent.id;
       break;
     }
 
@@ -983,6 +1099,7 @@ export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boo
 /* ------------------------------------------------------------------ */
 
 export function hydrateSnapshot(state: ConsoleState, snapshot: ConsoleSnapshot): void {
+  state.serverOpenGates = [...snapshot.openGates];
   // Gates resolved locally stay "open" server-side until the resumed workflow
   // yields; keep them hidden so the card does not flicker back.
   snapshot.openGates = snapshot.openGates.filter((gate) => !state.dismissedGateIds.has(gate.id));
@@ -1008,7 +1125,13 @@ export function hydrateSnapshot(state: ConsoleState, snapshot: ConsoleSnapshot):
       kind: "user",
       tag: "USER",
       text: snapshot.requirement.rawRequirement,
+      threadId: "main",
+      importance: "primary",
+      defaultExpanded: true,
+      turnId: "t0",
     });
+    state.turnCounter = Math.max(state.turnCounter, 1);
+    state.currentTurnId = "t0";
   }
 
   for (const envelope of [...snapshot.events].sort((a, b) => a.seq - b.seq)) {
@@ -1073,6 +1196,10 @@ function computeComposer(state: ConsoleState): ComposerState {
     composer.gateId = gate.id;
     composer.gateType = gate.gateType;
     composer.gateOptions = gate.options.length ? gate.options : def.options;
+    if (gate.gateType === "deployment") {
+      const preview = snapshot.dev?.previewUrl ?? snapshot.testing?.previewUrl;
+      if (preview) composer.input = preview;
+    }
     return composer;
   }
 
@@ -1149,7 +1276,7 @@ export function deriveActions(state: ConsoleState): ActionDef[] {
   const status = state.snapshot?.project.status;
 
   if (status === "PRD Ready") {
-    actions.push({ key: "d", label: "start development", id: "start_dev" });
+    actions.push({ label: "start development", id: "start_dev" });
   }
   // Developing but silent with no gate: the slice loop likely died with a
   // previous API process — offer to resume it from the persisted session.
@@ -1157,47 +1284,65 @@ export function deriveActions(state: ConsoleState): ActionDef[] {
   // only a very long silence overrides that signal.
   const idleMs = Date.now() - state.lastEventAtMs;
   const hasRunningTool = state.toolCalls.some((tc) => tc.status === "running");
+  const hasOpenSliceFailureGate = state.serverOpenGates.some(
+    (gate) => gate.gateType === "slice_failure",
+  );
   if (
     status === "Developing" &&
+    !hasOpenSliceFailureGate &&
     !state.snapshot?.openGates.length &&
     state.busy.size === 0 &&
     ((idleMs > 45_000 && !hasRunningTool) || idleMs > 300_000)
   ) {
-    actions.push({ key: "d", label: "恢复开发（续跑切片）", id: "start_dev" });
+    actions.push({ label: "恢复开发（续跑切片）", id: "start_dev" });
   }
   if (status === "Testing" && (state.snapshot?.testing?.suiteTotal ?? 0) === 0) {
-    actions.push({ key: "t", label: "run tests + deploy", id: "start_testing" });
+    actions.push({ label: "run tests + deploy", id: "start_testing" });
   }
   if (status === "Delivered") {
-    actions.push({ key: "g", label: "delivery report", id: "delivery_report" });
+    actions.push({ label: "delivery report", id: "delivery_report" });
   }
   if (
     status &&
     !["Draft Requirement", "Failed"].includes(status)
   ) {
-    actions.push({ key: "e", label: "导出提交包", id: "export_submission" });
+    actions.push({ label: "导出提交包", id: "export_submission" });
   }
   if (state.composer.mode === "question_round") {
-    actions.push({ key: "k", label: "跳过澄清", id: "skip_clarification" });
+    actions.push({ label: "跳过澄清", id: "skip_clarification" });
     const allAnswered =
       state.composer.draftAnswers.length === state.composer.questions.length &&
       state.composer.draftAnswers.every((answer) => answer.trim().length > 0);
     if (allAnswered) {
-      actions.push({ key: "s", label: "提交本轮答案", id: "submit_answers" });
+      actions.push({ label: "提交本轮答案", id: "submit_answers" });
     }
   }
   if (status === "Paused") {
-    actions.push({ key: "p", label: "resume", id: "pause_resume" });
+    actions.push({ label: "resume", id: "pause_resume" });
   } else if (status && status !== "Delivered" && status !== "Failed") {
-    actions.push({ key: "p", label: "pause", id: "pause_resume" });
+    actions.push({ label: "pause", id: "pause_resume" });
   }
-  actions.push({ key: "r", label: "refresh", id: "refresh" });
+  actions.push({ label: "refresh", id: "refresh" });
   actions.push({
-    key: "y",
+    label: state.theme === "dark" ? "浅色主题" : "深色主题",
+    id: "toggle_theme",
+  });
+  actions.push({
     label: state.yoloMode ? "关闭 YOLO" : "YOLO 模式",
     id: "toggle_yolo",
   });
   return actions;
+}
+
+/** Filter palette entries by query (label or id). */
+export function filterPaletteActions(state: ConsoleState): ActionDef[] {
+  const actions = deriveActions(state);
+  const q = state.commandPalette?.query.trim().toLowerCase() ?? "";
+  if (!q) return actions;
+  return actions.filter(
+    (action) =>
+      action.label.toLowerCase().includes(q) || action.id.toLowerCase().includes(q),
+  );
 }
 
 /** True when the composer is consuming printable keystrokes. */
@@ -1205,4 +1350,12 @@ export function isTyping(state: ConsoleState): boolean {
   if (state.focus !== "composer") return false;
   // Taizi 全程接收输入：除门禁选项导航外，所有模式都可打字。
   return state.composer.mode !== "gate_decision";
+}
+
+export function toggleFileDir(state: ConsoleState, dirPath: string): void {
+  if (state.expandedFileDirs.has(dirPath)) {
+    state.expandedFileDirs.delete(dirPath);
+  } else {
+    state.expandedFileDirs.add(dirPath);
+  }
 }

@@ -62,20 +62,12 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     capabilities: ["LLM 结构化输出", "工具: read-artifact / workspace-read", "产物: 技术方案"],
   },
   {
-    id: "test-designer",
-    name: "Test Designer",
-    role: "测试设计",
-    description: "为每个功能切片设计范围清晰的测试。",
-    group: "development",
-    capabilities: ["LLM 结构化输出", "测试用例设计"],
-  },
-  {
     id: "planner",
     name: "Planner",
-    role: "切片规划",
-    description: "把验收标准拆分为有序的功能切片。",
+    role: "切片规划 / 测试设计",
+    description: "把验收标准拆分为有序的功能切片，并为每个切片设计 vitest 测试（tests/ 路径）。",
     group: "development",
-    capabilities: ["LLM 结构化输出", "切片拆分与排序"],
+    capabilities: ["LLM 结构化输出", "切片拆分与排序", "vitest 测试设计"],
   },
   {
     id: "coding",
@@ -145,6 +137,31 @@ export function agentDisplayName(agentId?: string): string {
   return key ? key.replace(/-/g, " ") : "Agent";
 }
 
+/** Collapsed activity-group header icon per agent role. */
+export const AGENT_COLLAPSED_ICONS: Record<string, string> = {
+  intake: "◌",
+  "requirement-analyst": "◇",
+  "completeness-scorer": "◎",
+  "question-planner": "?",
+  "prd-acceptance": "✓",
+  architect: "◆",
+  planner: "▣",
+  coding: "⚙",
+  review: "⧉",
+  qa: "▤",
+  "devops-delivery": "↗",
+};
+
+export function agentCollapsedIcon(agentId?: string): string | undefined {
+  const key = normalizeAgentId(agentId);
+  return key ? AGENT_COLLAPSED_ICONS[key] : undefined;
+}
+
+export function agentCollapsedIconByName(name: string): string | undefined {
+  const entry = AGENT_CATALOG.find((agent) => agent.name === name);
+  return entry ? AGENT_COLLAPSED_ICONS[entry.id] : undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* Lifecycle                                                            */
 /* ------------------------------------------------------------------ */
@@ -199,7 +216,7 @@ export const GATE_DEFINITIONS: Record<string, GateDefinition> = {
   slice_failure: {
     title: "切片开发失败",
     description: "某个功能切片在重试预算内未能完成，需要你决定如何处理。",
-    options: ["retry", "replan", "request_skip_slice", "fail"],
+    options: ["retry", "replan", "replan_slices", "request_skip_slice", "fail"],
   },
   change_review: {
     title: "变更评审",
@@ -208,7 +225,7 @@ export const GATE_DEFINITIONS: Record<string, GateDefinition> = {
   },
   deployment: {
     title: "部署确认",
-    description: "即将对外暴露部署 URL，请确认。",
+    description: "确认对外暴露的部署 URL（测试阶段已生成 Preview，可直接批准）。",
     options: ["approve", "reject", "custom"],
   },
   dangerous_operation: {
@@ -234,6 +251,7 @@ export const GATE_OPTION_LABELS: Record<string, string> = {
   fail: "终止",
   retry: "重试该切片",
   replan: "重新规划技术方案",
+  replan_slices: "重新规划切片",
   request_skip_slice: "跳过该切片",
   update_plan: "更新开发计划",
   revise_tech_plan: "修改技术方案",

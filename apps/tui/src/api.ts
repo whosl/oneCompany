@@ -56,9 +56,17 @@ export class ApiClient {
     return this.get(`/projects/${projectId}/console/snapshot`) as Promise<ConsoleSnapshot>;
   }
 
-  async readFile(projectId: string, path: string): Promise<{ path: string; content: string }> {
+  async readFile(
+    projectId: string,
+    path: string,
+  ): Promise<{ path: string; content: string; binary?: boolean; absolutePath?: string }> {
     const body = await this.get(`/projects/${projectId}/files?path=${encodeURIComponent(path)}`);
-    return { path: String(body.path ?? path), content: String(body.content ?? "") };
+    return {
+      path: String(body.path ?? path),
+      content: String(body.content ?? ""),
+      binary: body.binary === true,
+      absolutePath: typeof body.absolutePath === "string" ? body.absolutePath : undefined,
+    };
   }
 
   /* -- requirement --------------------------------------------------- */
@@ -163,12 +171,19 @@ export class ApiClient {
   taiziMessage(
     projectId: string,
     message: string,
-  ): Promise<{ intent: string; action: string; reply: string; stateChanged: boolean }> {
+  ): Promise<{
+    intent: string;
+    action: string;
+    reply: string;
+    stateChanged: boolean;
+    openPath?: string;
+  }> {
     return this.post(`/projects/${projectId}/taizi/message`, { message }) as Promise<{
       intent: string;
       action: string;
       reply: string;
       stateChanged: boolean;
+      openPath?: string;
     }>;
   }
 

@@ -1,8 +1,13 @@
 import { ApiClient } from "./api.js";
+import { execFile } from "node:child_process";
+import fs from "node:fs";
 import { attachStdin, type Key, type MouseEvent } from "./input.js";
+import { toggleTurnExpansion } from "./codex-turns.js";
+import { toggleTheme } from "./theme.js";
 import {
   enterScreen,
   hitTest,
+  inInspectorFiles,
   inStream,
   leaveScreen,
   renderConsole,
@@ -11,17 +16,18 @@ import {
   rosterOrder,
   type PickerState,
 } from "./render.js";
-import { loadDismissedGates, loadYoloMode, persistDismissedGate, persistYoloMode } from "./persist.js";
+import { loadDismissedGates, loadTheme, loadYoloMode, persistDismissedGate, persistTheme, persistYoloMode } from "./persist.js";
 import { startEventStream, type SseHandle } from "./sse.js";
 import {
   createConsoleState,
-  deriveActions,
+  filterPaletteActions,
   hydrateSnapshot,
   applyEnvelope,
   pushNotice,
   pushUserMessage,
   pushTaiziReply,
   refreshComposer,
+  toggleFileDir,
   type ConsoleState,
   type FocusZone,
 } from "./store.js";
@@ -84,7 +90,6 @@ export class App {
     leaveScreen();
     if (this.lastOpenedProjectId) {
       process.stdout.write(`\nProject: ${this.lastOpenedProjectId}\n`);
-      process.stdout.write(`Web UI:  http://localhost:3000/projects/${this.lastOpenedProjectId}\n`);
     }
     process.exit(code);
   }
@@ -142,7 +147,7 @@ export class App {
     this.closeConsoleStreams();
     this.screen = "console";
     this.lastOpenedProjectId = projectId;
-    this.console = createConsoleState(projectId);
+    this.console = createConsoleState(projectId, this.options.theme ?? loadTheme());
     this.console.yoloMode = loadYoloMode();
     if (this.console.yoloMode) {
       // Persisted from a previous session — never silently auto-approve.
@@ -272,7 +277,13 @@ export class App {
     void this.api
       .readFile(state.projectId, path)
       .then((file) => {
-        if (!this.console?.viewer) return;
+        if (!this.console) return;
+        if (file.binary && file.absolutePath) {
+          this.console.viewer = undefined;
+          this.openBinaryArtifact(file.absolutePath, file.path);
+          return;
+        }
+        if (!this.console.viewer) return;
         // Match overlayViewer's inner content width (w - 4 box padding).
         const cols = process.stdout.columns || 120;
         const viewerWidth = Math.min(cols - 6, 110) - 4;
@@ -298,6 +309,61 @@ export class App {
           this.markDirty();
         }
       });
+  }
+
+  /** Open a local file or folder with the OS default handler (Preview / Finder / …). */
+  private openSystemPath(
+    absolutePath: string,
+    options?: { successMessage?: string; failLabel?: string },
+  ): void {
+    const state = this.console;
+    if (!state) return;
+    const failLabel = options?.failLabel ?? absolutePath;
+    if (!fs.existsSync(absolutePath)) {
+      pushNotice(state, "error", `路径不存在：${absolutePath}`);
+      this.markDirty();
+      return;
+    }
+
+    const run =
+      process.platform === "darwin"
+        ? (cb: (error: Error | null) => void) => execFile("open", [absolutePath], cb)
+        : process.platform === "win32"
+          ? (cb: (error: Error | null) => void) => execFile("explorer", [absolutePath], cb)
+          : (cb: (error: Error | null) => void) => execFile("xdg-open", [absolutePath], cb);
+
+    run((error) => {
+      if (!this.console) return;
+      pushNotice(
+        this.console,
+        error ? "error" : "info",
+        error
+          ? `无法打开 ${failLabel}: ${error.message}`
+          : (options?.successMessage ?? `已打开 ${failLabel}`),
+      );
+      this.markDirty();
+    });
+  }
+
+  /** Open exported submission package folder in Finder / file manager. */
+  private openSubmissionPackage(packagePath: string): void {
+    this.openSystemPath(packagePath, {
+      failLabel: "提交包",
+      successMessage:
+        process.platform === "darwin"
+          ? "提交包已导出，已在 Finder 中打开"
+          : process.platform === "win32"
+            ? "提交包已导出，已在资源管理器中打开"
+            : "提交包已导出，已用系统文件管理器打开",
+    });
+  }
+
+  /** PNG/JPEG etc. cannot render in the terminal — open with the OS viewer. */
+  private openBinaryArtifact(absolutePath: string, label: string): void {
+    this.openSystemPath(absolutePath, {
+      failLabel: label,
+      successMessage: `已用 Preview 打开 ${label}`,
+    });
   }
 
   /* -- business actions ----------------------------------------------------- */
@@ -491,6 +557,9 @@ export class App {
         const result = await this.api.taiziMessage(state.projectId, text);
         if (this.console) {
           pushTaiziReply(this.console, result.reply, result.action);
+          if (result.openPath) {
+            this.openSubmissionPackage(result.openPath);
+          }
           this.markDirty();
         }
       },
@@ -532,6 +601,7 @@ export class App {
       case "export_submission":
         this.runAction("export submission", async () => {
           const result = await this.api.exportSubmission(state.projectId);
+          this.openSubmissionPackage(result.packagePath);
           return `submission exported → ${result.packagePath}`;
         });
         break;
@@ -546,6 +616,7 @@ export class App {
         break;
       case "inspector_files":
         state.inspectorTab = "files";
+        state.fileTreeScroll = 0;
         break;
       case "pause_resume": {
         const paused = state.snapshot?.project.status === "Paused";
@@ -569,8 +640,19 @@ export class App {
             ? "⚡ YOLO 已开启 — 危险操作将自动放行（顶部显示 ⚡YOLO）"
             : "YOLO 已关闭 — 危险操作需手动确认",
         );
-        // Opening YOLO must also clear gates that are already waiting.
         if (state.yoloMode) this.yoloSweep();
+        break;
+      }
+      case "toggle_theme": {
+        state.theme = toggleTheme(state.theme);
+        persistTheme(state.theme);
+        pushNotice(
+          state,
+          "info",
+          state.theme === "dark"
+            ? "已切换为深色主题 — 太子回复使用柔和深底（按 m 切回浅色）"
+            : "已切换为浅色主题 — 太子回复使用暖色浅底（按 m 切回深色）",
+        );
         break;
       }
       case "follow_stream":
@@ -618,6 +700,17 @@ export class App {
     const state = this.console;
     if (!state) return;
 
+    if (state.commandPalette) {
+      if (event.kind === "press") {
+        const hit = hitTest(event.x, event.y);
+        if (hit?.type === "palette_action") {
+          this.dispatchAction(hit.id);
+          state.commandPalette = undefined;
+        }
+      }
+      return;
+    }
+
     // File viewer overlay captures all mouse input.
     if (state.viewer) {
       if (event.kind === "wheelup") {
@@ -636,6 +729,11 @@ export class App {
           event.kind === "wheelup"
             ? state.timelineScroll + 3
             : Math.max(0, state.timelineScroll - 3);
+      } else if (inInspectorFiles(event.x, event.y) && state.inspectorTab === "files") {
+        state.fileTreeScroll =
+          event.kind === "wheelup"
+            ? Math.max(0, state.fileTreeScroll - 3)
+            : state.fileTreeScroll + 3;
       }
       return;
     }
@@ -652,10 +750,14 @@ export class App {
         const roster = rosterOrder(state);
         const index = roster.findIndex((agent) => agent.id === hit.id);
         if (index >= 0) state.agentCursor = index;
-        state.inspectorAgentId = state.inspectorAgentId === hit.id ? undefined : hit.id;
-        state.focus = "agents";
+        this.focusAgentStream(state, hit.id);
         break;
       }
+      case "timeline_focus_back":
+        state.timelineFocusAgentId = undefined;
+        state.timelineScroll = 0;
+        state.focus = "timeline";
+        break;
       case "gate_option": {
         const options = state.composer.gateOptions;
         const option = options[hit.index];
@@ -682,15 +784,28 @@ export class App {
         break;
       case "inspector_tab":
         state.inspectorTab = hit.tab;
+        if (hit.tab === "files") state.fileTreeScroll = 0;
         break;
       case "action":
         this.dispatchAction(hit.id);
+        break;
+      case "palette_action":
+        if (state.commandPalette) {
+          this.dispatchAction(hit.id);
+          state.commandPalette = undefined;
+        }
         break;
       case "open_artifact":
         this.openArtifact(hit.path);
         break;
       case "open_file":
         this.openArtifact(hit.path);
+        break;
+      case "toggle_file_dir":
+        toggleFileDir(state, hit.path);
+        break;
+      case "toggle_turn":
+        toggleTurnExpansion(state, hit.id, hit.expanded);
         break;
       default:
         break;
@@ -735,6 +850,11 @@ export class App {
     const state = this.console;
     if (!state) return;
 
+    // Command palette captures input (opencode-style Ctrl+P menu).
+    if (state.commandPalette) {
+      return this.handleCommandPaletteKey(state, key);
+    }
+
     // File viewer overlay captures all keys.
     if (state.viewer) {
       const viewer = state.viewer;
@@ -754,7 +874,10 @@ export class App {
     if (key.type === "ctrl") {
       if (key.ch === "b") return this.backToPicker();
       if (key.ch === "r") return void this.refreshSnapshot();
-      if (key.ch === "p") return this.dispatchAction("pause_resume");
+      if (key.ch === "p") {
+        state.commandPalette = { query: "", cursor: 0 };
+        return;
+      }
       return;
     }
     if (key.type === "tab") {
@@ -781,6 +904,11 @@ export class App {
   }
 
   private handleTimelineKey(state: ConsoleState, key: Key): void {
+    if (key.type === "esc" && state.timelineFocusAgentId) {
+      state.timelineFocusAgentId = undefined;
+      state.timelineScroll = 0;
+      return;
+    }
     const page = Math.max(4, (process.stdout.rows || 40) - 14);
     if (key.type === "up") state.timelineScroll += 1;
     else if (key.type === "down") state.timelineScroll = Math.max(0, state.timelineScroll - 1);
@@ -791,15 +919,20 @@ export class App {
     else if (key.type === "char") this.handleShortcut(state, key.ch);
   }
 
+  private focusAgentStream(state: ConsoleState, agentId: string): void {
+    state.timelineFocusAgentId = agentId;
+    state.inspectorAgentId = agentId;
+    state.timelineScroll = 0;
+    state.focus = "timeline";
+  }
+
   private handleAgentsKey(state: ConsoleState, key: Key): void {
     const roster = rosterOrder(state);
     if (key.type === "up") state.agentCursor = Math.max(0, state.agentCursor - 1);
     else if (key.type === "down") state.agentCursor = Math.min(roster.length - 1, state.agentCursor + 1);
     else if (key.type === "enter") {
       const agent = roster[state.agentCursor];
-      if (agent) {
-        state.inspectorAgentId = state.inspectorAgentId === agent.id ? undefined : agent.id;
-      }
+      if (agent) this.focusAgentStream(state, agent.id);
     } else if (key.type === "char") this.handleShortcut(state, key.ch);
   }
 
@@ -987,15 +1120,45 @@ export class App {
     }
   }
 
+  private handleCommandPaletteKey(state: ConsoleState, key: Key): void {
+    const palette = state.commandPalette!;
+    const actions = filterPaletteActions(state);
+
+    if (key.type === "esc") {
+      state.commandPalette = undefined;
+      return;
+    }
+    if (key.type === "up") {
+      palette.cursor = Math.max(0, palette.cursor - 1);
+      return;
+    }
+    if (key.type === "down") {
+      palette.cursor = Math.min(Math.max(0, actions.length - 1), palette.cursor + 1);
+      return;
+    }
+    if (key.type === "enter") {
+      const action = actions[palette.cursor];
+      state.commandPalette = undefined;
+      if (action) this.dispatchAction(action.id);
+      return;
+    }
+    if (key.type === "backspace") {
+      palette.query = [...palette.query].slice(0, -1).join("");
+      palette.cursor = 0;
+      return;
+    }
+    if (key.type === "char") {
+      palette.query += key.ch;
+      palette.cursor = 0;
+    }
+  }
+
   private isShortcutKey(state: ConsoleState, ch: string): boolean {
-    if (ch === "q" || ch === "b") return true;
-    return deriveActions(state).some((a) => a.key === ch);
+    return ch === "q" || ch === "b";
   }
 
   private handleShortcut(state: ConsoleState, ch: string): void {
     if (ch === "q") this.quit();
     if (ch === "b") return this.backToPicker();
-    const action = deriveActions(state).find((a) => a.key === ch);
-    if (action) this.dispatchAction(action.id);
   }
 }

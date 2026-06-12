@@ -14,7 +14,7 @@ export function createDevelopmentRoutes(development: DevelopmentService) {
     }
     try {
       const result = await development.start(projectId, body.profile);
-      return c.json(result);
+      return c.json(result, result.running ? 202 : 200);
     } catch (error) {
       const message = error instanceof Error ? error.message : "failed to start development";
       return c.json({ error: message }, 400);

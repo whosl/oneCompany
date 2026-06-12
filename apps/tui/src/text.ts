@@ -85,6 +85,23 @@ export function padW(text: string, width: number): string {
   return clipped + " ".repeat(Math.max(0, width - strWidth(clipped)));
 }
 
+/** Wrap each line separately so newlines in the source are preserved. */
+export function wrapPreservingNewlines(text: string, width: number, maxLines = Infinity): string[] {
+  const rows: string[] = [];
+  for (const line of text.replace(/\r\n/g, "\n").split("\n")) {
+    if (!line.trim()) {
+      rows.push("");
+      if (rows.length >= maxLines) return rows.slice(0, maxLines);
+      continue;
+    }
+    for (const wrapped of wrapW(line, width)) {
+      rows.push(wrapped);
+      if (rows.length >= maxLines) return rows.slice(0, maxLines);
+    }
+  }
+  return rows.slice(0, maxLines);
+}
+
 /** Greedy wrap by display width (CJK-safe; prefers breaking at spaces). */
 export function wrapW(text: string, width: number, maxLines = Infinity): string[] {
   if (width <= 0) return [];

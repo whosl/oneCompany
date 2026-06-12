@@ -8,6 +8,8 @@ import { createEventBridge } from "./event-bridge.js";
 import { handlePermission } from "./permission-bridge.js";
 import { registerHarnessSession, unregisterHarnessSession } from "./session-registry.js";
 import { releaseProjectServer, startProjectServer } from "./opencode-server.js";
+import { DEFAULT_SDK_CALL_TIMEOUT_MS, withTimeout } from "./sdk-timeout.js";
+import { waitForSessionCompletion } from "./wait-for-session.js";
 import type {
   CodingHarness,
   DevContext,
@@ -16,6 +18,9 @@ import type {
   SliceResult,
   SliceSpec,
 } from "./types.js";
+import { buildReviewPrompt, buildTddPrompt } from "../agents/prompt-builder.js";
+
+export { buildReviewPrompt, buildTddPrompt } from "../agents/prompt-builder.js";
 
 const DEFAULT_SLICE_TIMEOUT_MS = Number(process.env.OC_OPENCODE_SLICE_TIMEOUT_MS ?? 600_000);
 const DEFAULT_REVIEW_TIMEOUT_MS = Number(process.env.OC_OPENCODE_REVIEW_TIMEOUT_MS ?? 240_000);
@@ -36,49 +41,6 @@ function parseModelRef(model: string): { providerID: string; modelID: string } {
     };
   }
   return { providerID: "openai", modelID: model };
-}
-
-function buildTddPrompt(slice: SliceSpec): string {
-  const checks =
-    slice.acceptanceChecks.length > 0
-      ? slice.acceptanceChecks.map((check, index) => `${index + 1}. ${check}`).join("\n")
-      : "";
-
-  return [
-    `Implement slice "${slice.sliceId}" using strict TDD.`,
-    `Goal: ${slice.goal}`,
-    checks ? `Acceptance checks:\n${checks}` : "",
-    `Scoped test command (OneCompany runs this authoritatively after you finish): ${slice.testCommand}`,
-    "The repo already contains package.json, tsconfig.json, vitest.config.ts, and src/.",
-    "Do not run npm/pnpm install; vitest is already available from the workspace toolchain.",
-    "You MUST create and edit files under src/ using tools. Do not reply with text-only plans.",
-    "Write failing tests first, implement code, run the scoped test command via shell tools, then stop.",
-    "Do not claim success without producing file changes and running the scoped test command.",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-function buildReviewPrompt(review: ReviewSpec): string {
-  const checks =
-    review.acceptanceChecks.length > 0
-      ? review.acceptanceChecks.map((check, index) => `${index + 1}. ${check}`).join("\n")
-      : "";
-
-  return [
-    `You are a READ-ONLY code reviewer for slice "${review.sliceId}" (just committed).`,
-    `Slice goal: ${review.goal}`,
-    checks ? `Acceptance checks:\n${checks}` : "",
-    review.diffSummary ? `Latest commit summary: ${review.diffSummary}` : "",
-    "Inspect the repository using read / grep / glob tools ONLY.",
-    "Do NOT edit, write, or create any files. Do NOT run shell commands.",
-    "Review the implementation for correctness, consistency with the acceptance checks, and obvious defects.",
-    "When done, reply with EXACTLY ONE JSON object and nothing else:",
-    '{"approved": true|false, "findings": ["发现1", "发现2"], "summary": "一句话结论"}',
-    "findings 与 summary 必须使用简体中文。无问题时 findings 为空数组。",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
 }
 
 /** Extract the trailing JSON review verdict from the assistant's reply. */
@@ -109,10 +71,14 @@ async function lastAssistantText(
   sessionId: string,
   directory: string,
 ): Promise<string> {
-  const response = await client.session.messages({
-    path: { id: sessionId },
-    query: { directory },
-  });
+  const response = await withTimeout(
+    client.session.messages({
+      path: { id: sessionId },
+      query: { directory },
+    }),
+    DEFAULT_SDK_CALL_TIMEOUT_MS,
+    "opencode session.messages",
+  );
   const messages = response.data ?? [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i]!;
@@ -127,76 +93,23 @@ async function lastAssistantText(
   return "";
 }
 
-function assistantHasText(messages: Array<{ info: { role: string }; parts: Array<{ type: string; text?: string }> }>): boolean {
-  return messages.some(
-    (message) =>
-      message.info.role === "assistant" &&
-      message.parts.some((part) => part.type === "text" && Boolean(part.text?.trim())),
-  );
-}
-
-async function hasAssistantMessage(
-  client: OpencodeClient,
-  sessionId: string,
-  directory: string,
-): Promise<boolean> {
-  const response = await client.session.messages({
-    path: { id: sessionId },
-    query: { directory },
-  });
-  return assistantHasText(response.data ?? []);
-}
-
-async function waitForSessionCompletion(
-  client: OpencodeClient,
-  bridge: ReturnType<typeof createEventBridge>,
-  sessionId: string,
-  directory: string,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  const startedAt = Date.now();
-  const idleGraceMs = Number(process.env.OC_OPENCODE_IDLE_GRACE_MS ?? 15_000);
-  const idleStreakRequired = Number(process.env.OC_OPENCODE_IDLE_STREAK ?? 2);
-  let idleStreak = 0;
-
-  while (Date.now() < deadline) {
-    const hasFiles = bridge.changedFiles.size > 0;
-    const idle = bridge.isIdle();
-    const elapsed = Date.now() - startedAt;
-
-    if (idle) {
-      idleStreak += 1;
-    } else {
-      idleStreak = 0;
-    }
-
-    if (hasFiles && idleStreak >= 1) {
-      return;
-    }
-
-    if (idleStreak >= idleStreakRequired && elapsed >= idleGraceMs) {
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-  }
-
-  if (await hasAssistantMessage(client, sessionId, directory)) {
-    return;
-  }
-
-  throw new Error(`opencode session completion timeout after ${timeoutMs}ms`);
-}
-
 async function collectChangedFiles(
   client: ReturnType<typeof createOpencodeClient>,
   directory: string,
   tracked: Set<string>,
 ): Promise<string[]> {
-  const response = await client.file.status({ query: { directory } });
+  const response = await withTimeout(
+    client.file.status({ query: { directory } }),
+    DEFAULT_SDK_CALL_TIMEOUT_MS,
+    "opencode file.status",
+  );
   const fromStatus = (response.data ?? []).map((file) => file.path);
   return [...new Set([...tracked, ...fromStatus])];
+}
+
+function harnessHeartbeat(ctx: DevContext, phase: string, elapsedMs: number): void {
+  const seconds = Math.max(1, Math.round(elapsedMs / 1000));
+  emitPhase(ctx, phase, `Opencode 仍在运行（已 ${seconds}s）…`);
 }
 
 export function createOpencodeHarness(): CodingHarness {
@@ -264,16 +177,36 @@ export function createOpencodeHarness(): CodingHarness {
 
         emitPhase(ctx, "act", `prompting opencode for ${slice.sliceId}`);
 
-        await client.session.promptAsync({
-          path: { id: session.id },
-          query: { directory },
-          body: {
-            model,
-            parts: [{ type: "text", text: buildTddPrompt(slice) }],
-          },
+        const promptText = buildTddPrompt(slice);
+        ctx.emit({
+          type: "agent.prompt",
+          text: promptText,
+          sliceId: slice.sliceId,
         });
 
-        await waitForSessionCompletion(client, bridge, session.id, directory, DEFAULT_SLICE_TIMEOUT_MS);
+        await withTimeout(
+          client.session.promptAsync({
+            path: { id: session.id },
+            query: { directory },
+            body: {
+              model,
+              parts: [{ type: "text", text: promptText }],
+            },
+          }),
+          DEFAULT_SLICE_TIMEOUT_MS,
+          "opencode session.promptAsync",
+        );
+
+        await waitForSessionCompletion(
+          client,
+          bridge,
+          session.id,
+          directory,
+          DEFAULT_SLICE_TIMEOUT_MS,
+          {
+            onHeartbeat: (elapsedMs) => harnessHeartbeat(ctx, "act", elapsedMs),
+          },
+        );
         bridge.stop();
 
         const changedFiles = await collectChangedFiles(client, directory, bridge.changedFiles);
@@ -303,7 +236,7 @@ export function createOpencodeHarness(): CodingHarness {
       } finally {
         if (activeSessionId) unregisterHarnessSession(ctx.projectId, activeSessionId);
         bridge?.stop();
-        await releaseProjectServer(directory);
+        await releaseProjectServer(directory, { projectId: ctx.projectId });
       }
     },
 
@@ -361,14 +294,25 @@ export function createOpencodeHarness(): CodingHarness {
 
         emitPhase(ctx, "act", `正在审查 ${review.sliceId} — 阅读改动与验收标准`);
 
-        await client.session.promptAsync({
-          path: { id: session.id },
-          query: { directory },
-          body: {
-            model,
-            parts: [{ type: "text", text: buildReviewPrompt(review) }],
-          },
+        const promptText = buildReviewPrompt(review);
+        ctx.emit({
+          type: "agent.prompt",
+          text: promptText,
+          sliceId: review.sliceId,
         });
+
+        await withTimeout(
+          client.session.promptAsync({
+            path: { id: session.id },
+            query: { directory },
+            body: {
+              model,
+              parts: [{ type: "text", text: promptText }],
+            },
+          }),
+          DEFAULT_REVIEW_TIMEOUT_MS,
+          "opencode session.promptAsync",
+        );
 
         await waitForSessionCompletion(
           client,
@@ -376,6 +320,9 @@ export function createOpencodeHarness(): CodingHarness {
           session.id,
           directory,
           DEFAULT_REVIEW_TIMEOUT_MS,
+          {
+            onHeartbeat: (elapsedMs) => harnessHeartbeat(ctx, "act", elapsedMs),
+          },
         );
         bridge.stop();
 
@@ -405,10 +352,14 @@ export function createOpencodeHarness(): CodingHarness {
           `审查结论：${verdict.approved ? "✓ 通过" : "✗ 不通过"}${verdict.summary ? ` — ${verdict.summary}` : ""}`,
         );
         return verdict;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        emitPhase(ctx, "observe", `审查未完成：${message.slice(0, 200)}`);
+        throw error;
       } finally {
         if (activeSessionId) unregisterHarnessSession(ctx.projectId, activeSessionId);
         bridge?.stop();
-        await releaseProjectServer(directory);
+        await releaseProjectServer(directory, { projectId: ctx.projectId });
       }
     },
   };

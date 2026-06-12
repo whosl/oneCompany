@@ -1,5 +1,7 @@
 /** API DTOs mirrored from @oc/api + @oc/shared (kept standalone on purpose). */
 
+import type { TuiTheme } from "./theme.js";
+
 export type Json = Record<string, unknown>;
 
 export type ProjectStatus =
@@ -117,6 +119,8 @@ export type DevelopmentRunResult = {
   gateId?: string;
   gateType?: string;
   gateOptions?: string[];
+  running?: boolean;
+  backgroundError?: string;
 };
 
 export type TestingRunResult = {
@@ -137,4 +141,5 @@ export type TuiOptions = {
   apiBase: string;
   stub: boolean;
   projectId?: string;
+  theme?: TuiTheme;
 };

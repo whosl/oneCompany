@@ -122,7 +122,7 @@ export async function startProjectServer(
   options?: { projectId?: string },
 ): Promise<ProjectServer> {
   const resolved = normalizeRepoPath(repoPath);
-  const cacheKey = `${resolved}:${options?.projectId ?? ""}`;
+  const cacheKey = serverCacheKey(resolved, options?.projectId);
   const existing = activeServers.get(cacheKey);
   if (existing) {
     return existing;
@@ -169,10 +169,19 @@ export async function startProjectServer(
   return handle;
 }
 
-export async function releaseProjectServer(repoPath: string): Promise<void> {
-  const server = activeServers.get(normalizeRepoPath(repoPath));
+function serverCacheKey(repoPath: string, projectId?: string): string {
+  return `${repoPath}:${projectId ?? ""}`;
+}
+
+export async function releaseProjectServer(
+  repoPath: string,
+  options?: { projectId?: string },
+): Promise<void> {
+  const cacheKey = serverCacheKey(normalizeRepoPath(repoPath), options?.projectId);
+  const server = activeServers.get(cacheKey);
   if (!server) {
     return;
   }
+  activeServers.delete(cacheKey);
   await server.close();
 }

@@ -225,6 +225,39 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
         next = raiseTechPlanGate(deps, next);
         return { payload: next };
       }
+      case "replan_slices": {
+        const sliceId =
+          payload.meta.currentSliceId ??
+          payload.state.currentTask?.id ??
+          getCurrentSlice(payload.state)?.id;
+        let next = await runPlanner(deps, payload);
+        if (sliceId && next.state.taskQueue.some((task) => task.id === sliceId)) {
+          next = { ...next, state: resetSliceForRetry(next.state, sliceId) };
+        } else {
+          next = {
+            ...next,
+            state: {
+              ...next.state,
+              currentSliceAttempts: 0,
+              currentTask: next.state.taskQueue.find(
+                (task) => (task.status ?? "pending") === "pending",
+              ),
+            },
+          };
+        }
+        next = {
+          ...next,
+          meta: {
+            ...next.meta,
+            phase: "slicing",
+            gateId: undefined,
+            gateType: undefined,
+            currentSliceId: getCurrentSlice(next.state)?.id,
+          },
+        };
+        saveDevSession(deps.db, payload.state.projectId, next);
+        return { payload: next };
+      }
       case "request_skip_slice": {
         const sliceId =
           payload.meta.currentSliceId ?? payload.state.currentTask?.id ?? "unknown-slice";
@@ -372,6 +405,17 @@ export async function resumeDevelopmentAfterGateGraph(
   const payload = loadDevSession(deps.db, input.projectId);
   if (payload.meta.phase !== "awaiting_gate" && payload.meta.phase !== "change_review") {
     throw new Error(`Expected awaiting_gate or change_review, got ${payload.meta.phase}`);
+  }
+
+  // Slice loops run in the legacy background runner — graph.invoke would block
+  // the gate HTTP handler for the entire opencode session.
+  const gateType = payload.meta.gateType;
+  if (
+    gateType === SLICE_FAILURE_GATE ||
+    gateType === TECH_PLAN_CONFIRM_GATE ||
+    gateType === CHANGE_REVIEW_GATE
+  ) {
+    return resumeDevelopmentAfterGateLegacy(deps, input);
   }
 
   if (!(await hasGraphCheckpoint(`dev:${input.projectId}`))) {

@@ -97,6 +97,10 @@ export type DevelopmentRunResult = {
   gateType?: DevelopmentGateType;
   gateOptions?: string[];
   state: DevState;
+  /** True when the slice loop is executing in a background task. */
+  running?: boolean;
+  /** Last background slice-loop error, if any. */
+  backgroundError?: string;
 };
 
 export type SliceIterationResult =
@@ -129,6 +133,7 @@ export function buildSliceSpec(
     goal: slice.title,
     acceptanceChecks: slice.acceptanceChecks ?? [],
     testCommand,
+    expectedFiles: slice.expectedFiles,
     modelTier: "strong",
   };
 }

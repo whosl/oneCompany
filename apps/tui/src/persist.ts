@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { TuiTheme } from "./theme.js";
 
 /**
  * Tiny on-disk store for gate decisions made in this TUI.
@@ -12,6 +13,7 @@ import path from "node:path";
 
 const FILE = path.join(os.tmpdir(), "onecompany-tui-dismissed-gates.json");
 const YOLO_FILE = path.join(os.tmpdir(), "onecompany-tui-yolo.json");
+const THEME_FILE = path.join(os.tmpdir(), "onecompany-tui-theme.json");
 const MAX_ENTRIES = 200;
 
 type DismissedMap = Record<string, string[]>; // projectId -> gateIds
@@ -53,6 +55,23 @@ export function loadYoloMode(): boolean {
 export function persistYoloMode(enabled: boolean): void {
   try {
     fs.writeFileSync(YOLO_FILE, JSON.stringify({ enabled }));
+  } catch {
+    // Best-effort preference.
+  }
+}
+
+export function loadTheme(): TuiTheme {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(THEME_FILE, "utf8")) as { theme?: string };
+    return parsed?.theme === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+export function persistTheme(theme: TuiTheme): void {
+  try {
+    fs.writeFileSync(THEME_FILE, JSON.stringify({ theme }));
   } catch {
     // Best-effort preference.
   }

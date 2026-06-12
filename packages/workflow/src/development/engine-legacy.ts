@@ -26,6 +26,11 @@ import {
 import { captureDiff } from "./diffs.js";
 import { runPlanner } from "./planner.js";
 import {
+  hasOpenSliceFailureGate,
+  reconcilePassedSlicesFromCommits,
+  resolveStaleSliceFailureGate,
+} from "./session-reconcile.js";
+import {
   allSlicesPassed,
   effectiveMaxSliceAttempts,
   getCurrentSlice,
@@ -240,6 +245,22 @@ export async function runSliceIteration(
       };
       state = captureDiff(deps.db, state, slice.id, deps.onEvent);
 
+      // Persist pass before advisory review — review can hang for minutes and the
+      // HTTP slice loop may die without reaching the per-iteration save.
+      saveDevSession(deps.db, state.projectId, {
+        ...payload,
+        state,
+        meta: {
+          ...payload.meta,
+          phase: "slicing",
+          currentSliceId: slice.id,
+          gateId: undefined,
+          gateType: undefined,
+        },
+      });
+
+      resolveStaleSliceFailureGate(deps.db, state.projectId, "auto_reconciled", deps.onEvent);
+
       if (deps.harness.runReview) {
         // Same engine as coding, attributed to the "review" role. The verdict
         // is advisory: findings surface in the stream, but a failed parse or
@@ -251,6 +272,7 @@ export async function runSliceIteration(
               sliceId: slice.id,
               goal: sliceSpec.goal,
               acceptanceChecks: sliceSpec.acceptanceChecks,
+              expectedFiles: sliceSpec.expectedFiles,
               diffSummary: state.diffs.at(-1)?.summary,
               modelTier: sliceSpec.modelTier,
             },
@@ -310,6 +332,63 @@ export async function runSliceIteration(
 
 export { isSliceLoopActive } from "./slice-loop-registry.js";
 
+const sliceLoopBackgroundErrors = new Map<string, string>();
+
+export function getSliceLoopBackgroundError(projectId: string): string | undefined {
+  return sliceLoopBackgroundErrors.get(projectId);
+}
+
+function emitSliceLoopFailure(
+  deps: DevelopmentWorkflowDeps,
+  projectId: string,
+  message: string,
+): void {
+  try {
+    deps.onEvent?.(
+      emit(deps.db, {
+        projectId,
+        payload: {
+          type: "run.failed",
+          projectId,
+          agentId: "coding",
+          runId: projectId,
+          reason: `开发循环异常终止：${message.slice(0, 300)}`,
+        },
+      }),
+    );
+  } catch {
+    /* event emission is best-effort during crash handling */
+  }
+}
+
+/** Run the slice loop on a background task; HTTP handlers return immediately. */
+export function beginSliceLoopInBackground(
+  deps: DevelopmentWorkflowDeps,
+  payload: DevelopmentSessionPayload,
+): DevelopmentRunResult {
+  const projectId = payload.state.projectId;
+  if (isSliceLoopActive(projectId)) {
+    throw new Error(`开发循环正在运行中，无需恢复 — 请等待当前切片完成`);
+  }
+
+  sliceLoopBackgroundErrors.delete(projectId);
+  markSliceLoopActive(projectId);
+
+  void (async () => {
+    try {
+      await runSliceLoopUntilHaltInner(deps, payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      sliceLoopBackgroundErrors.set(projectId, message);
+      emitSliceLoopFailure(deps, projectId, message);
+    } finally {
+      markSliceLoopInactive(projectId);
+    }
+  })();
+
+  return { ...toResult(deps, payload), running: true };
+}
+
 export async function runSliceLoopUntilHalt(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
@@ -322,25 +401,9 @@ export async function runSliceLoopUntilHalt(
   try {
     return await runSliceLoopUntilHaltInner(deps, payload);
   } catch (error) {
-    // A crash here previously vanished into a long-dead HTTP request — the
-    // console kept showing "running" forever. Surface it as a stream event.
     const message = error instanceof Error ? error.message : String(error);
-    try {
-      deps.onEvent?.(
-        emit(deps.db, {
-          projectId,
-          payload: {
-            type: "run.failed",
-            projectId,
-            agentId: "coding",
-            runId: projectId,
-            reason: `开发循环异常终止：${message.slice(0, 300)}`,
-          },
-        }),
-      );
-    } catch {
-      /* event emission is best-effort during crash handling */
-    }
+    sliceLoopBackgroundErrors.set(projectId, message);
+    emitSliceLoopFailure(deps, projectId, message);
     throw error;
   } finally {
     markSliceLoopInactive(projectId);
@@ -361,7 +424,12 @@ export async function resumeOrphanedSliceLoop(
     // (observed: every slice of a project ran twice, interleaved).
     throw new Error("开发循环正在运行中，无需恢复 — 请等待当前切片完成");
   }
-  const payload = loadDevSession(deps.db, projectId);
+  if (hasOpenSliceFailureGate(deps.db, projectId)) {
+    throw new Error(
+      "切片失败门禁仍待处理 — 请在控制台选择「重试该切片」「重新规划切片」等选项，不要点「恢复开发」",
+    );
+  }
+  let payload = loadDevSession(deps.db, projectId);
   if (payload.meta.phase === "awaiting_gate" || payload.meta.phase === "change_review") {
     throw new Error(
       `Development is waiting on a ${payload.meta.gateType ?? "gate"} decision — resolve the gate instead of restarting`,
@@ -370,7 +438,14 @@ export async function resumeOrphanedSliceLoop(
   if (payload.meta.phase !== "slicing") {
     throw new Error(`Cannot resume development from phase: ${payload.meta.phase}`);
   }
-  return runSliceLoopUntilHalt(deps, payload);
+
+  const reconciled = reconcilePassedSlicesFromCommits(deps.db, payload.state, deps.onEvent);
+  if (reconciled !== payload.state) {
+    payload = { ...payload, state: reconciled };
+    saveDevSession(deps.db, projectId, payload);
+  }
+
+  return beginSliceLoopInBackground(deps, payload);
 }
 
 /**
@@ -433,6 +508,8 @@ async function runSliceLoopUntilHaltInner(
         },
       });
     }
+
+    saveDevSession(deps.db, current.state.projectId, current);
   }
 
   if (allSlicesPassed(current.state)) {
@@ -541,7 +618,7 @@ async function resumeTechPlanGate(
         meta: { ...next.meta, phase: "slicing", gateId: undefined, gateType: undefined },
       };
       saveDevSession(deps.db, next.state.projectId, next);
-      return runSliceLoopUntilHalt(deps, next);
+      return beginSliceLoopInBackground(deps, next);
     }
     case "reject_and_redo":
     case "revise_then_approve": {
@@ -585,7 +662,7 @@ async function resumeSliceFailureGate(
         },
       };
       saveDevSession(deps.db, payload.state.projectId, next);
-      return runSliceLoopUntilHalt(deps, next);
+      return beginSliceLoopInBackground(deps, next);
     }
     case "replan": {
       const prd = loadLatestPrd(deps.db, payload.state.projectId);
@@ -596,6 +673,39 @@ async function resumeSliceFailureGate(
       });
       next = raiseTechPlanGate(deps, next);
       return toResult(deps, next);
+    }
+    case "replan_slices": {
+      const sliceId =
+        payload.meta.currentSliceId ??
+        payload.state.currentTask?.id ??
+        getCurrentSlice(payload.state)?.id;
+      let next = await runPlanner(deps, payload);
+      if (sliceId && next.state.taskQueue.some((task) => task.id === sliceId)) {
+        next = { ...next, state: resetSliceForRetry(next.state, sliceId) };
+      } else {
+        next = {
+          ...next,
+          state: {
+            ...next.state,
+            currentSliceAttempts: 0,
+            currentTask: next.state.taskQueue.find(
+              (task) => (task.status ?? "pending") === "pending",
+            ),
+          },
+        };
+      }
+      next = {
+        ...next,
+        meta: {
+          ...next.meta,
+          phase: "slicing",
+          gateId: undefined,
+          gateType: undefined,
+          currentSliceId: getCurrentSlice(next.state)?.id,
+        },
+      };
+      saveDevSession(deps.db, next.state.projectId, next);
+      return beginSliceLoopInBackground(deps, next);
     }
     case "request_skip_slice": {
       const sliceId =
@@ -627,7 +737,7 @@ async function resumeChangeReviewGate(
 ): Promise<DevelopmentRunResult> {
   const next = handleChangeReviewDecision(deps, payload, decision);
   if (decision === "update_plan" || (decision === "reject" && next.meta.phase === "slicing")) {
-    return runSliceLoopUntilHalt(deps, next);
+    return beginSliceLoopInBackground(deps, next);
   }
   if (decision === "revise_tech_plan") {
     const prd = loadLatestPrd(deps.db, payload.state.projectId);
@@ -647,5 +757,9 @@ export function getDevelopmentStatus(
   projectId: string,
 ): DevelopmentRunResult {
   const payload = loadDevSession(deps.db, projectId);
-  return toResult(deps, payload);
+  return {
+    ...toResult(deps, payload),
+    running: isSliceLoopActive(projectId),
+    backgroundError: getSliceLoopBackgroundError(projectId),
+  };
 }

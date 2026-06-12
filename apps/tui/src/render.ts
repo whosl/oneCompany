@@ -7,9 +7,13 @@ import {
   lifecycleIndex,
   toolVerb,
 } from "./catalog.js";
+import { buildAgentThreadTask, buildCodexStream } from "./codex-stream.js";
+import { buildFileTree, filterRepoPaths, flattenFileTree } from "./file-tree.js";
+import { renderMarkdownLines } from "./markdown.js";
 import {
   agentWorkMs,
-  deriveActions,
+  filterPaletteActions,
+  filterTimelineForAgentFocus,
   pushTaiziReply,
   type AgentStatus,
   type AgentView,
@@ -18,7 +22,7 @@ import {
   type TimelineEntry,
   type TodoItem,
 } from "./store.js";
-import { clipW, padW, strWidth, wrapW } from "./text.js";
+import { clipW, padW, strWidth, wrapPreservingNewlines, wrapW } from "./text.js";
 import type { ProjectRecord } from "./types.js";
 
 /* ------------------------------------------------------------------ */
@@ -80,11 +84,15 @@ function elapsed(startedAt: number): string {
 export type Hit =
   | { type: "open_project"; id: string }
   | { type: "select_agent"; id: string }
+  | { type: "timeline_focus_back" }
+  | { type: "toggle_turn"; id: string; expanded: boolean }
   | { type: "gate_option"; index: number }
   | { type: "suggestion"; index: number }
   | { type: "action"; id: string }
+  | { type: "palette_action"; id: string }
   | { type: "open_artifact"; path: string }
   | { type: "open_file"; path: string }
+  | { type: "toggle_file_dir"; path: string }
   | { type: "focus"; zone: FocusZone }
   | { type: "skip_clarification" }
   | { type: "question_prev" }
@@ -95,10 +103,12 @@ type Region = { x1: number; y1: number; x2: number; y2: number; hit: Hit };
 
 let regions: Region[] = [];
 let streamRect = { x1: -1, y1: -1, x2: -1, y2: -1 };
+let inspectorFilesRect = { x1: -1, y1: -1, x2: -1, y2: -1 };
 
 function resetHits(): void {
   regions = [];
   streamRect = { x1: -1, y1: -1, x2: -1, y2: -1 };
+  inspectorFilesRect = { x1: -1, y1: -1, x2: -1, y2: -1 };
 }
 
 function addHit(x: number, y: number, w: number, h: number, hit: Hit): void {
@@ -116,6 +126,15 @@ export function hitTest(x: number, y: number): Hit | undefined {
 
 export function inStream(x: number, y: number): boolean {
   return x >= streamRect.x1 && x <= streamRect.x2 && y >= streamRect.y1 && y <= streamRect.y2;
+}
+
+export function inInspectorFiles(x: number, y: number): boolean {
+  return (
+    x >= inspectorFilesRect.x1 &&
+    x <= inspectorFilesRect.x2 &&
+    y >= inspectorFilesRect.y1 &&
+    y <= inspectorFilesRect.y2
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -216,7 +235,9 @@ function buildHeader(state: ConsoleState, width: number): string[] {
     : "";
   const conn = state.sseConnected ? pc.green("● live") : pc.red("○ offline");
   const yolo = state.yoloMode ? pc.yellow(" ⚡YOLO") : "";
-  const right = `${busyNote}${yolo}  ${pc.dim(elapsed(state.startedAt))}  ${conn} `;
+  const themeTag =
+    state.theme === "dark" ? pc.dim(" 🌙") : pc.dim(" ☀");
+  const right = `${busyNote}${yolo}${themeTag}  ${pc.dim(elapsed(state.startedAt))}  ${conn} `;
 
   const left = ` ${statusBadge(status)}`;
   const gap = Math.max(1, width - strWidth(left) - strWidth(right));
@@ -281,7 +302,8 @@ function buildAgentsColumn(state: ConsoleState, width: number, height: number): 
 
     const selected = focused && i === state.agentCursor;
     const pinned = state.inspectorAgentId === agent.id;
-    const cursor = selected ? pc.cyan("▸") : pinned ? pc.cyan("·") : " ";
+    const focusedStream = state.timelineFocusAgentId === agent.id;
+    const cursor = selected ? pc.cyan("▸") : focusedStream ? pc.cyan("◆") : pinned ? pc.cyan("·") : " ";
     const nameRaw = clipW(agent.name, width - 11);
     const name = selected ? pc.inverse(` ${nameRaw} `) : ` ${nameRaw} `;
     const word = agentStatusWord(agent.status, agent);
@@ -312,7 +334,7 @@ function buildAgentsColumn(state: ConsoleState, width: number, height: number): 
       label: string,
       value: string,
       maxLines: number,
-      tintFn: (s: string) => string = pc.dim,
+      tintFn: (s: string) => string = (s) => s,
     ): void => {
       const wrapped = wrapW(value, width - 6, maxLines);
       lines.push({ text: padW(`${pc.cyan(label)}  ${tintFn(wrapped[0] ?? "")}`, width) });
@@ -333,7 +355,7 @@ function buildAgentsColumn(state: ConsoleState, width: number, height: number): 
         text: padW(`${i === 0 ? pc.cyan("能力") : "    "}  ${pc.dim("·")} ${wrapped[0] ?? ""}`, width),
       });
       for (const cont of wrapped.slice(1)) {
-        lines.push({ text: padW(`        ${pc.dim(cont)}`, width) });
+        lines.push({ text: padW(`        ${cont}`, width) });
       }
     }
 
@@ -375,7 +397,7 @@ function buildAgentsColumn(state: ConsoleState, width: number, height: number): 
       lines.push({ text: padW(`${pc.cyan(label)}  ${wrapped[0] ?? ""}`, width) });
       for (const cont of wrapped.slice(1)) {
         if (lines.length >= paorBudget) break;
-        lines.push({ text: padW(`      ${pc.dim(cont)}`, width) });
+        lines.push({ text: padW(`      ${cont}`, width) });
       }
     }
 
@@ -485,139 +507,6 @@ function buildTodoPanel(state: ConsoleState, width: number): HitLine[] {
     lines.push({ text: pc.dim(`    … 还有 ${state.todos.length - 8} 项`) });
   }
   return lines;
-}
-
-/** Claude-style warm cream panel for Taizi replies (#FAF9F5 / #3D3929). */
-const TAIZI_PANEL_BG = "\x1b[48;2;250;249;245m";
-const TAIZI_PANEL_FG = "\x1b[38;2;61;57;53m";
-const TAIZI_PANEL_ACCENT = "\x1b[38;2;194;95;67m";
-const TAIZI_PANEL_RESET = "\x1b[0m";
-
-function taiziBgLine(text: string, width: number): string {
-  const padded = padW(text, width);
-  return `${TAIZI_PANEL_BG}${TAIZI_PANEL_FG}${padded}${TAIZI_PANEL_RESET}`;
-}
-
-function entryToLines(entry: TimelineEntry, width: number): HitLine[] {
-  // Sequential streaming: entries queued behind the current one stay hidden.
-  if (entry.bornAtMs && entry.bornAtMs > Date.now()) return [];
-  const out: HitLine[] = [];
-  const blank = (): void => {
-    if (out.length === 0) out.push({ text: "" });
-  };
-  const time = pc.dim(entry.at);
-
-  switch (entry.kind) {
-    case "agent": {
-      out.push({ text: "" });
-      out.push({
-        text: `${pc.cyan("⏺")} ${pc.bold(pc.cyan(entry.agent ?? entry.text))} ${pc.dim("开始工作")} ${time}`,
-      });
-      break;
-    }
-    case "reason": {
-      const label = REASON_LABEL[entry.tag] ?? "思考";
-      const wrapped = wrapW(reveal(entry, entry.text), width - 10, 3);
-      out.push({ text: `  ${pc.cyan(label)}  ${pc.dim(wrapped[0] ?? "")}` });
-      for (const cont of wrapped.slice(1)) out.push({ text: `        ${pc.dim(cont)}` });
-      break;
-    }
-    case "tool":
-      out.push({ text: `  ${pc.magenta("⚙")} ${toolTitle(entry, width)} ${pc.dim("…")}` });
-      break;
-    case "tool_ok": {
-      out.push({ text: `  ${pc.green("✓")} ${toolTitle(entry, width)}` });
-      if (showToolOutput(entry)) {
-        for (const cont of wrapW(entry.text, width - 8, 2)) {
-          out.push({ text: `    ${pc.dim(`⎿ ${cont}`)}` });
-        }
-      }
-      break;
-    }
-    case "tool_redirect":
-      out.push({
-        text: `  ${pc.yellow("↪")} ${toolTitle(entry, width)} ${pc.dim("→ 受治理执行")}`,
-      });
-      break;
-    case "tool_err": {
-      out.push({ text: `  ${pc.red("✗")} ${toolTitle(entry, width)}` });
-      for (const cont of wrapW(entry.text, width - 8, 2)) {
-        out.push({ text: `    ${pc.red(`⎿ ${cont}`)}` });
-      }
-      break;
-    }
-    case "status":
-      out.push({ text: "" });
-      out.push({ text: `${pc.blue("◆")} ${pc.bold(pc.blue(entry.text))} ${time}` });
-      break;
-    case "taizi": {
-      out.push({ text: "" });
-      const prefix = `${TAIZI_PANEL_ACCENT}◆${TAIZI_PANEL_FG} ${pc.bold("太子")} `;
-      const prefixPad = "   ";
-      const mdWidth = Math.max(16, width - strWidth(prefixPad));
-      const rendered = renderMarkdownLines(entry.text, mdWidth);
-      const mdLines = rendered.slice(0, 48);
-      const truncated = rendered.length > mdLines.length;
-      let headerPlaced = false;
-      for (const line of mdLines) {
-        if (!headerPlaced && line.trim()) {
-          out.push({ text: taiziBgLine(`${prefix}${line}`, width) });
-          headerPlaced = true;
-        } else {
-          out.push({ text: taiziBgLine(`${prefixPad}${line}`, width) });
-        }
-      }
-      if (!headerPlaced) {
-        out.push({ text: taiziBgLine(`${prefix}${pc.dim("（无内容）")}`, width) });
-      }
-      if (truncated) {
-        out.push({
-          text: taiziBgLine(`${prefixPad}${pc.dim(`… 还有 ${rendered.length - mdLines.length} 行，End 滚动查看`)}`, width),
-        });
-      }
-      if (entry.metaAction) {
-        out.push({ text: taiziBgLine(`${prefixPad}${pc.dim(`(${entry.metaAction})`)}`, width) });
-      }
-      out.push({ text: taiziBgLine(`${prefixPad}${time}`, width) });
-      break;
-    }
-    case "gate":
-      out.push({ text: "" });
-      out.push({ text: `${pc.yellow("⛔")} ${pc.bold(pc.yellow(entry.text))} ${time}` });
-      break;
-    case "gate_ok":
-      out.push({ text: `${pc.yellow("✓")} ${pc.yellow(entry.text)}` });
-      break;
-    case "user": {
-      out.push({ text: "" });
-      const wrapped = wrapW(entry.text, width - 4, 4);
-      out.push({ text: `${pc.cyan("❯")} ${pc.bold(wrapped[0] ?? "")}` });
-      for (const cont of wrapped.slice(1)) out.push({ text: `  ${pc.bold(cont)}` });
-      break;
-    }
-    case "test": {
-      const passed = /passed/.test(entry.text);
-      const mark = passed ? pc.green("✓") : pc.red("✗");
-      out.push({ text: `  ${mark} ${(passed ? pc.green : pc.red)(entry.text)}` });
-      break;
-    }
-    case "artifact":
-      out.push({ text: `  ${pc.green("+")} ${pc.dim(entry.text)}` });
-      break;
-    case "deploy":
-      out.push({ text: `${pc.blue("↗")} ${pc.blue(entry.text)}` });
-      break;
-    case "error": {
-      const wrapped = wrapW(entry.text, width - 4, 3);
-      out.push({ text: `${pc.red("✗")} ${pc.red(pc.bold(wrapped[0] ?? ""))}` });
-      for (const cont of wrapped.slice(1)) out.push({ text: `  ${pc.red(cont)}` });
-      break;
-    }
-    default:
-      blank();
-      out.push({ text: `  ${pc.dim(`· ${entry.text}`)}` });
-  }
-  return out;
 }
 
 function boxTop(title: string, tint: (s: string) => string, width: number): string {
@@ -735,6 +624,23 @@ function buildGateBox(state: ConsoleState, width: number): HitLine[] {
       text: boxRow(pc.yellow(`当前完成度 ${pct}%，仍未达标 — 你想怎么继续？`), tint, width),
     });
   }
+  if (gate.gateType === "deployment") {
+    const preview =
+      state.snapshot?.dev?.previewUrl ?? state.snapshot?.testing?.previewUrl ?? composer.input.trim();
+    if (preview) {
+      lines.push({
+        text: boxRow(
+          `${pc.bold("Preview URL")}  ${pc.cyan(preview)} ${pc.dim("（测试阶段已生成，Enter 确认放行）")}`,
+          tint,
+          width,
+        ),
+      });
+    } else {
+      lines.push({
+        text: boxRow(pc.yellow("请先输入部署 URL，Enter 确认后再选「通过」"), tint, width),
+      });
+    }
+  }
   options.forEach((option, i) => {
     const active = composer.gateId === gate.id && composer.gateCursor === i;
     const zh = GATE_OPTION_LABELS[option];
@@ -783,7 +689,7 @@ function buildQuestionBox(state: ConsoleState, width: number): HitLine[] {
   q.suggestedAnswers.slice(0, 4).forEach((answer, k) => {
     for (const [j, text] of wrapW(answer, width - 12, 2).entries()) {
       lines.push({
-        text: boxRow(j === 0 ? ` ${pc.cyan(`${k + 1})`)} ${text}` : `    ${pc.dim(text)}`, tint, width),
+        text: boxRow(j === 0 ? ` ${pc.cyan(`${k + 1})`)} ${text}` : `    ${text}`, tint, width),
         hit: { type: "suggestion", index: k },
       });
     }
@@ -898,6 +804,7 @@ const DRAFT_MAX_LINES = 6;
 function buildLiveDraft(state: ConsoleState, width: number): HitLine[] {
   const draft = state.liveDraft;
   if (!draft) return [];
+  if (state.timelineFocusAgentId && draft.agentId !== state.timelineFocusAgentId) return [];
   // A draft that stopped updating is settled or orphaned — stop showing it.
   if (Date.now() - draft.atMs > DRAFT_STALE_MS) return [];
   const inner = Math.max(16, width - 8);
@@ -942,6 +849,7 @@ function buildLiveLine(state: ConsoleState, width: number): HitLine[] {
     ];
   }
   if (active) {
+    if (state.timelineFocusAgentId && active.id !== state.timelineFocusAgentId) return [];
     const lastCall = [...state.toolCalls].reverse().find((tc) => tc.agentId === active.id);
     const doing =
       active.status === "tool" && active.lastTool
@@ -984,20 +892,53 @@ function buildLiveLine(state: ConsoleState, width: number): HitLine[] {
 }
 
 function buildStreamLines(state: ConsoleState, width: number): HitLine[] {
+  const focusAgent = state.timelineFocusAgentId
+    ? state.agents.get(state.timelineFocusAgentId)
+    : undefined;
+  const entries = focusAgent
+    ? filterTimelineForAgentFocus(state.timeline, focusAgent)
+    : state.timeline.filter((entry) => entry.kind !== "prompt");
+
   const lines: HitLine[] = [];
-  for (const entry of state.timeline) {
-    lines.push(...entryToLines(entry, width));
+  if (focusAgent) {
+    lines.push(...buildAgentThreadTask(state, width));
   }
+
+  for (const row of buildCodexStream(state, entries, width)) {
+    lines.push({
+      text: row.text,
+      hit: row.hit as Hit | undefined,
+    });
+  }
+
   lines.push(...buildLiveDraft(state, width));
-  lines.push(...buildGateBox(state, width));
-  lines.push(...buildQuestionBox(state, width));
-  lines.push(...buildLaunchButton(state, width));
+  if (!focusAgent) {
+    lines.push(...buildGateBox(state, width));
+    lines.push(...buildQuestionBox(state, width));
+    lines.push(...buildLaunchButton(state, width));
+  }
   lines.push(...buildTodoPanel(state, width));
   lines.push(...buildLiveLine(state, width));
   if (lines.length === 0) {
-    lines.push({ text: pc.dim("  waiting for events…") });
+    lines.push({
+      text: pc.dim(focusAgent ? `  ${focusAgent.name} 暂无工作记录…` : "  waiting for events…"),
+    });
   }
   return lines;
+}
+
+function buildTimelineBreadcrumb(state: ConsoleState, width: number): HitLine | undefined {
+  const agent = state.timelineFocusAgentId
+    ? state.agents.get(state.timelineFocusAgentId)
+    : undefined;
+  if (!agent) return undefined;
+  const back = pc.cyan(pc.underline("信息流"));
+  const sep = pc.dim(" › ");
+  const current = pc.bold(agent.name);
+  return {
+    text: padW(`${back}${sep}${current}`, width),
+    hit: { type: "timeline_focus_back" },
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1027,8 +968,13 @@ function composerLabel(state: ConsoleState): string {
       return "门禁决策 — 1-9 / ↑↓ + Enter 选项，或直接输入自然语言";
     case "gate_custom":
       return "custom decision";
-    case "deployment_url":
-      return "deployment url — Enter to confirm + approve";
+    case "deployment_url": {
+      const preview =
+        state.snapshot?.dev?.previewUrl ?? state.snapshot?.testing?.previewUrl ?? composer.input.trim();
+      return preview
+        ? `部署 URL 已就绪 — Enter 确认并放行（${preview}）`
+        : "输入部署 URL — Enter 确认并放行";
+    }
     case "change_request":
       return "太子在线 — 插话 / 变更 / 继续 / 暂停 / 导出…（! 开头立即打断）";
     case "paused":
@@ -1088,7 +1034,11 @@ function integrationStatusLabel(status: string): string {
   return pc.dim(status);
 }
 
-function buildInspectorColumn(state: ConsoleState, width: number, height: number): HitLine[] {
+function buildInspectorColumn(
+  state: ConsoleState,
+  width: number,
+  height: number,
+): { lines: HitLine[]; filesContent?: { startLine: number; height: number } } {
   const lines: HitLine[] = [];
   const push = (text: string, hit?: Hit): void => {
     lines.push(hit ? { text, hit } : { text });
@@ -1191,17 +1141,43 @@ function buildInspectorColumn(state: ConsoleState, width: number, height: number
       });
     }
   } else {
-    const files = state.repoFiles.filter(
-      (file) => !file.includes("node_modules") && !file.startsWith("dist/"),
+    const treeRows = flattenFileTree(
+      buildFileTree(filterRepoPaths(state.repoFiles)),
+      state.expandedFileDirs,
     );
-    if (files.length === 0) {
+    if (treeRows.length === 0) {
       push(padW(pc.dim("（暂无 repo 文件）"), width));
     } else {
-      for (const file of files.slice(0, contentHeight)) {
-        push(padW(`${pc.blue("📄")} ${clipW(file, width - 3)}`, width), {
-          type: "open_file",
-          path: file,
-        });
+      const showTopHint = state.fileTreeScroll > 0;
+      const slots = contentHeight - (showTopHint ? 1 : 0);
+      const maxScroll = Math.max(0, treeRows.length - slots);
+      state.fileTreeScroll = Math.min(state.fileTreeScroll, maxScroll);
+
+      if (showTopHint) {
+        push(padW(pc.dim(` ↑ ${state.fileTreeScroll} above — scroll`), width));
+      }
+
+      const visibleRows = treeRows.slice(state.fileTreeScroll, state.fileTreeScroll + slots);
+      for (const row of visibleRows) {
+        const indent = "  ".repeat(row.depth);
+        if (row.kind === "dir") {
+          const chevron = row.expanded ? pc.cyan("▾") : pc.dim("▸");
+          const suffix = row.childCount > 0 ? pc.dim(` (${row.childCount})`) : "";
+          push(
+            padW(`${indent}${chevron} ${pc.yellow("📁")} ${clipW(row.name, width - indent.length - 8)}${suffix}`, width),
+            { type: "toggle_file_dir", path: row.path },
+          );
+        } else {
+          push(
+            padW(`${indent}${pc.blue("📄")} ${clipW(row.name, width - indent.length - 4)}`, width),
+            { type: "open_file", path: row.path },
+          );
+        }
+      }
+
+      const below = treeRows.length - state.fileTreeScroll - visibleRows.length;
+      if (below > 0 && lines.length - contentStart < contentHeight) {
+        push(padW(pc.dim(` ↓ ${below} below — scroll`), width));
       }
     }
   }
@@ -1211,107 +1187,18 @@ function buildInspectorColumn(state: ConsoleState, width: number, height: number
   }
 
   while (lines.length < height) push(" ".repeat(width));
-  return lines.slice(0, height);
+  const filesContent =
+    state.inspectorTab === "files"
+      ? { startLine: contentStart, height: contentHeight }
+      : undefined;
+  return { lines: lines.slice(0, height), filesContent };
 }
 
 /* ------------------------------------------------------------------ */
-/* Markdown rendering (artifact viewer)                                 */
+/* Markdown rendering — see markdown.ts                                 */
 /* ------------------------------------------------------------------ */
 
-function mdInline(text: string): string {
-  return text
-    .replace(/\*\*([^*]+)\*\*/g, (_, t: string) => pc.bold(t))
-    .replace(/\*([^*]+)\*/g, (_, t: string) => pc.italic(t))
-    .replace(/`([^`]+)`/g, (_, t: string) => pc.cyan(t));
-}
-
-/** Lightweight terminal markdown renderer for the artifact viewer.
- *  `width` wraps prose to the viewer's inner width (long CJK paragraphs would
- *  otherwise be clipped at paint time). */
-export function renderMarkdownLines(content: string, width = 100): string[] {
-  const out: string[] = [];
-  let inCode = false;
-
-  // Wrap plain text first, then style each wrapped piece — wrapping after
-  // styling would count ANSI escape codes as visible characters.
-  const pushWrapped = (
-    text: string,
-    firstPrefix: string,
-    contPrefix: string,
-    style: (s: string) => string,
-  ): void => {
-    const avail = Math.max(16, width - strWidth(firstPrefix));
-    const pieces = wrapW(text, avail);
-    if (pieces.length === 0) {
-      out.push(firstPrefix.trimEnd());
-      return;
-    }
-    pieces.forEach((piece, index) => {
-      out.push(`${index === 0 ? firstPrefix : contPrefix}${style(piece)}`);
-    });
-  };
-
-  for (const raw of content.replace(/\r\n/g, "\n").split("\n")) {
-    if (/^\s*```/.test(raw)) {
-      inCode = !inCode;
-      out.push(pc.dim("─".repeat(Math.min(40, width))));
-      continue;
-    }
-    if (inCode) {
-      // Code is whitespace-sensitive: clip rather than wrap.
-      out.push(pc.dim(`  ${clipW(raw, Math.max(16, width - 2))}`));
-      continue;
-    }
-    const h = /^(#{1,4})\s+(.*)$/.exec(raw);
-    if (h) {
-      const level = h[1]!.length;
-      const text = h[2]!;
-      if (level === 1) {
-        out.push("");
-        pushWrapped(text, "█ ", "  ", (s) => pc.bold(pc.cyan(s)));
-      } else if (level === 2) {
-        out.push("");
-        pushWrapped(text, "▎", " ", (s) => pc.bold(pc.cyan(s)));
-      } else {
-        pushWrapped(text, "  ".repeat(level - 3), "  ".repeat(level - 3), (s) => pc.bold(s));
-      }
-      continue;
-    }
-    if (/^\s*([-*_]){3,}\s*$/.test(raw)) {
-      out.push(pc.dim("─".repeat(Math.min(40, width))));
-      continue;
-    }
-    const bullet = /^(\s*)[-*]\s+(.*)$/.exec(raw);
-    if (bullet) {
-      const indent = bullet[1]!;
-      pushWrapped(bullet[2]!, `${indent}${pc.cyan("•")} `, `${indent}  `, mdInline);
-      continue;
-    }
-    const ordered = /^(\s*)(\d+)\.\s+(.*)$/.exec(raw);
-    if (ordered) {
-      const indent = ordered[1]!;
-      const marker = `${ordered[2]}.`;
-      pushWrapped(
-        ordered[3]!,
-        `${indent}${pc.cyan(marker)} `,
-        `${indent}${" ".repeat(marker.length + 1)}`,
-        mdInline,
-      );
-      continue;
-    }
-    const quote = /^\s*>\s?(.*)$/.exec(raw);
-    if (quote) {
-      pushWrapped(quote[1]!, `${pc.dim("▏")} `, `${pc.dim("▏")} `, (s) => pc.dim(s));
-      continue;
-    }
-    pushWrapped(raw, "", "", mdInline);
-  }
-  return out;
-}
-
-/* ------------------------------------------------------------------ */
-/* Hints line                                                           */
-/* ------------------------------------------------------------------ */
+export { renderMarkdownLines } from "./markdown.js";
 
 function buildHints(state: ConsoleState, width: number, y: number): string {
   if (state.notice && Date.now() - state.notice.at < 6_000) {
@@ -1322,22 +1209,15 @@ function buildHints(state: ConsoleState, width: number, y: number): string {
     );
   }
 
-  let x = 1;
-  let line = " ";
-  for (const action of deriveActions(state)) {
-    const label = `[${action.key}] ${action.label}`;
-    addHit(x, y, strWidth(label), 1, { type: "action", id: action.id });
-    line += `${pc.cyan(`[${action.key}]`)} ${action.label}`;
-    line += pc.dim("  ·  ");
-    x += strWidth(label) + 5;
-  }
   const keys =
     state.focus === "timeline"
-      ? "wheel/↑↓ scroll · End follow"
+      ? state.timelineFocusAgentId
+        ? "点击 信息流 返回 · wheel/↑↓ scroll · End follow"
+        : "wheel/↑↓ scroll · End follow"
       : state.focus === "agents"
-        ? "↑↓ select · Enter pin"
+        ? "↑↓ select · Enter 查看工作过程"
         : "Enter submit";
-  line += pc.dim(`${keys}  ·  Tab focus  ·  ^B projects  ·  q quit`);
+  const line = ` ${pc.cyan("Ctrl+P")} 命令  ·  ${pc.dim(keys)}  ·  Tab focus  ·  ^B projects  ·  q quit`;
   return padW(line, width);
 }
 
@@ -1368,9 +1248,20 @@ export function renderConsole(state: ConsoleState): void {
   addHit(rx, bodyTop, rightW, bodyH, { type: "focus", zone: "composer" });
 
   const streamH = bodyH - 3;
-  streamRect = { x1: cx, y1: bodyTop, x2: cx + centerW - 1, y2: bodyTop + streamH - 1 };
-  addHit(cx, bodyTop, centerW, streamH, { type: "focus", zone: "timeline" });
+  const breadcrumb = buildTimelineBreadcrumb(state, centerW);
+  const crumbRows = breadcrumb ? 1 : 0;
+  const streamContentH = streamH - crumbRows;
+  streamRect = {
+    x1: cx,
+    y1: bodyTop + crumbRows,
+    x2: cx + centerW - 1,
+    y2: bodyTop + streamH - 1,
+  };
+  addHit(cx, bodyTop + crumbRows, centerW, streamContentH, { type: "focus", zone: "timeline" });
   addHit(cx, bodyTop + streamH, centerW, 3, { type: "focus", zone: "composer" });
+  if (breadcrumb) {
+    addHit(cx, bodyTop, strWidth("信息流") + 2, 1, { type: "timeline_focus_back" });
+  }
 
   // Left column (with row hits).
   const left = buildAgentsColumn(state, leftW, bodyH);
@@ -1380,13 +1271,13 @@ export function renderConsole(state: ConsoleState): void {
 
   // Center stream with scroll window.
   const streamLines = buildStreamLines(state, centerW);
-  const maxScroll = Math.max(0, streamLines.length - streamH);
+  const maxScroll = Math.max(0, streamLines.length - streamContentH);
   state.timelineScroll = Math.min(state.timelineScroll, maxScroll);
   const end = streamLines.length - state.timelineScroll;
-  const visible = streamLines.slice(Math.max(0, end - streamH), end);
-  while (visible.length < streamH) visible.unshift({ text: "" });
+  const visible = streamLines.slice(Math.max(0, end - streamContentH), end);
+  while (visible.length < streamContentH) visible.unshift({ text: "" });
   visible.forEach((line, i) => {
-    if (line.hit) addHit(cx, bodyTop + i, centerW, 1, line.hit);
+    if (line.hit) addHit(cx, bodyTop + crumbRows + i, centerW, 1, line.hit);
   });
   if (state.timelineScroll > 0) {
     visible[visible.length - 1] = {
@@ -1397,11 +1288,28 @@ export function renderConsole(state: ConsoleState): void {
   }
 
   const center = [
+    ...(breadcrumb ? [padW(breadcrumb.text, centerW)] : []),
     ...visible.map((line) => padW(line.text, centerW)),
     ...buildInputBox(state, centerW),
   ];
 
-  const right = buildInspectorColumn(state, rightW, bodyH);
+  const inspector = buildInspectorColumn(state, rightW, bodyH);
+  const right = inspector.lines;
+  if (inspector.filesContent) {
+    inspectorFilesRect = {
+      x1: rx,
+      y1: bodyTop + inspector.filesContent.startLine,
+      x2: rx + rightW - 1,
+      y2: bodyTop + inspector.filesContent.startLine + inspector.filesContent.height - 1,
+    };
+    addHit(
+      rx,
+      bodyTop + inspector.filesContent.startLine,
+      rightW,
+      inspector.filesContent.height,
+      { type: "focus", zone: "composer" },
+    );
+  }
   right.forEach((line, i) => {
     if (line.hit) addHit(rx, bodyTop + i, rightW, 1, line.hit);
   });
@@ -1415,7 +1323,78 @@ export function renderConsole(state: ConsoleState): void {
 
   const frame = [...header, ...body, buildHints(state, width, hintsY)];
   if (state.viewer) overlayViewer(frame, state, cols, rows);
+  if (state.commandPalette) overlayCommandPalette(frame, state, cols, rows);
   paint(frame);
+}
+
+/* ------------------------------------------------------------------ */
+/* Command palette overlay (Ctrl+P)                                     */
+/* ------------------------------------------------------------------ */
+
+function overlayCommandPalette(
+  frame: string[],
+  state: ConsoleState,
+  cols: number,
+  rows: number,
+): void {
+  const palette = state.commandPalette!;
+  const actions = filterPaletteActions(state);
+  const cursor = Math.min(palette.cursor, Math.max(0, actions.length - 1));
+  palette.cursor = cursor;
+
+  const w = Math.min(cols - 4, 72);
+  const visible = 10;
+  const listH = Math.min(visible, Math.max(1, actions.length));
+  const h = listH + 4;
+  const x0 = Math.floor((cols - w) / 2);
+  const y0 = Math.max(2, rows - h - 3);
+
+  const place = (y: number, content: string): void => {
+    if (y < 0 || y >= frame.length) return;
+    frame[y] = padW(content, cols);
+  };
+
+  const border = pc.dim("─".repeat(w - 2));
+  place(y0, " ".repeat(x0) + pc.dim(`┌${border}┐`));
+  place(
+    y0 + 1,
+    " ".repeat(x0) +
+      pc.dim("│ ") +
+      pc.cyan("❯ ") +
+      palette.query +
+      pc.inverse(" ") +
+      " ".repeat(Math.max(0, w - 6 - strWidth(palette.query))) +
+      pc.dim(" │"),
+  );
+  place(y0 + 2, " ".repeat(x0) + pc.dim(`├${border}┤`));
+
+  const start = Math.max(0, cursor - Math.floor(visible / 2));
+  const window = actions.slice(start, start + visible);
+  for (let i = 0; i < listH; i += 1) {
+    const action = window[i];
+    const rowY = y0 + 3 + i;
+    if (!action) {
+      place(rowY, " ".repeat(x0) + pc.dim(`│${" ".repeat(w - 2)}│`));
+      continue;
+    }
+    const index = start + i;
+    const selected = index === cursor;
+    const innerW = w - 4;
+    const prefix = selected ? pc.cyan("▸ ") : "  ";
+    const label = clipW(action.label, innerW - 2);
+    const body = selected ? pc.bgCyan(pc.black(`${prefix}${label}`)) : `${prefix}${label}`;
+    addHit(x0 + 2, rowY, w - 4, 1, { type: "palette_action", id: action.id });
+    place(
+      rowY,
+      " ".repeat(x0) + pc.dim("│ ") + padW(body, innerW) + pc.dim(" │"),
+    );
+  }
+
+  place(y0 + 3 + listH, " ".repeat(x0) + pc.dim(`└${border}┘`));
+  place(
+    y0 + 3 + listH + 1,
+    padW(pc.dim("  ↑↓ select · Enter run · Esc close · type to filter"), cols),
+  );
 }
 
 /* ------------------------------------------------------------------ */
