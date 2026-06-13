@@ -66,3 +66,12 @@ export {
   type AutoEnableIntegrationsResult,
 } from "./auto-enable-from-requirement.js";
 export { assertUntrustedResourceDoesNotOverridePolicy, wrapUntrustedResource } from "./untrusted.js";
+export {
+  listProjectMcpConfigs,
+  getProjectMcpConfig,
+  upsertProjectMcpConfig,
+  deleteProjectMcpConfig,
+  presetDefaultMcpConfigs,
+  projectMcpConfigsToOpencode,
+} from "./project-mcp.js";
+export { PRESET_MCP_SERVERS, resolvePresetMcpServers } from "./preset-mcp.js";
