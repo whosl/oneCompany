@@ -111,9 +111,12 @@ export function buildStructuredAgentPrompts(
   db: Db,
   agentIdAtVersion: string,
   userPayload: unknown,
-): Pick<AgentPromptContent, "system" | "human"> {
-  const human =
-    typeof userPayload === "string" ? userPayload : JSON.stringify(userPayload);
+): { system: string; human: string } {
+  // JSON.stringify(undefined) returns undefined (not a string), so guard it;
+  // otherwise human could violate its declared string type at runtime.
+  const human = typeof userPayload === "string"
+    ? userPayload
+    : JSON.stringify(userPayload) ?? "";
   return {
     system: buildAgentSystemPrompt(db, agentIdAtVersion),
     human,

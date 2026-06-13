@@ -1,4 +1,4 @@
-import type { Event, OpencodeClient, Part, Permission } from "@opencode-ai/sdk";
+import type { Event, OpencodeClient, Part, Permission, ToolPart } from "@opencode-ai/sdk";
 import { formatCommandOutput, type LogBridgeDeps } from "./log-bridge.js";
 
 export type HarnessEventPayload = {
@@ -350,7 +350,7 @@ function summarizeToolOutput(toolName: string, output: unknown): string | undefi
 function emitToolStarted(
   ctx: EventBridgeContext,
   hooks: { seenToolCalls: Set<string> },
-  part: Part,
+  part: ToolPart,
   summary: string | undefined,
 ): void {
   const toolCallId = part.callID;
