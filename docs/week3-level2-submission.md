@@ -99,9 +99,8 @@ OneCompany 将“一句话生成应用”拆成两个职责清晰、通过持久
 ```text
 PRD/验收标准
   -> Architect 生成技术方案
-  -> Test Designer 设计测试
   -> 技术方案确认 Gate
-  -> Planner 拆分功能切片
+  -> Planner 拆分功能切片并设计每个切片的测试命令
   -> 对每个切片执行：
        先确定失败测试和验收检查
        -> Opencode Harness 读取/编辑代码并运行命令
@@ -116,7 +115,7 @@ PRD/验收标准
   -> 交付报告
 ```
 
-这里的 Plan 由架构师、测试设计和切片规划 Agent 共同形成；ReAct 主要发生在单个开发切片内部，由编码模型根据当前目标反复读取文件、编辑文件、执行测试、观察结果并修正实现。LangGraph 不会把工作流控制权交给编码模型：重试预算、状态转换、Gate 和是否进入下一切片始终由 OneCompany 决定。
+这里的 Plan 由架构师和切片规划 Agent 共同形成（切片规划 Agent 同时负责为每个切片设计测试命令）；ReAct 主要发生在单个开发切片内部，由编码模型根据当前目标反复读取文件、编辑文件、执行测试、观察结果并修正实现。LangGraph 不会把工作流控制权交给编码模型：重试预算、状态转换、Gate 和是否进入下一切片始终由 OneCompany 决定。
 
 开发过程中用户仍可以输入新要求。系统会先分析变更影响，形成变更单并进入 `Change Review`；批准后只重做受影响的计划、切片和测试，项目代码通过 Git 保存提交点，保证可追踪和可回滚。
 
@@ -141,8 +140,7 @@ PRD/验收标准
 | Agent | 主要职责 | 核心能力 | 主要输出 |
 | --- | --- | --- | --- |
 | Architect | 把 PRD 转成可执行技术方案 | 技术栈、架构、模块、数据模型、风险与 TDD 策略 | Technical Plan |
-| Test Designer | 在编码前设计验证方式 | 将验收标准转成单元、集成、类型检查、构建和 E2E 测试 | 测试规格与命令 |
-| Planner | 将整体计划拆成可独立验证的功能切片 | 依赖排序、切片目标、预期文件、验收检查、测试命令 | 有序 Slice Queue |
+| Planner | 将整体计划拆成可独立验证的功能切片，并为每个切片设计测试 | 依赖排序、切片目标、预期文件、验收检查、将验收标准转成测试命令 | 有序 Slice Queue |
 | Coding | 实现一个功能切片 | 在 Opencode Harness 中执行 ReAct/TDD，读取、编辑代码并运行测试 | 源码、测试、变更文件 |
 | Review | 独立审查切片改动 | 对照验收标准检查正确性、一致性、缺陷与风险 | 通过/拒绝、Findings |
 | QA | 验证整个应用而非单个函数 | 运行测试、检查预览、浏览器行为、控制台错误和证据 | 测试结果与 QA 结论 |
@@ -267,7 +265,6 @@ TUI2 同时展示 Agent 当前状态、工作时长、工具次数、产物数�
 | Agent | tier | 实际模型（当前） | 执行器 |
 | --- | --- | --- | --- |
 | Architect | strong | `deepseek-v4-pro` | LangChain |
-| Test Designer | standard | `deepseek-v4-flash` | LangChain |
 | Planner | strong | `deepseek-v4-pro` | LangChain |
 | Coding | strong | `xiaomi-token-plan-cn/mimo-v2.5-pro` | mimo Harness |
 | Review | strong | `xiaomi-token-plan-cn/mimo-v2.5-pro` | mimo Harness（只读） |
@@ -344,7 +341,7 @@ OneCompany 的工具不是展示用标签，而是进入 Agent 和 Harness 执�
 
 OneCompany 采用测试驱动开发的软件工程范式，在三个层次执行验证：
 
-1. **切片前测试设计**：Test Designer 先根据验收标准设计测试，Planner 将测试命令绑定到切片。
+1. **切片前测试设计**：Planner 在拆分切片时，根据验收标准为每个切片生成绑定的测试命令。
 2. **切片内 TDD**：Opencode Harness 根据目标和失败测试实现代码，循环执行测试并修正。
 3. **切片外权威测试**：OneCompany 独立运行测试命令并解析结果。只有权威结果通过才允许提交。
 4. **项目级全量测试**：全部切片完成后执行 Unit、Integration、Typecheck、Build、Playwright E2E 和验收用例。
@@ -522,7 +519,7 @@ pnpm tui2 --project <project-id>
 2. 输入统一 AI 面试助手需求。
 3. 展示累计 6 个以上澄清问题、建议答案、自由输入和默认假设继续。
 4. 打开 PRD 与验收标准，批准需求确认 Gate。
-5. 展示 Architect、Test Designer、Planner 的 PAOR 和技术方案。
+5. 展示 Architect、Planner 的 PAOR 和技术方案。
 6. 批准技术方案，展示 Opencode Harness 的真实文件读取、编辑、Shell、测试和 Diff。
 7. 展示至少 5 种工具调用及其中一次失败/重试。
 8. 在输入框向 Taizi 提问（如「slice 为什么 failed」「现在该说什么」），展示 `tool_call.*` 只读调研（事件流、dev session、Gate）及中文作答，说明 Taizi 只读、不改工作流。
