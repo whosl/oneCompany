@@ -38,6 +38,7 @@ import {
   loadDevSession,
   saveDevSession,
 } from "./development/state.js";
+import { isSliceLoopActive } from "./development/slice-loop-registry.js";
 import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./development/types.js";
 import type { RequirementWorkflowDeps } from "./requirement/types.js";
 import { resetGraphCheckpointerForTests } from "./graph/checkpointer.js";
@@ -332,7 +333,7 @@ export function createTestingDeps(
     createGate: (projectId, gateType) => createGate(db, projectId, gateType),
     loadSession: (projectId) => loadDevSession(db, projectId),
     saveSession: (projectId, payload) => saveDevSession(db, projectId, payload),
-    startPreview: async (projectId) => ({
+    startPreview: async (_projectId) => ({
       url: options.previewUrl ?? `http://127.0.0.1:4173`,
       port: 4173,
       stop: async () => undefined,
@@ -404,4 +405,33 @@ export function setupDevelopmentTest(
       cleanup();
     },
   };
+}
+
+/**
+ * Wait for the in-process background slice loop to reach a quiescent state
+ * (no longer active) after a tech-plan approval or change-review resume.
+ *
+ * `beginSliceLoopInBackground` is a fire-and-forget async loop, so callers that
+ * need to observe the resulting gate (slice_failure / change_review / finalize)
+ * must poll until the loop releases its in-memory "active" mark and persists
+ * the next phase. This mirrors how the integration tests poll the HTTP API.
+ */
+export async function waitForSliceLoopIdle(
+  db: Db,
+  projectId: string,
+  timeoutMs = 5_000,
+): Promise<DevelopmentSessionPayload> {
+  const deadline = Date.now() + timeoutMs;
+  // Let the microtask/macrotask queue drain before the first check.
+  await new Promise((resolve) => setImmediate(resolve));
+  while (isSliceLoopActive(projectId)) {
+    if (Date.now() > deadline) {
+      const current = loadDevSession(db, projectId);
+      throw new Error(
+        `slice loop did not become idle within ${timeoutMs}ms (phase=${current.meta.phase})`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return loadDevSession(db, projectId);
 }

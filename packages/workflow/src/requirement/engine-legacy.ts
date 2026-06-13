@@ -242,7 +242,7 @@ export async function startRequirementLegacy(
   },
 ): Promise<RequirementRunResult> {
   const profile = input.profile ?? "vague";
-  let payload = createRequirementSession(
+  const payload = createRequirementSession(
     deps.db,
     input.projectId,
     input.requirement,

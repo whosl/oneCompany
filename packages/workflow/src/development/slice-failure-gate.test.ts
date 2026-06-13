@@ -1,18 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { changeRequests } from "@oc/shared";
-import { startDevelopment, resumeDevelopmentAfterGate } from "./engine.js";
-import { setupDevelopmentTest } from "../test-utils.js";
+import { startDevelopment, resumeDevelopmentAfterGate, getDevelopmentStatus } from "./engine.js";
+import { setupDevelopmentTest, waitForSliceLoopIdle } from "../test-utils.js";
 
-async function reachSliceFailureGate(projectId: string, deps: ReturnType<typeof setupDevelopmentTest>["deps"]) {
+async function reachSliceFailureGate(
+  db: ReturnType<typeof setupDevelopmentTest>["db"],
+  projectId: string,
+  deps: ReturnType<typeof setupDevelopmentTest>["deps"],
+) {
   await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
-  return resumeDevelopmentAfterGate(deps, { projectId, decision: "approve" });
+  await resumeDevelopmentAfterGate(deps, { projectId, decision: "approve" });
+  // Slice loop runs in the background after tech-plan approval; wait for it to
+  // exhaust its retry budget and raise the slice-failure gate.
+  await waitForSliceLoopIdle(db, projectId);
+  return getDevelopmentStatus(deps, projectId);
 }
 
 describe("slice failure gate", () => {
   it("raises gate after budget exhausted", async () => {
-    const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      const result = await reachSliceFailureGate(projectId, deps);
+      const result = await reachSliceFailureGate(db, projectId, deps);
       expect(result.gateType).toBe("slice_failure");
       expect(result.state.currentSliceAttempts).toBe(4);
     } finally {
@@ -21,15 +29,19 @@ describe("slice failure gate", () => {
   });
 
   it("retry resets the failed slice to pending and reruns it", async () => {
-    const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      const gated = await reachSliceFailureGate(projectId, deps);
+      const gated = await reachSliceFailureGate(db, projectId, deps);
       expect(gated.state.taskQueue[0]?.status).toBe("failed");
 
-      const retried = await resumeDevelopmentAfterGate(deps, {
+      await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "retry",
       });
+      // Retry relaunches the background slice loop with an extended budget;
+      // alwaysFail drives it back to the slice-failure gate.
+      await waitForSliceLoopIdle(db, projectId);
+      const retried = getDevelopmentStatus(deps, projectId);
       expect(retried.projectStatus).toBe("Developing");
       expect(retried.gateType).toBe("slice_failure");
       expect(retried.state.taskQueue[0]?.status).toBe("failed");
@@ -40,9 +52,9 @@ describe("slice failure gate", () => {
   });
 
   it("replan returns to Tech Plan Review", async () => {
-    const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      await reachSliceFailureGate(projectId, deps);
+      await reachSliceFailureGate(db, projectId, deps);
       const replanned = await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "replan",
@@ -57,7 +69,7 @@ describe("slice failure gate", () => {
   it("request_skip_slice opens change review without marking passed", async () => {
     const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      await reachSliceFailureGate(projectId, deps);
+      await reachSliceFailureGate(db, projectId, deps);
       const skipped = await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "request_skip_slice",
@@ -71,9 +83,9 @@ describe("slice failure gate", () => {
   });
 
   it("fail sets project Failed", async () => {
-    const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      await reachSliceFailureGate(projectId, deps);
+      await reachSliceFailureGate(db, projectId, deps);
       const failed = await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "fail",

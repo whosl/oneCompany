@@ -4,11 +4,18 @@ import { eq } from "drizzle-orm";
 import { handleChangeReviewDecision, startRequirementChangeReview } from "./change-review.js";
 import { startDevelopment, resumeDevelopmentAfterGate } from "./engine.js";
 import { loadDevSession, saveDevSession } from "./state.js";
-import { setupDevelopmentTest } from "../test-utils.js";
+import { setupDevelopmentTest, waitForSliceLoopIdle } from "../test-utils.js";
 
-async function reachChangeReview(projectId: string, deps: ReturnType<typeof setupDevelopmentTest>["deps"]) {
+async function reachChangeReview(
+  db: ReturnType<typeof setupDevelopmentTest>["db"],
+  projectId: string,
+  deps: ReturnType<typeof setupDevelopmentTest>["deps"],
+) {
   await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
   await resumeDevelopmentAfterGate(deps, { projectId, decision: "approve" });
+  // Tech-plan approval starts the slice loop in the background (fire-and-forget);
+  // wait for it to reach the slice-failure gate before issuing the skip request.
+  await waitForSliceLoopIdle(db, projectId);
   await resumeDevelopmentAfterGate(deps, { projectId, decision: "request_skip_slice" });
 }
 
@@ -16,7 +23,7 @@ describe("change review", () => {
   it("update_plan appends acceptance version and continues developing", async () => {
     const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      await reachChangeReview(projectId, deps);
+      await reachChangeReview(db, projectId, deps);
       const before = db.select().from(acceptanceCriteriaVersions).all().length;
       const result = await resumeDevelopmentAfterGate(deps, {
         projectId,
@@ -31,9 +38,9 @@ describe("change review", () => {
   });
 
   it("revise_tech_plan routes to Tech Plan Review", async () => {
-    const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      await reachChangeReview(projectId, deps);
+      await reachChangeReview(db, projectId, deps);
       const result = await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "revise_tech_plan",
@@ -45,9 +52,9 @@ describe("change review", () => {
   });
 
   it("reject from skip_slice reopens the slice_failure gate", async () => {
-    const { deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
-      await reachChangeReview(projectId, deps);
+      await reachChangeReview(db, projectId, deps);
       const result = await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "reject",
@@ -67,6 +74,9 @@ describe("change review", () => {
     try {
       await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
       await resumeDevelopmentAfterGate(deps, { projectId, decision: "approve" });
+      // Wait for the background slice loop to settle before opening the change review;
+      // startRequirementChangeReview rejects while a slice loop is still active.
+      await waitForSliceLoopIdle(db, projectId);
 
       const developing = loadDevSession(db, projectId);
       const activeSlice = developing.state.taskQueue[0];

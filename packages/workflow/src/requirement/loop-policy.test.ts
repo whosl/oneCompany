@@ -1,5 +1,5 @@
 import { validRequirementState } from "@oc/shared";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   canAskAnotherRound,
   hasMetQuestionMinimum,
@@ -10,6 +10,16 @@ import {
   shouldRaiseStuckGate,
   totalQuestionsAsked,
 } from "./loop-policy.js";
+
+// Several tests mutate OC_MIN_TOTAL_QUESTIONS. Clear it before and after every
+// test so a question-floor override set by one case never leaks into another
+// (this was flaking the "defaults to 0" and "PRD readiness" cases under reorder).
+beforeEach(() => {
+  delete process.env.OC_MIN_TOTAL_QUESTIONS;
+});
+afterEach(() => {
+  delete process.env.OC_MIN_TOTAL_QUESTIONS;
+});
 
 describe("requirement loop policy — M3", () => {
   it("detects PRD readiness without critical gaps", () => {
@@ -110,10 +120,6 @@ describe("requirement loop policy — M3", () => {
 });
 
 describe("requirement loop policy — minimum question floor", () => {
-  afterEach(() => {
-    delete process.env.OC_MIN_TOTAL_QUESTIONS;
-  });
-
   const round = (count: number, scoreAfter = 90) => ({
     topic: "t",
     questions: Array.from({ length: count }, (_, i) => ({

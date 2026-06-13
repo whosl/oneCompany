@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { commits, diffs, events } from "@oc/shared";
 import { loadTestResults } from "../testing/results.js";
 import { startDevelopment, resumeDevelopmentAfterGate } from "./engine.js";
-import { setupDevelopmentTest } from "../test-utils.js";
+import { getDevelopmentStatus } from "./engine.js";
+import { setupDevelopmentTest, waitForSliceLoopIdle } from "../test-utils.js";
 
 describe("slice loop with stub harness", () => {
   it("retries on authoritative failure then commits on pass", async () => {
@@ -12,10 +13,14 @@ describe("slice loop with stub harness", () => {
     });
     try {
       await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
-      const result = await resumeDevelopmentAfterGate(deps, {
+      await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "approve",
       });
+      // Slice loop runs in the background after tech-plan approval; wait for it
+      // to reach a quiescent state before asserting on the final results.
+      await waitForSliceLoopIdle(db, projectId);
+      const result = getDevelopmentStatus(deps, projectId);
 
       expect(result.state.commits).toHaveLength(1);
       expect(result.state.currentSliceAttempts).toBe(0);
@@ -45,10 +50,12 @@ describe("slice loop with stub harness", () => {
     const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
       await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
-      const result = await resumeDevelopmentAfterGate(deps, {
+      await resumeDevelopmentAfterGate(deps, {
         projectId,
         decision: "approve",
       });
+      await waitForSliceLoopIdle(db, projectId);
+      const result = getDevelopmentStatus(deps, projectId);
       expect(result.gateType).toBe("slice_failure");
       expect(db.select().from(commits).all()).toHaveLength(0);
     } finally {

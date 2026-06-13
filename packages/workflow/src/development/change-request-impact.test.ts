@@ -8,7 +8,7 @@ import {
 } from "./change-review.js";
 import { analyzeChangeImpact } from "./change-request-impact.js";
 import { resumeDevelopmentAfterGate, startDevelopment } from "./engine.js";
-import { setupDevelopmentTest } from "../test-utils.js";
+import { setupDevelopmentTest, waitForSliceLoopIdle } from "../test-utils.js";
 
 describe("change request impact", () => {
   it("classifies architecture-impacting requirement changes", async () => {
@@ -31,6 +31,9 @@ describe("change request impact", () => {
     try {
       await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
       await resumeDevelopmentAfterGate(deps, { projectId, decision: "approve" });
+      // Wait for the background slice loop to settle; startRequirementChangeReview
+      // rejects while a slice loop is still active.
+      await waitForSliceLoopIdle(db, projectId);
       db.update(projects)
         .set({ status: "Developing" })
         .where(eq(projects.id, projectId))

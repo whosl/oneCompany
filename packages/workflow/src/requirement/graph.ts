@@ -276,7 +276,7 @@ export function buildRequirementGraph(deps: RequirementWorkflowDeps) {
       gateId: state.payload.meta.gateId,
     }) as string;
 
-    let payload = { ...state.payload };
+    const payload = { ...state.payload };
     switch (decision) {
       case "keep_answering": {
         payload.state = {

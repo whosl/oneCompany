@@ -574,7 +574,7 @@ export async function resumeDevelopmentAfterGateLegacy(
   deps: DevelopmentWorkflowDeps,
   input: { projectId: string; decision: string },
 ): Promise<DevelopmentRunResult> {
-  let payload = loadDevSession(deps.db, input.projectId);
+  const payload = loadDevSession(deps.db, input.projectId);
   const gateType = payload.meta.gateType;
 
   if (payload.meta.phase !== "awaiting_gate" && payload.meta.phase !== "change_review") {

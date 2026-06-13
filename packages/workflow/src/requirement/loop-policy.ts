@@ -12,6 +12,9 @@ export function totalQuestionsAsked(state: RequirementState): number {
  * Cumulative clarification-question floor before PRD generation.
  * Stub engine and test runs keep the legacy behavior (0) so fixture flows stay
  * deterministic; override either way with OC_MIN_TOTAL_QUESTIONS.
+ *
+ * The test-env check mirrors the graph checkpointer: vitest sets VITEST="true"
+ * (NODE_ENV may remain "development" under pnpm/turbo), so both signals count.
  */
 export function minTotalQuestions(): number {
   const raw = process.env.OC_MIN_TOTAL_QUESTIONS;
@@ -21,7 +24,11 @@ export function minTotalQuestions(): number {
       return parsed;
     }
   }
-  if (process.env.OC_USE_STUB_ENGINE === "1" || process.env.NODE_ENV === "test") {
+  if (
+    process.env.OC_USE_STUB_ENGINE === "1" ||
+    process.env.NODE_ENV === "test" ||
+    process.env.VITEST === "true"
+  ) {
     return 0;
   }
   return DEFAULT_MIN_TOTAL_QUESTIONS;
