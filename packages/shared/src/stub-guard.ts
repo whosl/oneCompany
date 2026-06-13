@@ -9,7 +9,13 @@ function isStubAllowedEnv(): boolean {
   if (process.env.NODE_ENV === "production") {
     return false;
   }
-  return process.env.NODE_ENV === "test" || process.env.OC_ALLOW_STUB === "1";
+  // vitest sets VITEST="true" while NODE_ENV may stay "development" under
+  // pnpm/turbo; accept both signals (mirrors loop-policy and checkpointer).
+  return (
+    process.env.NODE_ENV === "test" ||
+    process.env.VITEST === "true" ||
+    process.env.OC_ALLOW_STUB === "1"
+  );
 }
 
 export function assertStubEngineAllowed(): void {

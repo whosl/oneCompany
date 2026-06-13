@@ -1,4 +1,5 @@
 import type { DevContext } from "@oc/agent-core";
+import { listProjectMcpConfigs, projectMcpConfigsToOpencode } from "@oc/integrations";
 import { emit, ephemeralEnvelope, type AgentEvent, type DevState } from "@oc/shared";
 import { classifyCommandChain, persistOutput } from "@oc/workspace";
 import type { DevelopmentWorkflowDeps } from "./types.js";
@@ -93,6 +94,9 @@ export function buildHarnessContext(
     repoPath: deps.repoPath,
     projectId: state.projectId,
     logsPath: deps.logsPath,
+    // Inject project-level MCP servers (codegraph/context7/web-search) so the
+    // opencode code agent can call them during slice TDD and review.
+    projectMcp: projectMcpConfigsToOpencode(listProjectMcpConfigs(deps.db, state.projectId)),
     formatToolOutput: formatToolOutput || undefined,
     classifyShellRisk: (command) =>
       deps.classifyShellRisk?.(command) ??

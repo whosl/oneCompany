@@ -9,6 +9,7 @@ import {
   type ProjectStatus,
 } from "@oc/shared";
 import { projectStatusHistory, projects } from "@oc/shared";
+import { presetDefaultMcpConfigs } from "@oc/integrations";
 
 function slugify(name: string): string {
   return name
@@ -79,6 +80,11 @@ export function createProjectService(db: Db, onEvent: (envelope: EventEnvelope) 
       payload: { type: "project.created", projectId: id, name },
     });
     onEvent(envelope);
+
+    // Seed default MCP servers (codegraph/context7/web-search). Each probes
+    // availability and degrades to enabled=false when the tool is missing,
+    // so this never throws on a bare environment.
+    presetDefaultMcpConfigs(db, id);
 
     return {
       id,

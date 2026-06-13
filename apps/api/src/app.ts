@@ -13,6 +13,7 @@ import { createTestingService } from "./testing/service.js";
 import type { RequirementService } from "./requirement/service.js";
 import { createOrchestrationRoutes } from "./orchestration/routes.js";
 import { createInterruptRoutes } from "./projects/interrupt-routes.js";
+import { createProjectMcpRoutes } from "./projects/mcp-routes.js";
 import { createProjectRoutes } from "./projects/routes.js";
 import { createProjectService } from "./projects/service.js";
 import { createRequirementRoutes } from "./requirement/routes.js";
@@ -129,6 +130,10 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createPanelRoutes(panel));
   app.route("/projects", createConsoleRoutes(consoleService));
   app.route("/projects", createProjectIntegrationRoutes(integrations));
+  app.route(
+    "/projects",
+    createProjectMcpRoutes(deps.db, (id) => projects.getProject(id) !== null),
+  );
 
   return {
     app,

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ProjectService } from "./service.js";
 import type { WorkspaceService } from "../workspace/service.js";
+import { isCodegraphAvailable, initCodegraphForRepo } from "./codegraph.js";
 
 export function createProjectRoutes(projects: ProjectService, workspace?: WorkspaceService) {
   const router = new Hono();
@@ -15,7 +16,17 @@ export function createProjectRoutes(projects: ProjectService, workspace?: Worksp
       return c.json({ error: "name is required" }, 400);
     }
     const project = projects.createProject(body.name.trim());
-    workspace?.ensureForProject(project);
+    const paths = workspace?.ensureForProject(project);
+    // Build a codegraph index for the fresh repo so the code agent can query
+    // call graphs from the first slice. No-op (silent skip) if codegraph is
+    // not installed, matching the preset MCP availability behavior.
+    if (paths && isCodegraphAvailable()) {
+      try {
+        initCodegraphForRepo(paths.repo);
+      } catch {
+        // Indexing is best-effort; the MCP server will re-index on first sync.
+      }
+    }
     return c.json(project, 201);
   });
 
