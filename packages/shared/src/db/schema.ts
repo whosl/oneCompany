@@ -275,3 +275,21 @@ export const skillPackRuns = sqliteTable("skill_pack_runs", {
   artifact_path: text("artifact_path"),
   created_at: text("created_at").notNull(),
 });
+
+export const projectMcpConfigs = sqliteTable("project_mcp_configs", {
+  id: text("id").primaryKey(),
+  project_id: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  server_id: text("server_id").notNull(),
+  display_name: text("display_name").notNull(),
+  transport: text("transport").notNull(),
+  command_json: text("command_json").notNull(),
+  args_json: text("args_json"),
+  env_json: text("env_json"),
+  cwd: text("cwd"),
+  tool_allowlist_json: text("tool_allowlist_json"),
+  enabled: integer("enabled").default(1),
+  created_at: text("created_at").notNull(),
+  updated_at: text("updated_at").notNull(),
+});

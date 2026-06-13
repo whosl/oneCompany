@@ -82,5 +82,22 @@ export function ensureAdditiveIntegrationSchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (project_id) REFERENCES projects(id)
     );
+
+    CREATE TABLE IF NOT EXISTS project_mcp_configs (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL,
+      server_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      transport TEXT NOT NULL,
+      command_json TEXT NOT NULL,
+      args_json TEXT,
+      env_json TEXT,
+      cwd TEXT,
+      tool_allowlist_json TEXT,
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    );
   `);
 }

@@ -30,6 +30,7 @@ export const INTEGRATION_TABLE_NAMES = [
   "integration_tool_calls",
   "skill_packs",
   "skill_pack_runs",
+  "project_mcp_configs",
 ] as const;
 
 export const INTEGRATION_TABLE_COUNT = INTEGRATION_TABLE_NAMES.length;

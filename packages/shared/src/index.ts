@@ -12,6 +12,7 @@ export * from "./schemas/change-request.js";
 export * from "./schemas/taizi.js";
 export * from "./schemas/delivery-report.js";
 export * from "./schemas/integration.js";
+export * from "./schemas/project-mcp.js";
 export * from "./db/schema.js";
 export { createDb, type Db } from "./db/client.js";
 export { getDbPath } from "./db/paths.js";
