@@ -3,7 +3,6 @@ import type {
   AuthDecision,
   CodingHarness,
   DevContext,
-  SliceResult,
   SliceSpec,
   ToolOp,
 } from "@oc/agent-core";

@@ -1,16 +1,9 @@
-import type { IntegrationVerificationArtifact, TestingSessionMeta } from "@oc/shared";
+import type { IntegrationVerificationArtifact } from "@oc/shared";
 import { applyRequirementIntegrations } from "../integrations/requirement-enable.js";
 import { persistRunnerResult } from "./results.js";
 import { runQaReview } from "./qa.js";
 import type { TestingRunResult, TestingWorkflowDeps } from "./types.js";
 import { FINAL_SUITE_ORDER } from "./types.js";
-
-function createInitialTestingMeta(): TestingSessionMeta {
-  return {
-    phase: "idle",
-    suiteResults: [],
-  };
-}
 
 function toResult(
   deps: TestingWorkflowDeps,

@@ -1,4 +1,4 @@
-import { AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { AIMessage, BaseMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import type { TaiziChatTurn, TaiziContext } from "@oc/shared";
 import { getOpenAiApiKey } from "../../engine-mode.js";
 import { createChatModel } from "../../llm/langchain-model.js";

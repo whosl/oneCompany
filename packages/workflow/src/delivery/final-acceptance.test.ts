@@ -4,7 +4,7 @@ import { setupTestingTest } from "../test-utils.js";
 
 describe("final acceptance", () => {
   it("clears reportGenerated after reject_and_redo", () => {
-    const { db, deps, projectId, cleanup } = setupTestingTest();
+    const { deps, projectId, cleanup } = setupTestingTest();
     try {
       deps.setStatus(projectId, "Awaiting Acceptance", "test");
       const payload = deps.loadSession(projectId);
@@ -31,7 +31,7 @@ describe("final acceptance", () => {
   });
 
   it("records feedback and opens change review when startChangeReview is provided", () => {
-    const { db, deps, projectId, cleanup } = setupTestingTest();
+    const { deps, projectId, cleanup } = setupTestingTest();
     try {
       deps.setStatus(projectId, "Awaiting Acceptance", "test");
       const payload = deps.loadSession(projectId);

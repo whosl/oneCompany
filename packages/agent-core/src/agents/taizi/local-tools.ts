@@ -6,7 +6,6 @@ import {
   projects,
   requirementSessions,
   techPlanVersions,
-  type Db,
 } from "@oc/shared";
 import { z } from "zod";
 import { LOCAL_TOOL_IDS } from "../../tools/local-tools.js";

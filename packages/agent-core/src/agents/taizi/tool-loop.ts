@@ -16,7 +16,7 @@ export async function runTaiziToolLoop(
   }
 
   const bound = model.bindTools(tools);
-  let current = [...messages];
+  const current = [...messages];
 
   for (let step = 0; step < MAX_TAIZI_TOOL_STEPS; step += 1) {
     const response = await bound.invoke(current);

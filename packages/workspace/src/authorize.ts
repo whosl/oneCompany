@@ -3,7 +3,7 @@ import type { AuthDecision, ToolOp } from "@oc/agent-core";
 import { isApprovalDecision } from "@oc/shared";
 import { resolveScopedPath } from "./paths.js";
 import { classifyToolOp } from "./risk.js";
-import type { GateRecord, ShellDeps } from "./shell.js";
+import type { ShellDeps } from "./shell.js";
 import { CommandRejectedError } from "./shell.js";
 
 function normalizeToolPath(repoPath: string, rawPath?: string): string | undefined {

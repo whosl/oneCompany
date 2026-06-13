@@ -15,7 +15,7 @@ export async function runOptionalToolLoop(
   }
 
   const bound = model.bindTools(tools);
-  let current = [...messages];
+  const current = [...messages];
 
   for (let step = 0; step < MAX_TOOL_STEPS; step += 1) {
     const response = await bound.invoke(current);

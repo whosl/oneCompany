@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendCustomGateNote, deployments, emit, resolveGateDecision } from "@oc/shared";
 import { assertWebLayerDelivered } from "@oc/workspace";
-import { loadDevSession, saveDevSession } from "../development/state.js";
+import { loadDevSession } from "../development/state.js";
 import type { DevelopmentSessionPayload } from "../development/types.js";
 import type { DeploymentRunResult, DeploymentWorkflowDeps } from "./types.js";
 

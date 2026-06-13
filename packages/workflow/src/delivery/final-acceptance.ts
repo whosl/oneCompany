@@ -1,8 +1,6 @@
 import {
   appendCustomGateNote,
   resolveGateDecision,
-  type Db,
-  type EventEnvelope,
   type ProjectStatus,
 } from "@oc/shared";
 import type { DevelopmentSessionPayload } from "../development/types.js";

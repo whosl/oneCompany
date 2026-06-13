@@ -10,7 +10,6 @@ import { createDevelopmentService } from "./development/service.js";
 import type { DevelopmentService } from "./development/service.js";
 import { createTestingRoutes } from "./testing/routes.js";
 import { createTestingService } from "./testing/service.js";
-import type { TestingService } from "./testing/service.js";
 import type { RequirementService } from "./requirement/service.js";
 import { createOrchestrationRoutes } from "./orchestration/routes.js";
 import { createInterruptRoutes } from "./projects/interrupt-routes.js";

@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { requirementScores, requirementSessions } from "@oc/shared";
 import { describe, expect, it } from "vitest";
 import {
