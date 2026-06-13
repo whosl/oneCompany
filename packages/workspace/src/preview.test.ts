@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -73,5 +74,64 @@ http.createServer((_req, res) => {
     const response = await fetch(handle.url);
     expect(await response.text()).toBe("app-live");
     await stopPreview(projectId);
+  });
+
+  // Regression: the fallback server must not serve files that escape the repo
+  // root via ".." or via a symlink that points outside. Both must 403.
+  it("fallback server rejects traversal and symlink escapes", async () => {
+    const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "oc-preview-traversal-"));
+    tempDirs.push(repoPath);
+
+    // Secret outside the served root, plus a symlink inside it pointing out.
+    const outsideSecret = path.join(os.tmpdir(), "oc-preview-outside-secret.txt");
+    fs.writeFileSync(outsideSecret, "outside-secret-content");
+    fs.writeFileSync(path.join(repoPath, "index.html"), "<h1>legit</h1>");
+    try {
+      fs.symlinkSync(outsideSecret, path.join(repoPath, "leak.txt"));
+    } catch {
+      // Some CI sandboxes disallow symlink creation; skip the symlink assertion
+      // there — the ".." case still covers the containment guarantee.
+    }
+
+    const projectId = "preview-traversal";
+    const handle = await startPreview({ projectId, repoPath });
+    try {
+      // fetch() normalizes "/../x" to "/x", so to exercise the server's ".."
+      // containment we must send the raw path over a plain socket.
+      const port = Number(new URL(handle.url).port);
+      const rawGet = (rawPath: string) =>
+        new Promise<{ status: number; body: string }>((resolve, reject) => {
+          const req = http.request(
+            { host: "127.0.0.1", port, path: rawPath, method: "GET" },
+            (res) => {
+              let body = "";
+              res.on("data", (chunk) => (body += chunk));
+              res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
+            },
+          );
+          req.on("error", reject);
+          req.end();
+        });
+
+      // ".." traversal must be forbidden.
+      const traversal = await rawGet(`/../${path.basename(outsideSecret)}`);
+      expect(traversal.status).toBe(403);
+      expect(traversal.body).not.toContain("outside-secret-content");
+
+      // A legit file still serves.
+      const legit = await rawGet("/index.html");
+      expect(legit.status).toBe(200);
+
+      // A symlink pointing outside must be forbidden, not leak the target.
+      const symlinkPath = path.join(repoPath, "leak.txt");
+      if (fs.existsSync(symlinkPath)) {
+        const symlink = await rawGet("/leak.txt");
+        expect(symlink.status).toBe(403);
+        expect(symlink.body).not.toContain("outside-secret-content");
+      }
+    } finally {
+      await stopPreview(projectId);
+      fs.rmSync(outsideSecret, { force: true });
+    }
   });
 });

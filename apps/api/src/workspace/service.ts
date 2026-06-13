@@ -7,6 +7,7 @@ import {
   diffs,
   prdVersions,
   techPlanVersions,
+  resolveScopedPath,
   type FileScope,
 } from "@oc/shared";
 import {
@@ -46,9 +47,13 @@ function findNewestPlaywrightScreenshot(integrationsDir: string): string | undef
 /**
  * Resolve an artifact relative path to an on-disk file. Handles legacy mock
  * paths (`playwright-screenshot.png`) that were advertised but never written.
+ *
+ * The relative path is validated through `resolveScopedPath` so that `..`
+ * segments, absolute paths, null bytes, and symlinks that escape the artifacts
+ * root are rejected before any filesystem read happens.
  */
 function resolveArtifactDiskPath(artifactsRoot: string, artifactRelative: string): string | undefined {
-  const direct = path.join(artifactsRoot, artifactRelative);
+  const direct = resolveScopedPath(artifactsRoot, artifactRelative);
   if (fs.existsSync(direct)) return direct;
 
   if (artifactRelative === "playwright-screenshot.png" || artifactRelative === "figma-export.png") {

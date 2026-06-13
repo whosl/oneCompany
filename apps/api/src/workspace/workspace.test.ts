@@ -106,4 +106,68 @@ describe("workspace API — M5", () => {
       cleanup();
     }
   });
+
+  // Regression for the artifacts path-traversal vulnerability: the artifacts
+  // branch of readProjectFile must reject "..", absolute paths, and symlinks
+  // that escape the artifacts root. These cases must never return 200 with
+  // out-of-scope file contents.
+  it("GET /projects/:id/files rejects artifacts path traversal attempts", async () => {
+    const { app, generatedProjectsRoot, cleanup } = setupTestApp();
+    try {
+      const created = await app.request("/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Traversal Demo" }),
+      });
+      const project = (await created.json()) as { id: string; slug: string };
+
+      // Place a secret OUTSIDE the artifacts root, and a symlink inside it.
+      const artifactsDir = path.join(generatedProjectsRoot, project.slug, "artifacts");
+      fs.mkdirSync(artifactsDir, { recursive: true });
+      const outsideSecret = path.join(generatedProjectsRoot, "outside-secret.txt");
+      fs.writeFileSync(outsideSecret, "outside-secret-content");
+      fs.writeFileSync(path.join(artifactsDir, "legit.txt"), "legit-content");
+      try {
+        fs.symlinkSync(outsideSecret, path.join(artifactsDir, "leak.txt"));
+      } catch {
+        // symlink creation can fail on some CI sandboxes; the ".." case below
+        // still covers the containment guarantee.
+      }
+
+      // ".." traversal must be rejected (this was the original vulnerability).
+      const traversal = await app.request(
+        `/projects/${project.id}/files?path=artifacts/../../outside-secret.txt`,
+      );
+      expect(traversal.status).toBe(400);
+      const traversalBody = (await traversal.json()) as { content?: string };
+      expect(traversalBody.content).not.toBe("outside-secret-content");
+
+      // Absolute paths must be rejected.
+      const absolute = await app.request(
+        `/projects/${project.id}/files?path=${encodeURIComponent(outsideSecret)}`,
+      );
+      expect(absolute.status).toBe(400);
+
+      // A legit artifacts file still resolves (guards against over-blocking).
+      const legit = await app.request(
+        `/projects/${project.id}/files?path=artifacts/legit.txt`,
+      );
+      expect(legit.status).toBe(200);
+      const legitBody = (await legit.json()) as { content: string };
+      expect(legitBody.content).toBe("legit-content");
+
+      // A symlink inside artifacts pointing outside must NOT leak the target.
+      const symlinkPath = path.join(artifactsDir, "leak.txt");
+      if (fs.existsSync(symlinkPath)) {
+        const symlink = await app.request(
+          `/projects/${project.id}/files?path=${encodeURIComponent(`artifacts/leak.txt`)}`,
+        );
+        expect(symlink.status).toBe(400);
+        const symlinkBody = (await symlink.json()) as { content?: string };
+        expect(symlinkBody.content).not.toBe("outside-secret-content");
+      }
+    } finally {
+      cleanup();
+    }
+  });
 });
