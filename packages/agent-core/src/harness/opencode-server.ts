@@ -37,16 +37,21 @@ function portForRepo(repoPath: string): number {
   return 4100 + offset;
 }
 
-function governedConfig(options?: { projectId?: string }) {
+function governedConfig(options?: {
+  projectId?: string;
+  /** Pre-resolved project-level MCP servers in opencode Config["mcp"] shape. */
+  projectMcp?: Record<string, unknown>;
+}) {
   // Model is selected per prompt in OpencodeHarness; server-level model config can
   // break session.create on some opencode builds when auth is injected later.
-  const mcp = options?.projectId ? buildOcGatewayMcpConfig(options.projectId) : undefined;
+  const gatewayMcp = options?.projectId ? buildOcGatewayMcpConfig(options.projectId) : undefined;
+  const mcp = { ...gatewayMcp, ...options?.projectMcp };
   return {
     permission: {
       edit: "ask" as const,
       bash: "ask" as const,
     },
-    ...(mcp ? { mcp: mcp as Config["mcp"] } : {}),
+    ...(Object.keys(mcp).length > 0 ? { mcp: mcp as Config["mcp"] } : {}),
   };
 }
 
@@ -65,7 +70,7 @@ async function probeServerHealth(url: string): Promise<boolean> {
 
 async function spawnCodingServer(
   port: number,
-  options?: { projectId?: string; timeoutMs?: number },
+  options?: { projectId?: string; timeoutMs?: number; projectMcp?: Record<string, unknown> },
 ): Promise<CachedServer> {
   const executable = resolveOpencodeExecutable();
   if (!executable) {
@@ -151,7 +156,7 @@ function toHandle(cached: CachedServer): ProjectServer {
 
 export async function startProjectServer(
   repoPath: string,
-  options?: { projectId?: string },
+  options?: { projectId?: string; projectMcp?: Record<string, unknown> },
 ): Promise<ProjectServer> {
   const resolved = normalizeRepoPath(repoPath);
   const cacheKey = serverCacheKey(resolved, options?.projectId);

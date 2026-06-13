@@ -52,7 +52,10 @@ export function bindAgentTools(
     ),
   );
 
-  const integrationTools = agent.id === "qa" ? buildIntegrationLangChainTools(agent, execCtx) : [];
+  const integrationTools =
+    (agent.integrationAccess ?? "none") === "auto"
+      ? buildIntegrationLangChainTools(agent, execCtx)
+      : [];
 
   return [...staticTools, ...integrationTools];
 }

@@ -34,6 +34,13 @@ export interface DevContext {
   formatToolOutput?: (toolCallId: string, raw: string) => string;
   classifyShellRisk?: (command: string) => ShellRiskLevel;
   runGovernedCommand?: (command: string) => Promise<CommandExecResult>;
+  /**
+   * Pre-resolved project-level MCP servers in opencode Config["mcp"] shape.
+   * The caller (development service) reads project_mcp_configs and converts
+   * them; the harness injects them into the opencode code server so the code
+   * agent can use project MCPs like codegraph.
+   */
+  projectMcp?: Record<string, unknown>;
 }
 
 export interface SliceResult {

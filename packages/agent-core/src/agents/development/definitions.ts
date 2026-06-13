@@ -82,6 +82,7 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "medium",
     permissions: ["read", "network"],
     executor: "scripted",
+    integrationAccess: "auto",
   },
   {
     id: "devops-delivery",

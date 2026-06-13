@@ -124,7 +124,10 @@ export function createOpencodeHarness(): CodingHarness {
       emitPhase(ctx, "plan", `opencode slice ${slice.sliceId}: ${slice.goal}`);
 
       const directory = path.resolve(ctx.repoPath);
-      const server = await startProjectServer(directory, { projectId: ctx.projectId });
+      const server = await startProjectServer(directory, {
+        projectId: ctx.projectId,
+        projectMcp: ctx.projectMcp,
+      });
       const model = parseModelRef(pickOpencodeModel(slice.modelTier as ModelTier));
       let bridge: ReturnType<typeof createEventBridge> | undefined;
       let activeSessionId: string | undefined;
@@ -247,7 +250,10 @@ export function createOpencodeHarness(): CodingHarness {
       emitPhase(ctx, "plan", `审查切片 ${review.sliceId} 的代码改动`);
 
       const directory = path.resolve(ctx.repoPath);
-      const server = await startProjectServer(directory, { projectId: ctx.projectId });
+      const server = await startProjectServer(directory, {
+        projectId: ctx.projectId,
+        projectMcp: ctx.projectMcp,
+      });
       const model = parseModelRef(pickOpencodeModel(review.modelTier as ModelTier));
       let bridge: ReturnType<typeof createEventBridge> | undefined;
       let activeSessionId: string | undefined;
