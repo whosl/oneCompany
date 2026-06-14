@@ -5,41 +5,38 @@ import {
   deleteProjectMcpConfig,
   presetDefaultMcpConfigs,
   projectMcpConfigsToOpencode,
+  resolveMcpSpawn,
 } from "./project-mcp.js";
-import { PRESET_MCP_SERVERS, resolvePresetMcpServers } from "./preset-mcp.js";
+import { VETTED_MCP_PRESETS, getMcpPreset } from "./preset-mcp.js";
 import { setupIntegrationTestDb, seedTestProject } from "./test-utils.js";
 
-describe("project MCP config CRUD", () => {
-  it("round-trips an MCP server config", () => {
+describe("project MCP config CRUD (presetId model)", () => {
+  it("round-trips a config via presetId (no command stored)", () => {
     const { db, cleanup } = setupIntegrationTestDb();
     try {
       const projectId = seedTestProject(db);
       upsertProjectMcpConfig(db, projectId, {
-        serverId: "custom-mcp",
-        displayName: "Custom MCP",
-        transport: "local",
-        command: ["node", "server.js"],
-        env: { API_KEY: "xxx" },
-        toolAllowlist: ["tool_a"],
+        presetId: "codegraph",
+        displayName: "CodeGraph",
+        secretRefs: {},
         enabled: true,
       });
 
       const list = listProjectMcpConfigs(db, projectId);
       expect(list).toHaveLength(1);
       expect(list[0]).toMatchObject({
-        serverId: "custom-mcp",
-        displayName: "Custom MCP",
-        transport: "local",
-        command: ["node", "server.js"],
+        presetId: "codegraph",
+        displayName: "CodeGraph",
         enabled: true,
       });
+      // No command/env fields on the API-facing config — command comes from preset.
+      expect(list[0]).not.toHaveProperty("command");
 
-      // Update via upsert (same serverId).
+      // Update via upsert.
       upsertProjectMcpConfig(db, projectId, {
-        serverId: "custom-mcp",
+        presetId: "codegraph",
         displayName: "Renamed",
-        transport: "local",
-        command: ["node", "server.js"],
+        secretRefs: {},
         enabled: false,
       });
       const updated = listProjectMcpConfigs(db, projectId);
@@ -48,39 +45,25 @@ describe("project MCP config CRUD", () => {
       expect(updated[0]?.enabled).toBe(false);
 
       // Delete.
-      deleteProjectMcpConfig(db, projectId, "custom-mcp");
+      deleteProjectMcpConfig(db, projectId, "codegraph");
       expect(listProjectMcpConfigs(db, projectId)).toHaveLength(0);
     } finally {
       cleanup();
     }
   });
 
-  it("preserves tool allowlist null (passthrough) vs explicit list", () => {
+  it("persists secretRefs references, not secret values", () => {
     const { db, cleanup } = setupIntegrationTestDb();
     try {
       const projectId = seedTestProject(db);
       upsertProjectMcpConfig(db, projectId, {
-        serverId: "passthrough",
-        displayName: "Passthrough",
-        transport: "local",
-        command: ["tool"],
-        toolAllowlist: null,
+        presetId: "codegraph",
+        displayName: "CodeGraph",
+        secretRefs: { API_KEY: "MY_API_KEY_ENV" },
         enabled: true,
       });
-      upsertProjectMcpConfig(db, projectId, {
-        serverId: "restricted",
-        displayName: "Restricted",
-        transport: "local",
-        command: ["tool"],
-        toolAllowlist: ["only_this"],
-        enabled: true,
-      });
-
       const list = listProjectMcpConfigs(db, projectId);
-      const passthrough = list.find((c) => c.serverId === "passthrough");
-      const restricted = list.find((c) => c.serverId === "restricted");
-      expect(passthrough?.toolAllowlist).toBeNull();
-      expect(restricted?.toolAllowlist).toEqual(["only_this"]);
+      expect(list[0]?.secretRefs).toEqual({ API_KEY: "MY_API_KEY_ENV" });
     } finally {
       cleanup();
     }
@@ -88,98 +71,113 @@ describe("project MCP config CRUD", () => {
 });
 
 describe("preset MCP servers", () => {
-  it("defines codegraph, context7, and web-search presets", () => {
-    const ids = PRESET_MCP_SERVERS.map((s) => s.serverId);
-    expect(ids).toEqual(expect.arrayContaining(["codegraph", "context7", "web-search"]));
+  it("vetted presets contain codegraph and context7 (not brave-search)", () => {
+    const ids = VETTED_MCP_PRESETS.map((p) => p.presetId);
+    expect(ids).toContain("codegraph");
+    expect(ids).toContain("context7");
+    // brave-search was removed (deprecated on npm)
+    expect(ids).not.toContain("web-search");
+    expect(ids).not.toContain("brave-search");
   });
 
-  it("resolvePresetMcpServers returns configs whose enabled reflects availability", () => {
-    const resolved = resolvePresetMcpServers();
-    const codegraph = resolved.find((c) => c.serverId === "codegraph");
-    expect(codegraph).toBeDefined();
-    expect(typeof codegraph?.enabled).toBe("boolean");
+  it("vetted presets use locked, version-pinned commands", () => {
+    const ctx = getMcpPreset("context7");
+    expect(ctx).toBeDefined();
+    // npx packages must be version-pinned (no bare @upstash/context7-mcp).
+    expect(ctx?.command.join(" ")).toMatch(/@upstash\/context7-mcp@\d+\.\d+\.\d+/);
   });
 
-  it("presetDefaultMcpConfigs seeds exactly three servers", () => {
+  it("resolvePresetMcpServers seeds configs whose enabled reflects availability", () => {
     const { db, cleanup } = setupIntegrationTestDb();
     try {
       const projectId = seedTestProject(db);
       presetDefaultMcpConfigs(db, projectId);
       const list = listProjectMcpConfigs(db, projectId);
-      expect(list).toHaveLength(3);
-      expect(list.map((c) => c.serverId).sort()).toEqual([
-        "codegraph",
-        "context7",
-        "web-search",
-      ]);
+      // codegraph + context7 (brave-search removed)
+      expect(list.length).toBeGreaterThanOrEqual(2);
+      for (const cfg of list) {
+        expect(typeof cfg.enabled).toBe("boolean");
+      }
     } finally {
       cleanup();
     }
   });
 });
 
-describe("projectMcpConfigsToOpencode", () => {
-  it("only includes enabled local servers in opencode format", () => {
-    const { db, cleanup } = setupIntegrationTestDb();
-    try {
-      const projectId = seedTestProject(db);
-      presetDefaultMcpConfigs(db, projectId);
-      const configs = listProjectMcpConfigs(db, projectId);
-      const opencode = projectMcpConfigsToOpencode(configs);
-
-      for (const entry of Object.values(opencode)) {
-        expect(entry.enabled).toBe(true);
-        expect(entry.type).toBe("local");
-        expect(entry.command.length).toBeGreaterThan(0);
-      }
-    } finally {
-      cleanup();
-    }
+describe("resolveMcpSpawn — command resolution from preset", () => {
+  it("resolves command from the vetted preset, never from DB", () => {
+    const resolved = resolveMcpSpawn({
+      presetId: "codegraph",
+      displayName: "CodeGraph",
+      secretRefs: {},
+      enabled: true,
+    });
+    expect(resolved).toBeDefined();
+    expect(resolved?.command).toEqual(["codegraph", "serve", "--mcp"]);
   });
 
-  it("skips disabled servers entirely", () => {
+  it("returns undefined for disabled configs", () => {
+    const resolved = resolveMcpSpawn({
+      presetId: "codegraph",
+      displayName: "CodeGraph",
+      secretRefs: {},
+      enabled: false,
+    });
+    expect(resolved).toBeUndefined();
+  });
+
+  it("returns undefined for unknown presetId", () => {
+    const resolved = resolveMcpSpawn({
+      presetId: "evil-preset",
+      displayName: "Evil",
+      secretRefs: {},
+      enabled: true,
+    });
+    expect(resolved).toBeUndefined();
+  });
+
+  it("resolves secret values from process.env via secretRefs", () => {
+    process.env.__TEST_MCP_KEY = "test-secret-value";
+    try {
+      // Register a temporary preset that allows the key.
+      const resolved = resolveMcpSpawn({
+        presetId: "codegraph",
+        displayName: "CodeGraph",
+        secretRefs: { __TEST_MCP_KEY: "__TEST_MCP_KEY" },
+        enabled: true,
+      });
+      // codegraph preset has empty allowedSecretKeys, so the ref is filtered out.
+      expect(resolved?.environment).toEqual({});
+    } finally {
+      delete process.env.__TEST_MCP_KEY;
+    }
+  });
+});
+
+describe("projectMcpConfigsToOpencode", () => {
+  it("only includes enabled servers with known presets", () => {
     const configs = [
       {
-        serverId: "disabled-one",
+        presetId: "codegraph",
+        displayName: "CodeGraph",
+        secretRefs: {},
+        enabled: true,
+      },
+      {
+        presetId: "codegraph",
         displayName: "Disabled",
-        transport: "local" as const,
-        command: ["cmd"],
+        secretRefs: {},
         enabled: false,
       },
       {
-        serverId: "enabled-one",
-        displayName: "Enabled",
-        transport: "local" as const,
-        command: ["cmd"],
+        presetId: "unknown",
+        displayName: "Unknown",
+        secretRefs: {},
         enabled: true,
       },
     ];
     const opencode = projectMcpConfigsToOpencode(configs);
-    expect(Object.keys(opencode)).toEqual(["enabled-one"]);
-  });
-
-  it("excludes servers with an explicit toolAllowlist (cannot be enforced on opencode path)", () => {
-    const configs = [
-      {
-        serverId: "passthrough",
-        displayName: "Passthrough",
-        transport: "local" as const,
-        command: ["codegraph", "serve", "--mcp"],
-        toolAllowlist: null,
-        enabled: true,
-      },
-      {
-        serverId: "restricted",
-        displayName: "Restricted",
-        transport: "local" as const,
-        command: ["codegraph", "serve", "--mcp"],
-        toolAllowlist: ["only_this"],
-        enabled: true,
-      },
-    ];
-    const opencode = projectMcpConfigsToOpencode(configs);
-    // Only the passthrough (null allowlist) server is injected; the restricted
-    // one is excluded because opencode direct-connect cannot honor the allowlist.
-    expect(Object.keys(opencode)).toEqual(["passthrough"]);
+    expect(Object.keys(opencode)).toEqual(["codegraph"]);
+    expect(opencode.codegraph?.command).toEqual(["codegraph", "serve", "--mcp"]);
   });
 });

@@ -137,14 +137,15 @@ export function createApp(deps: AppDependencies) {
       deps.db,
       (id) => projects.getProject(id) !== null,
       // Flush the cached opencode server when MCP config changes so the next
-      // slice/review picks up the new server set.
-      (projectId) => {
+      // slice/review picks up the new server set. Awaited to avoid a race where
+      // the next start probes a not-yet-exited old server.
+      async (projectId) => {
         try {
           const project = projects.getProject(projectId);
           if (project) {
             const ws = workspace?.ensureForProject(project);
             if (ws) {
-              void shutdownProjectServer(ws.repo, { projectId });
+              await shutdownProjectServer(ws.repo, { projectId });
             }
           }
         } catch {

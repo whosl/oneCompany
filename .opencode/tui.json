@@ -1,0 +1,10 @@
+{
+  "plugin": [
+    [
+      "file:///Users/wenzhuolin/dev/OneCompany/packages/opencode-plugin/src/tui/index.tsx",
+      {
+        "apiUrl": "http://127.0.0.1:3001"
+      }
+    ]
+  ]
+}

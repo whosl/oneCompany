@@ -1,25 +1,26 @@
 import { z } from "zod";
 
 /**
- * Shape of a project-level MCP server configuration (API-facing, camelCase).
+ * API-facing shape for a project-level MCP server configuration.
  *
- * Only `local` (stdio) transport is supported. Remote (SSE/HTTP) MCP is not
- * wired into the opencode injection path yet, so the schema rejects it to
- * avoid a declared-but-nonfunctional config.
+ * SECURITY MODEL: the API never accepts a raw `command[]`. Callers select a
+ * vetted `presetId`; the server maps it to a locked, full command. This closes
+ * the "node -e / arbitrary script" bypass that checking command[0] cannot
+ * prevent. Only `enabled` and `secretRefs` (env-var name references, never
+ * secret values) are user-settable.
  */
 export const ProjectMcpConfigSchema = z.object({
-  serverId: z.string().min(1),
+  /** Reference to a vetted preset in the server-side registry. */
+  presetId: z.string().min(1),
+  /** Human-readable label (defaults to the preset's display name). */
   displayName: z.string().min(1),
-  transport: z.literal("local"),
-  /** The command array, e.g. ["codegraph", "serve", "--mcp"]. */
-  command: z.array(z.string()).min(1),
-  /** Environment variables to pass to the MCP server process. */
-  env: z.record(z.string()).optional(),
-  /** Tool allowlist; null means passthrough (expose all tools).
-   * Note: only honored on the structured-agent (callIntegrationTool) path;
-   * opencode direct-connect cannot enforce it, so allowlisted servers are
-   * excluded from opencode injection. */
-  toolAllowlist: z.array(z.string()).nullable().optional(),
+  /**
+   * Environment-variable references for secrets the MCP server needs.
+   * Maps TARGET_ENV_NAME -> SOURCE_ENV_NAME (read from process.env at spawn).
+   * Secret VALUES are never persisted; only the reference is stored.
+   * Example: { "BRAVE_API_KEY": "BRAVE_API_KEY" }
+   */
+  secretRefs: z.record(z.string()).optional(),
   enabled: z.boolean().default(true),
 });
 

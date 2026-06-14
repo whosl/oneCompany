@@ -74,12 +74,13 @@ export {
   presetDefaultMcpConfigs,
   projectMcpConfigsToOpencode,
 } from "./project-mcp.js";
-export { PRESET_MCP_SERVERS, resolvePresetMcpServers } from "./preset-mcp.js";
 export {
-  validateMcpCommand,
-  validateMcpServerId,
-  isReservedServerId,
-  RESERVED_MCP_PREFIX,
-  VETTED_MCP_COMMANDS,
-  VETTED_NPX_PACKAGES,
-} from "./mcp-governance.js";
+  VETTED_MCP_PRESETS,
+  getMcpPreset,
+  resolvePresetMcpServers,
+  type VettedMcpPreset,
+} from "./preset-mcp.js";
+export {
+  resolveMcpSpawn,
+  type ResolvedMcpSpawn,
+} from "./project-mcp.js";
