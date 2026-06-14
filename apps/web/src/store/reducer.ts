@@ -1,0 +1,1279 @@
+/**
+ * Console reducer: view-model construction, event application, snapshot
+ * hydration, and composer derivation.
+ *
+ * Ported verbatim from apps/tui/src/store.ts. The only adaptation is module
+ * imports: catalog split into lib/catalog/*, theme into lib/theme, types into
+ * store/types, api DTOs into lib/api/types. All mutation logic is identical —
+ * the store keeps a single mutable ConsoleState (held in a useRef on the
+ * client) and applyEnvelope mutates fields in place.
+ */
+
+import {
+  AGENT_CATALOG,
+  agentDisplayName,
+  findAgent,
+  normalizeAgentId,
+  type AgentGroup,
+} from "../lib/catalog/agents";
+import { gateDefinition } from "../lib/catalog/gates";
+import { oneLine } from "../lib/format/text";
+import type { TuiTheme } from "../lib/theme/palette";
+import type { ConsoleSnapshot, EventEnvelope } from "../lib/api/types";
+import { entryDefaults, isExecutionKind } from "./stream-blocks";
+import type {
+  ActionDef,
+  AgentPaorEntry,
+  AgentStatus,
+  AgentView,
+  ComposerMode,
+  ComposerState,
+  ConsoleState,
+  Notice,
+  TimelineEntry,
+  TimelineKind,
+  ToolCallView,
+} from "./types";
+
+/** Total working time including the in-flight active period. */
+export function agentWorkMs(agent: AgentView): number {
+  return agent.totalActiveMs + (agent.activeSinceMs ? Date.now() - agent.activeSinceMs : 0);
+}
+
+/** Transition agent status, accounting active working time at `atMs`. */
+function setAgentStatus(agent: AgentView, status: AgentStatus, atMs: number): void {
+  const wasActive = agent.status === "running" || agent.status === "tool";
+  const isActive = status === "running" || status === "tool";
+  if (wasActive && !isActive && agent.activeSinceMs) {
+    agent.totalActiveMs += Math.max(0, atMs - agent.activeSinceMs);
+    agent.activeSinceMs = undefined;
+  } else if (!wasActive && isActive && !agent.activeSinceMs) {
+    agent.activeSinceMs = atMs;
+  }
+  agent.status = status;
+  agent.lastSeenAtMs = atMs;
+}
+
+/**
+ * Pipeline roles (e.g. review) emit plan/act without an `agent.started`, so
+ * the previous agent would stay "running" forever. Retire it on handover.
+ */
+function retirePreviousAgent(state: ConsoleState, nextKey: string, atMs: number): void {
+  if (!state.lastAgentId || state.lastAgentId === nextKey) return;
+  const previous = state.agents.get(state.lastAgentId);
+  if (previous && (previous.status === "running" || previous.status === "tool")) {
+    setAgentStatus(previous, "done", atMs);
+  }
+}
+
+/** Typewriter speed; mirrored by the renderer. */
+export const REVEAL_CPS = 100;
+
+const MAX_TIMELINE = 500;
+const MAX_TOOLCALLS = 120;
+const MAX_PAOR_LOG = 200;
+
+function appendPaorLog(
+  agent: AgentView,
+  phase: AgentPaorEntry["phase"],
+  text: string,
+  at: string,
+  seq?: number,
+): void {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  if (seq !== undefined && agent.paorLog.some((entry) => entry.seq === seq)) return;
+  const last = agent.paorLog.at(-1);
+  if (last && last.phase === phase && last.text === trimmed) return;
+  agent.paorLog.push({ phase, text: trimmed, at, seq });
+  if (agent.paorLog.length > MAX_PAOR_LOG) {
+    agent.paorLog.splice(0, agent.paorLog.length - MAX_PAOR_LOG);
+  }
+}
+
+/** Rebuild PAOR history from timeline reason rows (for sessions already hydrated). */
+export function backfillAgentPaorLogs(state: ConsoleState): void {
+  const tagToPhase: Record<string, AgentPaorEntry["phase"]> = {
+    PLAN: "plan",
+    ACT: "act",
+    OBSRV: "observe",
+    REFLT: "reflect",
+  };
+  for (const entry of state.timeline) {
+    if (entry.kind !== "reason" || !entry.agent) continue;
+    const phase = tagToPhase[entry.tag];
+    if (!phase) continue;
+    const agent = [...state.agents.values()].find((item) => item.name === entry.agent);
+    if (!agent) continue;
+    appendPaorLog(agent, phase, entry.text, entry.at, entry.seq);
+  }
+}
+
+/**
+ * Agent detail stream: own events plus a few workflow events that lack agent_id
+ * but are strongly tied to development (tests, commits, gates).
+ */
+export function timelineEntryForAgentFocus(entry: TimelineEntry, agent: AgentView): boolean {
+  if (entry.agent === agent.name) return true;
+  if (entry.kind === "gate" || entry.kind === "gate_ok") return true;
+  if (agent.group !== "development") return false;
+  if (entry.kind === "test") return true;
+  return entry.kind === "artifact" && entry.tag === "DIFF";
+}
+
+export function filterTimelineForAgentFocus(
+  timeline: TimelineEntry[],
+  agent: AgentView,
+): TimelineEntry[] {
+  return timeline.filter((entry) => timelineEntryForAgentFocus(entry, agent));
+}
+
+/* ------------------------------------------------------------------ */
+/* Construction                                                         */
+/* ------------------------------------------------------------------ */
+
+export function createConsoleState(projectId: string, theme: TuiTheme = "dark"): ConsoleState {
+  const agents = new Map<string, AgentView>();
+  for (const entry of AGENT_CATALOG) {
+    agents.set(entry.id, {
+      ...entry,
+      status: "idle",
+      steps: 0,
+      errors: 0,
+      totalActiveMs: 0,
+      toolRuns: 0,
+      artifactCount: 0,
+      paorLog: [],
+    });
+  }
+  return {
+    projectId,
+    agents,
+    timeline: [],
+    toolCalls: [],
+    toolNames: new Map(),
+    toolSummaries: new Map(),
+    artifacts: [],
+    lastSeq: 0,
+    sseConnected: false,
+    focus: "composer",
+    timelineScroll: 0,
+    agentStreamScroll: new Map(),
+    agentCursor: 0,
+    composer: emptyComposer("read_only", "Loading project…"),
+    busy: new Set(),
+    startedAt: Date.now(),
+    seededRequirement: false,
+    lastEventAtMs: Date.now(),
+    hydratedOnce: false,
+    dismissedGateIds: new Set(),
+    revealCursorMs: 0,
+    localUserEchoes: new Set(),
+    todos: [],
+    yoloMode: false,
+    theme,
+    inspectorTab: "artifacts",
+    repoFiles: [],
+    expandedFileDirs: new Set(),
+    fileTreeScroll: 0,
+    turnCounter: 0,
+    collapsedTurns: new Set(),
+    pinnedTurns: new Set(),
+    serverOpenGates: [],
+  };
+}
+
+function emptyComposer(mode: ComposerMode, reason: string): ComposerState {
+  return {
+    mode,
+    reason,
+    input: "",
+    gateOptions: [],
+    gateCursor: 0,
+    questions: [],
+    draftAnswers: [],
+    questionIndex: 0,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Timeline helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+function clock(timestamp?: string): string {
+  const date = timestamp ? new Date(timestamp) : new Date();
+  return Number.isNaN(date.getTime())
+    ? new Date().toLocaleTimeString("en-GB", { hour12: false })
+    : date.toLocaleTimeString("en-GB", { hour12: false });
+}
+
+function assignTurnMeta(
+  state: ConsoleState,
+  kind: TimelineKind,
+  tag: string,
+  agent?: string,
+): Pick<TimelineEntry, "turnId" | "activityGroupId" | "threadId" | "importance" | "defaultExpanded"> {
+  const { importance, defaultExpanded } = entryDefaults(kind, tag);
+  const threadId = agent ? (normalizeAgentId(agent) ?? agent) : "main";
+
+  if (kind === "user") {
+    state.turnCounter += 1;
+    state.currentTurnId = `t${state.turnCounter}`;
+  } else if (kind === "taizi" || (kind === "reason" && tag === "REFLT")) {
+    // Conclusion closes the active activity group; next execution opens a fresh one.
+    state.currentTurnId = undefined;
+  } else if (kind === "agent") {
+    state.turnCounter += 1;
+    state.currentTurnId = `t${state.turnCounter}`;
+  } else if (!state.currentTurnId && isExecutionKind(kind)) {
+    state.turnCounter += 1;
+    state.currentTurnId = `t${state.turnCounter}`;
+  }
+
+  const turnId = state.currentTurnId;
+  const activityGroupId = turnId && importance === "execution" ? `${turnId}-act` : undefined;
+
+  return { turnId, activityGroupId, threadId, importance, defaultExpanded };
+}
+
+function pushTimeline(
+  state: ConsoleState,
+  entry: {
+    seq?: number;
+    at?: string;
+    kind: TimelineKind;
+    tag: string;
+    agent?: string;
+    tool?: string;
+    toolCallId?: string;
+    toolSummary?: string;
+    metaAction?: string;
+    text: string;
+  },
+): void {
+  const meta = assignTurnMeta(state, entry.kind, entry.tag, entry.agent);
+  state.timeline.push({
+    seq: entry.seq ?? state.lastSeq,
+    at: entry.at ?? clock(),
+    kind: entry.kind,
+    tag: entry.tag,
+    agent: entry.agent,
+    tool: entry.tool,
+    toolCallId: entry.toolCallId,
+    toolSummary: entry.toolSummary,
+    metaAction: entry.metaAction,
+    text: entry.text,
+    bornAtMs: nextBornAt(state, entry.kind, entry.text),
+    ...meta,
+  });
+  if (state.timeline.length > MAX_TIMELINE) {
+    state.timeline.splice(0, state.timeline.length - MAX_TIMELINE);
+  }
+}
+
+/**
+ * Sequential typewriter schedule: user input is echoed instantly; agent/system
+ * text starts typing only after the previous queued entry finished.
+ */
+function nextBornAt(state: ConsoleState, kind: TimelineKind, text: string): number | undefined {
+  if (!state.hydratedOnce || kind === "user" || kind === "taizi") return undefined;
+  const now = Date.now();
+  // If the backlog grew too long (event burst), fast-forward instead of lagging.
+  if (state.revealCursorMs - now > 6_000) state.revealCursorMs = now;
+  const bornAtMs = Math.max(now, state.revealCursorMs);
+  const durationMs = Math.min(4_000, ([...text].length / REVEAL_CPS) * 1000);
+  state.revealCursorMs = bornAtMs + durationMs;
+  return bornAtMs;
+}
+
+/** Merge a tool result into its "started" entry (one line per tool call). */
+function settleToolEntry(
+  state: ConsoleState,
+  toolCallId: string,
+  kind: "tool_ok" | "tool_err" | "tool_redirect",
+  text: string,
+  toolSummary?: string,
+): boolean {
+  for (let i = state.timeline.length - 1; i >= 0; i -= 1) {
+    const entry = state.timeline[i]!;
+    if (entry.kind === "tool" && entry.toolCallId === toolCallId) {
+      entry.kind = kind;
+      entry.tag = kind === "tool_ok" ? "OK" : kind === "tool_redirect" ? "GOV" : "FAIL";
+      entry.text = text;
+      if (toolSummary && !entry.toolSummary) {
+        entry.toolSummary = toolSummary;
+      }
+      // Keep the original bornAtMs: the title line is already on screen, only
+      // the output snippet pops in (no re-queued typewriter for merged lines).
+      return true;
+    }
+  }
+  return false;
+}
+
+function inferToolSummaryFromOutput(toolName: string, output: string): string | undefined {
+  const trimmed = output.trim();
+  if (!trimmed) return undefined;
+  const pathTag = trimmed.match(/<path>([^<]+)<\/path>/i);
+  if (pathTag?.[1]) {
+    return pathTag[1].trim().slice(0, 160);
+  }
+  const key = toolName.toLowerCase();
+  if (key === "read" || key === "glob" || key === "grep" || key === "list" || key === "ls") {
+    const firstLine = trimmed.split("\n")[0]?.trim() ?? "";
+    if (/^\/|^\.\/|^[a-zA-Z]:[\\/]/.test(firstLine)) {
+      return firstLine.slice(0, 160);
+    }
+  }
+  return undefined;
+}
+
+function isGovernedRedirect(toolName: string, error: string): boolean {
+  return (toolName === "bash" || toolName === "shell") && /rejected permission/i.test(error);
+}
+
+/** Parse opencode todowrite JSON output into the live todo panel. */
+function applyTodoUpdate(state: ConsoleState, toolName: string, output: string): void {
+  const key = toolName.toLowerCase();
+  if (key !== "todowrite" && key !== "todo") return;
+  const trimmed = output.trim();
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const list = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === "object" && Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+    if (!list) return;
+    state.todos = list
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+      .map((item) => ({
+        content: String(item.content ?? item.title ?? "").trim(),
+        status: String(item.status ?? "pending"),
+        priority: typeof item.priority === "string" ? item.priority : undefined,
+      }))
+      .filter((item) => item.content.length > 0);
+
+    // Once every item is settled, the list stops being "live": archive it into
+    // the stream (it scrolls up with history) and unpin the panel.
+    const allDone =
+      state.todos.length > 0 &&
+      state.todos.every((item) => item.status === "completed" || item.status === "cancelled");
+    if (allDone) {
+      const done = state.todos.filter((item) => item.status === "completed").length;
+      pushTimeline(state, {
+        kind: "info",
+        tag: "TODO",
+        text: `任务清单完成（${done}/${state.todos.length}）：${state.todos
+          .map((item) => item.content)
+          .join("；")}`,
+      });
+      state.todos = [];
+    }
+  } catch {
+    // Non-JSON todo output — ignore.
+  }
+}
+
+/** Locally echo a user-authored message into the stream (Claude-Code style). */
+export function pushUserMessage(state: ConsoleState, text: string): void {
+  pushTimeline(state, { kind: "user", tag: "USER", text });
+}
+
+function normalizeTaiziReply(reply: string): string {
+  return reply.replace(/\r\n/g, "\n").trim();
+}
+
+function isDuplicateTaiziReply(state: ConsoleState, reply: string): boolean {
+  for (let i = state.timeline.length - 1; i >= 0 && i >= state.timeline.length - 4; i -= 1) {
+    const entry = state.timeline[i]!;
+    if (entry.kind === "taizi" && entry.text === reply) return true;
+  }
+  return false;
+}
+
+/** Full Taizi answer in the center stream (not truncated). */
+export function pushTaiziReply(
+  state: ConsoleState,
+  reply: string,
+  metaAction?: string,
+  opts?: { seq?: number; at?: string },
+): void {
+  const text = normalizeTaiziReply(reply);
+  if (!text || isDuplicateTaiziReply(state, text)) return;
+  pushTimeline(state, {
+    seq: opts?.seq,
+    at: opts?.at,
+    kind: "taizi",
+    tag: "太子",
+    text,
+    metaAction: metaAction && metaAction !== "noop" ? metaAction : undefined,
+  });
+}
+
+export function pushNotice(state: ConsoleState, kind: Notice["kind"], text: string): void {
+  state.notice = { text, kind, at: Date.now() };
+  if (kind === "error") {
+    pushTimeline(state, { kind: "error", tag: "ERR", text });
+  }
+}
+
+function addArtifact(state: ConsoleState, path: string): void {
+  if (!state.artifacts.includes(path)) {
+    state.artifacts.push(path);
+    if (state.artifacts.length > 20) state.artifacts.shift();
+  }
+}
+
+function ensureAgent(state: ConsoleState, rawId: string): AgentView {
+  const key = normalizeAgentId(rawId) ?? rawId;
+  let agent = state.agents.get(key);
+  if (!agent) {
+    const entry = findAgent(key);
+    agent = {
+      id: key,
+      name: entry?.name ?? agentDisplayName(key),
+      role: entry?.role ?? "—",
+      description: entry?.description ?? "",
+      capabilities: entry?.capabilities ?? [],
+      group: entry?.group ?? "development",
+      status: "idle",
+      steps: 0,
+      errors: 0,
+      totalActiveMs: 0,
+      toolRuns: 0,
+      artifactCount: 0,
+      paorLog: [],
+    };
+    state.agents.set(key, agent);
+  }
+  return agent;
+}
+
+/** Mark Taizi as the active agent before tool_call events arrive from research. */
+export function markTaiziActive(state: ConsoleState): void {
+  const agent = ensureAgent(state, "taizi");
+  state.lastAgentId = agent.id;
+}
+
+function resolveEventAgent(state: ConsoleState, envelope: EventEnvelope): AgentView | undefined {
+  const rawId = envelope.agentId ?? state.lastAgentId;
+  if (!rawId) return undefined;
+  const agent = ensureAgent(state, rawId);
+  state.lastAgentId = agent.id;
+  return agent;
+}
+
+/* ------------------------------------------------------------------ */
+/* Event application                                                    */
+/* ------------------------------------------------------------------ */
+
+const REASON_TAG: Record<string, string> = {
+  "agent.plan": "PLAN",
+  "agent.act": "ACT",
+  "agent.observe": "OBSRV",
+  "agent.reflect": "REFLT",
+};
+
+export function applyEnvelope(state: ConsoleState, envelope: EventEnvelope): boolean {
+  // Ephemeral bypass channel (seq=0): live token-stream snapshot. Updates the
+  // draft block only — never the timeline, never the replay cursor.
+  if (envelope.payload.type === "agent.stream_delta") {
+    const payload = envelope.payload;
+    if (payload.done === true) {
+      state.liveDraft = undefined;
+      return true;
+    }
+    const text = typeof payload.text === "string" ? payload.text : "";
+    if (!text) return false;
+    const agentId = String(payload.agentId ?? envelope.agentId ?? state.lastAgentId ?? "agent");
+    const agent = ensureAgent(state, agentId);
+    state.liveDraft = {
+      agentId: agent.id,
+      agentName: agent.name,
+      streamId: String(payload.streamId ?? "stream"),
+      text,
+      charCount: typeof payload.charCount === "number" ? payload.charCount : text.length,
+      atMs: Date.now(),
+    };
+    if (agent.status !== "tool") setAgentStatus(agent, "running", Date.now());
+    state.lastAgentId = agent.id;
+    state.lastEventAtMs = Date.now();
+    return true;
+  }
+
+  if (envelope.seq <= state.lastSeq) return false;
+  state.lastSeq = envelope.seq;
+  state.lastEventAtMs = Date.now();
+
+  // Any persisted event from the draft's agent means the generation turn
+  // settled (tool call started / summary landed) — retire the draft. The next
+  // delta (≤250ms away) recreates it if the model is still talking.
+  if (
+    state.liveDraft &&
+    envelope.payload.type !== "agent.progress" &&
+    normalizeAgentId(String(envelope.payload.agentId ?? envelope.agentId ?? "")) ===
+      state.liveDraft.agentId
+  ) {
+    state.liveDraft = undefined;
+  }
+
+  const payload = envelope.payload;
+  const type = payload.type;
+  const at = clock(envelope.timestamp);
+  const seq = envelope.seq;
+  const parsedTs = new Date(envelope.timestamp).getTime();
+  /** Event time for work-time accounting (history replay uses real timestamps). */
+  const tMs = Number.isNaN(parsedTs) ? Date.now() : parsedTs;
+
+  // Visible workflow progress invalidates any optimistic in-flight hint.
+  if (type === "project.status_changed" || type === "human_gate.created" || type === "agent.started") {
+    state.pendingHint = undefined;
+  }
+
+  switch (type) {
+    case "project.created":
+      pushTimeline(state, { seq, at, kind: "status", tag: "INIT", text: `project created: ${String(payload.name ?? "")}` });
+      break;
+
+    case "project.status_changed": {
+      const status = String(payload.status ?? "");
+      if (state.snapshot) state.snapshot.project.status = status;
+      pushTimeline(state, { seq, at, kind: "status", tag: "PHASE", text: `status → ${status}` });
+      break;
+    }
+
+    case "agent.started": {
+      const agentId = String(payload.agentId ?? envelope.agentId ?? "agent");
+      const key = normalizeAgentId(agentId) ?? agentId;
+      retirePreviousAgent(state, key, tMs);
+      const agent = ensureAgent(state, agentId);
+      setAgentStatus(agent, "running", tMs);
+      state.lastAgentId = agent.id;
+      pushTimeline(state, { seq, at, kind: "agent", tag: "AGENT", agent: agent.name, text: `${agent.name} started` });
+      break;
+    }
+
+    case "agent.prompt": {
+      const agentId = String(payload.agentId ?? envelope.agentId ?? state.lastAgentId ?? "agent");
+      const agent = ensureAgent(state, agentId);
+      const parts: string[] = [];
+      if (typeof payload.system === "string" && payload.system.trim()) {
+        parts.push(`[System]\n${payload.system}`);
+      }
+      if (typeof payload.human === "string" && payload.human.trim()) {
+        parts.push(`[Human]\n${payload.human}`);
+      }
+      if (typeof payload.text === "string" && payload.text.trim()) {
+        parts.push(payload.text);
+      }
+      const sliceId = typeof payload.sliceId === "string" ? payload.sliceId : undefined;
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "prompt",
+        tag: sliceId ? `PROMPT · ${sliceId}` : "PROMPT",
+        agent: agent.name,
+        text: parts.join("\n\n"),
+      });
+      state.lastAgentId = agent.id;
+      break;
+    }
+
+    case "agent.progress": {
+      // Ephemeral streaming progress: refresh the live status line only —
+      // never the timeline (a long generation would flood it).
+      const agentId = String(payload.agentId ?? envelope.agentId ?? state.lastAgentId ?? "agent");
+      const agent = ensureAgent(state, agentId);
+      const summary = typeof payload.summary === "string" ? payload.summary : "";
+      if (summary && agent.status !== "tool") {
+        agent.act = summary;
+        appendPaorLog(agent, "progress", summary, at, seq);
+        setAgentStatus(agent, "running", tMs);
+      }
+      state.lastAgentId = agent.id;
+      break;
+    }
+
+    case "agent.plan":
+    case "agent.act":
+    case "agent.observe":
+    case "agent.reflect": {
+      const agentId = String(payload.agentId ?? envelope.agentId ?? state.lastAgentId ?? "agent");
+      retirePreviousAgent(state, normalizeAgentId(agentId) ?? agentId, tMs);
+      const agent = ensureAgent(state, agentId);
+      const summary = typeof payload.summary === "string" ? payload.summary : "";
+      if (type === "agent.plan") {
+        agent.plan = summary;
+        appendPaorLog(agent, "plan", summary, at, seq);
+      }
+      if (type === "agent.act") {
+        agent.act = summary;
+        appendPaorLog(agent, "act", summary, at, seq);
+      }
+      if (type === "agent.observe") {
+        agent.observe = summary;
+        appendPaorLog(agent, "observe", summary, at, seq);
+      }
+      if (type === "agent.reflect") {
+        agent.reflect = summary;
+        appendPaorLog(agent, "reflect", summary, at, seq);
+        agent.steps += 1;
+        setAgentStatus(agent, "done", tMs);
+      } else if (agent.status !== "tool") {
+        setAgentStatus(agent, "running", tMs);
+      }
+      state.lastAgentId = agent.id;
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "reason",
+        tag: REASON_TAG[type] ?? "THINK",
+        agent: agent.name,
+        text: summary || `(${type.replace("agent.", "")})`,
+      });
+      break;
+    }
+
+    case "agent.error": {
+      const agentId = String(payload.agentId ?? envelope.agentId ?? state.lastAgentId ?? "agent");
+      const agent = ensureAgent(state, agentId);
+      setAgentStatus(agent, "failed", tMs);
+      agent.errors += 1;
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "error",
+        tag: "ERR",
+        agent: agent.name,
+        text: String(payload.message ?? "agent error"),
+      });
+      break;
+    }
+
+    case "run.failed": {
+      const rawAgentId = String(payload.agentId ?? "");
+      const agentName = agentDisplayName(rawAgentId);
+      if (rawAgentId) {
+        const agent = ensureAgent(state, rawAgentId);
+        setAgentStatus(agent, "failed", tMs);
+        agent.errors += 1;
+      }
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "error",
+        tag: "FAIL",
+        agent: agentName,
+        text: String(payload.reason ?? "run failed"),
+      });
+      break;
+    }
+
+    case "tool_call.started": {
+      const toolCallId = String(payload.toolCallId ?? `tc-${seq}`);
+      const toolName = String(payload.toolName ?? "tool");
+      const summary = typeof payload.summary === "string" ? payload.summary : undefined;
+      state.toolNames.set(toolCallId, toolName);
+      if (summary) state.toolSummaries.set(toolCallId, summary);
+      const agent = resolveEventAgent(state, envelope);
+      if (agent) {
+        setAgentStatus(agent, "tool", tMs);
+        agent.lastTool = toolName;
+        agent.toolRuns += 1;
+      }
+      state.toolCalls.push({
+        id: toolCallId,
+        toolName,
+        summary,
+        agentId: agent?.id,
+        status: "running",
+        startedAt: Date.now(),
+      });
+      if (state.toolCalls.length > MAX_TOOLCALLS) state.toolCalls.shift();
+      // Consecutive identical calls (same tool + same args summary, e.g. a
+      // retried command) collapse into the previous entry instead of stacking.
+      const last = state.timeline.at(-1);
+      if (
+        last &&
+        (last.kind === "tool" ||
+          last.kind === "tool_ok" ||
+          last.kind === "tool_err" ||
+          last.kind === "tool_redirect") &&
+        last.tool === toolName &&
+        Boolean(summary) &&
+        last.toolSummary === summary
+      ) {
+        last.kind = "tool";
+        last.tag = "TOOL";
+        last.toolCallId = toolCallId;
+        last.repeat = (last.repeat ?? 1) + 1;
+        last.text = "";
+        break;
+      }
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "tool",
+        tag: "TOOL",
+        agent: agent?.name,
+        tool: toolName,
+        toolCallId,
+        toolSummary: summary,
+        text: "",
+      });
+      break;
+    }
+
+    case "tool_call.output": {
+      const toolCallId = String(payload.toolCallId ?? "");
+      const toolName = state.toolNames.get(toolCallId) ?? "tool";
+      const output = typeof payload.output === "string" ? payload.output : "";
+      let summary = state.toolSummaries.get(toolCallId);
+      if (!summary) {
+        summary = inferToolSummaryFromOutput(toolName, output);
+        if (summary) state.toolSummaries.set(toolCallId, summary);
+      }
+      const record = state.toolCalls.find((tc) => tc.id === toolCallId) ?? state.toolCalls.at(-1);
+      if (record) {
+        record.status = "ok";
+        record.output = output;
+        record.endedAt = Date.now();
+        if (summary && !record.summary) record.summary = summary;
+      }
+      const agent = resolveEventAgent(state, envelope);
+      if (agent && agent.status === "tool") setAgentStatus(agent, "running", tMs);
+      applyTodoUpdate(state, toolName, output);
+      if (!settleToolEntry(state, toolCallId, "tool_ok", oneLine(output, 200), summary)) {
+        pushTimeline(state, {
+          seq,
+          at,
+          kind: "tool_ok",
+          tag: "OK",
+          agent: agent?.name,
+          tool: toolName,
+          toolCallId,
+          toolSummary: summary,
+          text: oneLine(output, 200),
+        });
+      }
+      break;
+    }
+
+    case "tool_call.failed": {
+      const toolCallId = String(payload.toolCallId ?? "");
+      const toolName = state.toolNames.get(toolCallId) ?? "tool";
+      const error = String(payload.error ?? "failed");
+      const record = state.toolCalls.find((tc) => tc.id === toolCallId);
+      if (record) {
+        record.status = "failed";
+        record.error = error;
+        record.endedAt = Date.now();
+      }
+      const agent = resolveEventAgent(state, envelope);
+      const governed = isGovernedRedirect(toolName, error);
+      if (agent && !governed) {
+        agent.errors += 1;
+        if (agent.status === "tool") setAgentStatus(agent, "running", tMs);
+      } else if (agent && agent.status === "tool") {
+        setAgentStatus(agent, "running", tMs);
+      }
+      const kind = governed ? "tool_redirect" : "tool_err";
+      const detail = governed
+        ? "已转交受治理执行（非失败，OneCompany 在沙箱中代为运行）"
+        : oneLine(error, 200);
+      if (!settleToolEntry(state, toolCallId, kind, detail)) {
+        pushTimeline(state, {
+          seq,
+          at,
+          kind,
+          tag: governed ? "GOV" : "FAIL",
+          agent: agent?.name,
+          tool: toolName,
+          toolSummary: state.toolSummaries.get(toolCallId),
+          text: detail,
+        });
+      }
+      break;
+    }
+
+    case "human_gate.created": {
+      const gateId = String(payload.gateId ?? "");
+      const gateType = String(payload.gateType ?? "gate");
+      if (
+        state.snapshot &&
+        !state.dismissedGateIds.has(gateId) &&
+        !state.snapshot.openGates.some((gate) => gate.id === gateId)
+      ) {
+        state.snapshot.openGates.push({
+          id: gateId,
+          gateType,
+          status: "open",
+          options: gateDefinition(gateType).options,
+          decision: null,
+        });
+      }
+      if (state.lastAgentId) {
+        const agent = state.agents.get(state.lastAgentId);
+        if (agent && (agent.status === "running" || agent.status === "tool")) {
+          setAgentStatus(agent, "blocked", tMs);
+        }
+      }
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "gate",
+        tag: "GATE",
+        text: `${gateDefinition(gateType).title} — 等待你的决定`,
+      });
+      break;
+    }
+
+    case "human_gate.resolved": {
+      const gateId = String(payload.gateId ?? "");
+      state.dismissedGateIds.add(gateId);
+      if (state.snapshot) {
+        state.snapshot.openGates = state.snapshot.openGates.filter((gate) => gate.id !== gateId);
+      }
+      for (const agent of state.agents.values()) {
+        if (agent.status === "blocked") agent.status = "waiting";
+      }
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "gate_ok",
+        tag: "GATE",
+        text: `gate resolved → ${String(payload.decision ?? "?")}`,
+      });
+      break;
+    }
+
+    case "change_request.created":
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "user",
+        tag: "USER",
+        text: `change request: ${oneLine(String(payload.summary ?? ""), 140)}`,
+      });
+      break;
+
+    case "user.interjection": {
+      const message = String(payload.message ?? "");
+      // Skip the echo of a message this client just sent.
+      if (state.localUserEchoes.delete(message)) break;
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "user",
+        tag: "USER",
+        text: oneLine(message, 200),
+      });
+      break;
+    }
+
+    case "taizi.routed": {
+      const reply = String(payload.reply ?? "");
+      const action = String(payload.action ?? "noop");
+      const message = String(payload.message ?? "");
+      if (message && !state.localUserEchoes.delete(message)) {
+        pushTimeline(state, { seq, at, kind: "user", tag: "USER", text: oneLine(message, 200) });
+      }
+      if (reply) {
+        pushTaiziReply(state, reply, action, { seq, at });
+      }
+      break;
+    }
+
+    case "change_request.resolved":
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "status",
+        tag: "CR",
+        text: `change request resolved → ${String(payload.decision ?? "?")}`,
+      });
+      break;
+
+    case "test.result": {
+      const status = String(payload.status ?? "?");
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: status === "passed" ? "test" : "error",
+        tag: "TEST",
+        text: `${String(payload.suite ?? "suite")} → ${status}`,
+      });
+      break;
+    }
+
+    case "diff.created":
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "artifact",
+        tag: "DIFF",
+        text: oneLine(String(payload.summary ?? "diff created"), 140),
+      });
+      break;
+
+    case "artifact.created": {
+      const path = String(payload.path ?? payload.artifactId ?? "artifact");
+      addArtifact(state, path);
+      if (state.lastAgentId) {
+        const agent = state.agents.get(state.lastAgentId);
+        if (agent) agent.artifactCount += 1;
+      }
+      pushTimeline(state, { seq, at, kind: "artifact", tag: "FILE", text: path });
+      break;
+    }
+
+    case "deployment.started":
+      pushTimeline(state, { seq, at, kind: "deploy", tag: "DEPLY", text: "deployment started" });
+      break;
+
+    case "deployment.url_confirmed":
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "deploy",
+        tag: "DEPLY",
+        text: `url confirmed: ${String(payload.url ?? "")}`,
+      });
+      break;
+
+    case "deployment.completed":
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "deploy",
+        tag: "DEPLY",
+        text: `deployment completed${payload.url ? `: ${String(payload.url)}` : ""}`,
+      });
+      break;
+
+    case "delivery.report_generated": {
+      const path = String(payload.artifactPath ?? "");
+      if (path) addArtifact(state, path);
+      pushTimeline(state, { seq, at, kind: "artifact", tag: "RPORT", text: `delivery report: ${path}` });
+      break;
+    }
+
+    case "environment.missing_key":
+      pushTimeline(state, {
+        seq,
+        at,
+        kind: "error",
+        tag: "ENV",
+        text: `${String(payload.keyName ?? "key")}: ${String(payload.message ?? "missing")}`,
+      });
+      break;
+
+    default:
+      pushTimeline(state, { seq, at, kind: "info", tag: "INFO", text: type });
+  }
+
+  refreshComposer(state);
+  return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Snapshot hydration                                                   */
+/* ------------------------------------------------------------------ */
+
+export function hydrateSnapshot(state: ConsoleState, snapshot: ConsoleSnapshot): void {
+  state.serverOpenGates = [...snapshot.openGates];
+  // Gates resolved locally stay "open" server-side until the resumed workflow
+  // yields; keep them hidden so the card does not flicker back.
+  snapshot.openGates = snapshot.openGates.filter((gate) => !state.dismissedGateIds.has(gate.id));
+
+  // Same for an already-answered question round still pending server-side.
+  const pending = snapshot.requirement?.pendingQuestions;
+  if (pending?.length) {
+    const key = pending.map((q) => q.question).join("|");
+    if (state.answeredQuestionsKey === key) {
+      snapshot.requirement!.pendingQuestions = [];
+    } else {
+      state.answeredQuestionsKey = undefined;
+    }
+  }
+
+  state.snapshot = snapshot;
+
+  if (!state.seededRequirement && snapshot.requirement?.rawRequirement) {
+    state.seededRequirement = true;
+    state.timeline.unshift({
+      seq: 0,
+      at: clock(snapshot.project.createdAt),
+      kind: "user",
+      tag: "USER",
+      text: snapshot.requirement.rawRequirement,
+      threadId: "main",
+      importance: "primary",
+      defaultExpanded: true,
+      turnId: "t0",
+    });
+    state.turnCounter = Math.max(state.turnCounter, 1);
+    state.currentTurnId = "t0";
+  }
+
+  for (const envelope of [...snapshot.events].sort((a, b) => a.seq - b.seq)) {
+    applyEnvelope(state, envelope);
+  }
+  state.lastSeq = Math.max(state.lastSeq, snapshot.lastSeq);
+
+  // Group-level waiting hint for agents that have not produced events.
+  const group = snapshot.phase.activeGroup.toLowerCase();
+  const activeGroup: AgentGroup | undefined = group.includes("requirement")
+    ? "requirement"
+    : group.includes("development")
+      ? "development"
+      : undefined;
+  for (const agent of state.agents.values()) {
+    if (agent.status === "idle" || agent.status === "waiting") {
+      agent.status = activeGroup && agent.group === activeGroup ? "waiting" : "idle";
+    }
+  }
+
+  state.hydratedOnce = true;
+  backfillAgentPaorLogs(state);
+  refreshComposer(state);
+}
+
+/* ------------------------------------------------------------------ */
+/* Composer derivation                                                  */
+/* ------------------------------------------------------------------ */
+
+function computeComposer(state: ConsoleState): ComposerState {
+  const snapshot = state.snapshot;
+  if (!snapshot) return emptyComposer("read_only", "Loading project…");
+
+  if (state.pendingHint) {
+    return emptyComposer("read_only", state.pendingHint);
+  }
+
+  const status = snapshot.project.status;
+
+  if (status === "Paused") {
+    return emptyComposer(
+      "paused",
+      snapshot.pausedFrom
+        ? `已暂停 — 输入「继续」回到 ${snapshot.pausedFrom}（或 ^P）`
+        : "已暂停 — 输入「继续」恢复（或 ^P）",
+    );
+  }
+
+  if (status === "Delivered") {
+    return emptyComposer(
+      "change_request",
+      "项目已交付 — 输入变更需求可重新打开开发（如：落点应在交叉点）",
+    );
+  }
+
+  if (status === "Failed") {
+    return emptyComposer("read_only", "Project failed — see timeline for details.");
+  }
+
+  const gate = snapshot.openGates[0];
+  if (gate) {
+    const def = gateDefinition(gate.gateType);
+    const composer = emptyComposer(
+      gate.gateType === "deployment" ? "deployment_url" : "gate_decision",
+      `${def.title} — ${def.description}`,
+    );
+    composer.gateId = gate.id;
+    composer.gateType = gate.gateType;
+    composer.gateOptions = gate.options.length ? gate.options : def.options;
+    if (gate.gateType === "deployment") {
+      const preview = snapshot.dev?.previewUrl ?? snapshot.testing?.previewUrl;
+      if (preview) composer.input = preview;
+    }
+    return composer;
+  }
+
+  if (status === "Asking Questions" && snapshot.requirement?.pendingQuestions?.length) {
+    const composer = emptyComposer(
+      "question_round",
+      "Agents need clarification — answer each question, Enter to confirm.",
+    );
+    composer.questions = snapshot.requirement.pendingQuestions;
+    composer.draftAnswers = snapshot.requirement.pendingQuestions.map(() => "");
+    composer.questionIndex = 0;
+    return composer;
+  }
+
+  if (status === "Draft Requirement") {
+    return emptyComposer("requirement", "Describe the product requirement, Enter to start the pipeline.");
+  }
+
+  if (status === "PRD Ready") {
+    return emptyComposer("read_only", "PRD 已就绪 — 点「启动开发」、按 d，或直接输入「开始开发」。");
+  }
+
+  if (status === "Developing" || status === "Testing") {
+    return emptyComposer(
+      "change_request",
+      `${status} — 输入新信息可随时插话给 Agent（! 开头会立即打断当前操作）`,
+    );
+  }
+
+  return emptyComposer(
+    "read_only",
+    `${status} — 可直接输入指令（继续 / 暂停 / 加一个xxx功能 / 导出 / 进度…）`,
+  );
+}
+
+/** Recompute composer, preserving in-progress user input when context is unchanged. */
+export function refreshComposer(state: ConsoleState): void {
+  const next = computeComposer(state);
+  const current = state.composer;
+
+  const sameGate = current.gateId === next.gateId;
+  const sameQuestions =
+    current.questions.length === next.questions.length &&
+    current.questions.every((q, i) => q.question === next.questions[i]?.question);
+
+  // User explicitly entered custom-text entry for the still-open gate: keep it.
+  if (current.mode === "gate_custom" && next.mode === "gate_decision" && sameGate) {
+    current.reason = next.reason;
+    current.gateOptions = next.gateOptions;
+    current.gateType = next.gateType;
+    return;
+  }
+
+  if (current.mode === next.mode && sameGate && sameQuestions) {
+    current.reason = next.reason;
+    current.gateType = next.gateType;
+    current.gateOptions = next.gateOptions;
+    current.gateCursor = Math.min(current.gateCursor, Math.max(0, next.gateOptions.length - 1));
+    if (current.draftAnswers.length !== current.questions.length) {
+      current.draftAnswers = current.questions.map((_, i) => current.draftAnswers[i] ?? "");
+    }
+    current.questionIndex = Math.min(current.questionIndex, Math.max(0, current.questions.length - 1));
+    return;
+  }
+
+  state.composer = next;
+}
+
+/* ------------------------------------------------------------------ */
+/* Project panel actions (deploy / export)                              */
+/* ------------------------------------------------------------------ */
+
+/** True when development is far enough along to deploy or export. */
+export function isProjectDeployReady(state: ConsoleState): boolean {
+  const status = state.snapshot?.project.status;
+  if (!status) return false;
+  if (
+    [
+      "Draft Requirement",
+      "Asking Questions",
+      "PRD Ready",
+      "Tech Plan Review",
+      "Failed",
+      "Paused",
+    ].includes(status)
+  ) {
+    return false;
+  }
+  const dev = state.snapshot?.dev;
+  if (dev && dev.sliceTotal > 0) {
+    return dev.sliceIndex >= dev.sliceTotal;
+  }
+  return ["Testing", "Deploying", "Awaiting Acceptance", "Delivered"].includes(status);
+}
+
+/** True when the preview server is running and reachable. */
+export function isPreviewDeployed(state: ConsoleState): boolean {
+  return state.previewReachable === true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Contextual actions                                                   */
+/* ------------------------------------------------------------------ */
+
+export function deriveActions(state: ConsoleState): ActionDef[] {
+  const actions: ActionDef[] = [];
+  const status = state.snapshot?.project.status;
+
+  if (status === "PRD Ready") {
+    actions.push({ label: "start development", id: "start_dev" });
+  }
+  // Developing but silent with no gate: the slice loop likely died with a
+  // previous API process — offer to resume it from the persisted session.
+  // A running tool call (long test run, build…) is live work, not a stall;
+  // only a very long silence overrides that signal.
+  const idleMs = Date.now() - state.lastEventAtMs;
+  const hasRunningTool = state.toolCalls.some((tc) => tc.status === "running");
+  const hasOpenSliceFailureGate = state.serverOpenGates.some(
+    (gate) => gate.gateType === "slice_failure",
+  );
+  if (
+    status === "Developing" &&
+    !hasOpenSliceFailureGate &&
+    !state.snapshot?.openGates.length &&
+    state.busy.size === 0 &&
+    ((idleMs > 45_000 && !hasRunningTool) || idleMs > 300_000)
+  ) {
+    actions.push({ label: "恢复开发（续跑切片）", id: "start_dev" });
+  }
+  if (status === "Testing" && (state.snapshot?.testing?.suiteTotal ?? 0) === 0) {
+    actions.push({ label: "run tests + deploy", id: "start_testing" });
+  }
+  if (status === "Delivered") {
+    actions.push({ label: "delivery report", id: "delivery_report" });
+  }
+  if (state.composer.mode === "question_round") {
+    actions.push({ label: "跳过澄清", id: "skip_clarification" });
+    const allAnswered =
+      state.composer.draftAnswers.length === state.composer.questions.length &&
+      state.composer.draftAnswers.every((answer) => answer.trim().length > 0);
+    if (allAnswered) {
+      actions.push({ label: "提交本轮答案", id: "submit_answers" });
+    }
+  }
+  if (status === "Paused") {
+    actions.push({ label: "resume", id: "pause_resume" });
+  } else if (status && status !== "Delivered" && status !== "Failed") {
+    actions.push({ label: "pause", id: "pause_resume" });
+  }
+  actions.push({ label: "refresh", id: "refresh" });
+  actions.push({
+    label: state.theme === "dark" ? "浅色主题" : "深色主题",
+    id: "toggle_theme",
+  });
+  actions.push({
+    label: state.yoloMode ? "关闭 YOLO" : "YOLO 模式",
+    id: "toggle_yolo",
+  });
+  return actions;
+}
+
+/** Filter palette entries by query (label or id). */
+export function filterPaletteActions(state: ConsoleState): ActionDef[] {
+  const actions = deriveActions(state);
+  const q = state.commandPalette?.query.trim().toLowerCase() ?? "";
+  if (!q) return actions;
+  return actions.filter(
+    (action) => action.label.toLowerCase().includes(q) || action.id.toLowerCase().includes(q),
+  );
+}
+
+/** True when the composer is consuming printable keystrokes. */
+export function isTyping(state: ConsoleState): boolean {
+  if (state.focus !== "composer") return false;
+  // Taizi 全程接收输入：除门禁选项导航外，所有模式都可打字。
+  return state.composer.mode !== "gate_decision";
+}
+
+export function toggleFileDir(state: ConsoleState, dirPath: string): void {
+  if (state.expandedFileDirs.has(dirPath)) {
+    state.expandedFileDirs.delete(dirPath);
+  } else {
+    state.expandedFileDirs.add(dirPath);
+  }
+}
+
+// Re-exports for the components layer.
+export type { ToolCallView };

@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------ */
+/* Theme CSS variables — mirror theme.ts palettes                       */
+/* dark:  bg rgb(38,37,35)  fg rgb(230,227,220)  accent rgb(224,140,108) */
+/* light: bg rgb(250,249,245) fg rgb(61,57,53)  accent rgb(194,95,67)    */
+/* ------------------------------------------------------------------ */
+:root,
+.theme-dark {
+  --taizi-bg: 38 37 35;
+  --taizi-fg: 230 227 220;
+  --taizi-accent: 224 140 108;
+}
+
+.theme-light {
+  --taizi-bg: 250 249 245;
+  --taizi-fg: 61 57 53;
+  --taizi-accent: 194 95 67;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0a0a0a;
+  color: #e5e3dc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars styled to match the terminal aesthetic. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+/* Selection keeps text legible. */
+::selection {
+  background: rgba(34, 211, 238, 0.3);
+}
