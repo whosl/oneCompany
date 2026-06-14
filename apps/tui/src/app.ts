@@ -1211,6 +1211,19 @@ export class App {
       composer.reason = "Custom decision — describe what should happen instead.";
       return;
     }
+    // coding_question "answer" requires free text — never resolve without it.
+    // This guards every entry path (mouse click, keyboard Enter, digit key)
+    // so a blank answer can never be submitted. When text is missing, focus
+    // the input box so the user knows to type.
+    if (
+      option === "answer" &&
+      composer.gateType === "coding_question" &&
+      !composer.input.trim()
+    ) {
+      state.focus = "composer";
+      composer.reason = "请先在下方输入框写出答案，再提交 — 不能发送空答案";
+      return;
+    }
     this.resolveGate(composer.gateId, option);
   }
 

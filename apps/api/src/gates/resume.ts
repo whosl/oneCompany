@@ -18,6 +18,14 @@ const DEVELOPMENT_GATE_TYPES = new Set([
  * onGateResolved — the resume handler would re-enter the dev workflow and throw
  * on a phase mismatch (the session is still mid-slice), leaving the gate stuck
  * open and the waiter blocked forever.
+ *
+ * Known limitation (shared with all blocking gates: authorize,
+ * dangerous_operation, deployment): if the API restarts while a gate is open,
+ * the in-memory `waitForGate` waiter and the opencode session it was blocking
+ * on are gone. resolveGate still persists the decision and returns 200, but no
+ * one consumes the answer — the dev session must be manually resumed, which
+ * starts a fresh opencode session. Persisting waiter/session ownership or
+ * orphan detection across restarts is a cross-cutting change not handled here.
  */
 const SELF_RESOLVING_GATE_TYPES = new Set(["coding_question"]);
 
