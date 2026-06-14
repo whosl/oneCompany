@@ -54,8 +54,14 @@ export const VETTED_MCP_PRESETS: readonly VettedMcpPreset[] = [
     allowedSecretKeys: [],
     available: isNpxAvailable(),
   },
-  // NOTE: brave-search preset removed — @modelcontextprotocol/server-brave-search
-  // is deprecated on npm. Add a replacement when a maintained search MCP is chosen.
+  {
+    presetId: "web-search",
+    displayName: "Web Search (Tavily)",
+    // Tavily MCP — AI-oriented web search. Requires TAVILY_API_KEY env.
+    command: ["npx", "--yes", "tavily-mcp@0.2.20"],
+    allowedSecretKeys: ["TAVILY_API_KEY"],
+    available: isNpxAvailable(),
+  },
 ];
 
 /** Look up a preset by id. */

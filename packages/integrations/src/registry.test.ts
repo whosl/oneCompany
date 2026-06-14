@@ -9,13 +9,16 @@ import {
 } from "./registry.js";
 
 describe("integration registry — M12", () => {
-  it("lists P1 integrations", () => {
+  it("lists P1 integrations plus development-assist MCPs", () => {
     expect(listIntegrations().map((row) => row.id).sort()).toEqual([
+      "codegraph",
+      "context7",
       "figma",
       "github",
       "playwright",
       "supabase",
       "vercel",
+      "web-search",
     ]);
   });
 

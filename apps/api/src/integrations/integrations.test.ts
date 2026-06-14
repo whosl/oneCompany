@@ -12,11 +12,14 @@ describe("integrations API — M12", () => {
         gateway?: { adapterMode: string };
       };
       expect(body.integrations.map((row) => row.id).sort()).toEqual([
+        "codegraph",
+        "context7",
         "figma",
         "github",
         "playwright",
         "supabase",
         "vercel",
+        "web-search",
       ]);
       const gatewayBody = body as {
         gateway?: { adapterMode: string; gateMode: string; skillPacksRoot: string };

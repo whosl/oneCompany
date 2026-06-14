@@ -26,6 +26,7 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    integrationAccess: "auto",
   },
   {
     id: "planner",
@@ -40,6 +41,7 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    integrationAccess: "auto",
   },
   {
     id: "coding",
@@ -54,6 +56,7 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "medium",
     permissions: ["read", "write"],
     executor: "scripted",
+    integrationAccess: "auto",
   },
   {
     id: "review",
@@ -68,6 +71,7 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    integrationAccess: "auto",
   },
   {
     id: "qa",

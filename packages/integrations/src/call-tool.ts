@@ -187,11 +187,18 @@ export async function callIntegrationTool(
   assertToolAllowed(definition, input.toolName);
 
   const connection = getConnectionForProject(deps.db, deps.projectId, definition.id);
-  if (!connection || connection.status === "not_configured" || connection.status === "disabled") {
+  // Auto-available: definitions with no secret requirements (e.g. codegraph,
+  // context7) don't need a user-created connection record. Definitions that
+  // DO require secrets still need an active connection.
+  const isAutoAvailable = definition.secretRefs.length === 0;
+  if (
+    !isAutoAvailable &&
+    (!connection || connection.status === "not_configured" || connection.status === "disabled")
+  ) {
     throw new Error(`Integration not enabled for project: ${definition.id}`);
   }
 
-  if (shouldUseOfflineFallback(definition, connection.status)) {
+  if (connection && shouldUseOfflineFallback(definition, connection.status)) {
     return runOfflineFallback(deps, definition, input.toolName, input.args);
   }
 

@@ -81,6 +81,21 @@
       "transport": "mcp_stdio",
       "command": ["${OC_MCP_SERVERS_ROOT}/node_modules/.bin/mcp-server-kubernetes"],
       "envFromSecretRefs": { "KUBECONFIG": "KUBECONFIG" }
+    },
+    "codegraph": {
+      "transport": "mcp_stdio",
+      "command": ["codegraph", "serve", "--mcp"],
+      "notes": "Global npm install (@colbymchenry/codegraph); no secrets needed."
+    },
+    "context7": {
+      "transport": "mcp_stdio",
+      "command": ["npx", "--yes", "@upstash/context7-mcp@3.2.1"],
+      "notes": "Public library docs API; no secrets needed."
+    },
+    "web-search": {
+      "transport": "mcp_stdio",
+      "command": ["npx", "--yes", "tavily-mcp@0.2.20"],
+      "envFromSecretRefs": { "TAVILY_API_KEY": "TAVILY_API_KEY" }
     }
   }
 }

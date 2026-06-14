@@ -70,4 +70,47 @@ export const P1_INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     offlineFallbackSkillPackId: "vercel-offline",
     highRiskTools: ["create_preview_deploy"],
   },
+
+  // ─── Development-assist MCPs (no secret, auto-available) ─────────────────
+  // These are local/stdio MCP servers that need no OAuth or API key, so they
+  // don't require a user-created connection record — callIntegrationTool
+  // auto-enables definitions with empty secretRefs.
+  {
+    id: "codegraph",
+    version: "1.0.0",
+    protocol: "mcp",
+    mode: "remote",
+    displayName: "CodeGraph",
+    description: "Code intelligence: call graphs, callers, callees, impact analysis",
+    toolAllowlist: ["query", "callers", "callees", "impact", "status"],
+    permissions: ["read"],
+    riskLevel: "low",
+    secretRefs: [],
+  },
+  {
+    id: "context7",
+    version: "1.0.0",
+    protocol: "mcp",
+    mode: "remote",
+    displayName: "Context7 (library docs)",
+    description: "Resolve and fetch up-to-date documentation for third-party libraries",
+    toolAllowlist: ["resolve-library-id", "get-library-docs"],
+    permissions: ["read", "network"],
+    riskLevel: "low",
+    secretRefs: [],
+  },
+
+  // ─── Web search MCP (requires Tavily API key) ────────────────────────────
+  {
+    id: "web-search",
+    version: "1.0.0",
+    protocol: "mcp",
+    mode: "remote",
+    displayName: "Web Search (Tavily)",
+    description: "AI-oriented web search, extract, and crawl via Tavily",
+    toolAllowlist: ["tavily-search", "tavily-extract"],
+    permissions: ["read", "network"],
+    riskLevel: "low",
+    secretRefs: ["TAVILY_API_KEY"],
+  },
 ];

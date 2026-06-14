@@ -71,12 +71,12 @@ describe("project MCP config CRUD (presetId model)", () => {
 });
 
 describe("preset MCP servers", () => {
-  it("vetted presets contain codegraph and context7 (not brave-search)", () => {
+  it("vetted presets contain codegraph, context7, and web-search", () => {
     const ids = VETTED_MCP_PRESETS.map((p) => p.presetId);
     expect(ids).toContain("codegraph");
     expect(ids).toContain("context7");
-    // brave-search was removed (deprecated on npm)
-    expect(ids).not.toContain("web-search");
+    expect(ids).toContain("web-search");
+    // brave-search (deprecated) must not be present
     expect(ids).not.toContain("brave-search");
   });
 

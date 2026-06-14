@@ -65,6 +65,9 @@ function resolveEnabledIntegrationIds(execCtx: ToolExecutionContext): string[] {
   }
   return listIntegrations()
     .filter((definition) => {
+      // Auto-available: definitions with no secret requirements (codegraph,
+      // context7) are always enabled without a user-created connection.
+      if (definition.secretRefs.length === 0) return true;
       const connection = getConnectionForProject(execCtx.db, execCtx.projectId, definition.id);
       return (
         connection &&
