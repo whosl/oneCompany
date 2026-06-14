@@ -157,4 +157,29 @@ describe("projectMcpConfigsToOpencode", () => {
     const opencode = projectMcpConfigsToOpencode(configs);
     expect(Object.keys(opencode)).toEqual(["enabled-one"]);
   });
+
+  it("excludes servers with an explicit toolAllowlist (cannot be enforced on opencode path)", () => {
+    const configs = [
+      {
+        serverId: "passthrough",
+        displayName: "Passthrough",
+        transport: "local" as const,
+        command: ["codegraph", "serve", "--mcp"],
+        toolAllowlist: null,
+        enabled: true,
+      },
+      {
+        serverId: "restricted",
+        displayName: "Restricted",
+        transport: "local" as const,
+        command: ["codegraph", "serve", "--mcp"],
+        toolAllowlist: ["only_this"],
+        enabled: true,
+      },
+    ];
+    const opencode = projectMcpConfigsToOpencode(configs);
+    // Only the passthrough (null allowlist) server is injected; the restricted
+    // one is excluded because opencode direct-connect cannot honor the allowlist.
+    expect(Object.keys(opencode)).toEqual(["passthrough"]);
+  });
 });

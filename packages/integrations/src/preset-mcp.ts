@@ -5,6 +5,10 @@ import type { ProjectMcpConfig } from "@oc/shared";
  * Default MCP servers preset for every new project. Each entry carries an
  * `available` probe so we can mark unavailable servers enabled=false instead
  * of failing project creation (silent skip per the configured behavior).
+ *
+ * NOTE: commands here must also be vetted in mcp-governance.ts (VETTED_MCP_COMMANDS
+ * / VETTED_NPX_PACKAGES) — the preset bypasses API validation but the governance
+ * layer is the single source of truth for what may run.
  */
 export const PRESET_MCP_SERVERS: ReadonlyArray<
   ProjectMcpConfig & { available: boolean }
@@ -29,10 +33,13 @@ export const PRESET_MCP_SERVERS: ReadonlyArray<
   },
   {
     serverId: "web-search",
-    displayName: "Web Search",
+    displayName: "Brave Web Search",
     transport: "local",
-    command: ["npx", "--yes", "@anthropic/web-search-mcp"],
+    // The official MCP search server; requires BRAVE_API_KEY env. Replaces the
+    // earlier @anthropic/web-search-mcp which does not exist on npm (E404).
+    command: ["npx", "--yes", "@modelcontextprotocol/server-brave-search"],
     toolAllowlist: null,
+    env: {},
     enabled: true,
     available: isNpxAvailable(),
   },

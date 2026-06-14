@@ -45,7 +45,19 @@ function governedConfig(options?: {
   // Model is selected per prompt in OpencodeHarness; server-level model config can
   // break session.create on some opencode builds when auth is injected later.
   const gatewayMcp = options?.projectId ? buildOcGatewayMcpConfig(options.projectId) : undefined;
-  const mcp = { ...gatewayMcp, ...options?.projectMcp };
+  // Defense in depth: strip any project MCP whose key would shadow the reserved
+  // oc-* namespace (the governance gateway). This prevents a user-registered
+  // "oc-gateway" entry from replacing the official governed gateway even if the
+  // API-layer validation is bypassed.
+  const safeProjectMcp: Record<string, unknown> = {};
+  if (options?.projectMcp) {
+    for (const [key, value] of Object.entries(options.projectMcp)) {
+      if (!key.toLowerCase().startsWith("oc-")) {
+        safeProjectMcp[key] = value;
+      }
+    }
+  }
+  const mcp = { ...gatewayMcp, ...safeProjectMcp };
   return {
     permission: {
       edit: "ask" as const,

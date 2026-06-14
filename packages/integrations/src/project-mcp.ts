@@ -13,11 +13,9 @@ function rowToConfig(row: ProjectMcpConfigRow): ProjectMcpConfig {
   return {
     serverId: row.server_id,
     displayName: row.display_name,
-    transport: row.transport as "local" | "remote",
-    command: row.command_json ? (JSON.parse(row.command_json) as string[]) : undefined,
-    url: row.args_json ? (JSON.parse(row.args_json) as { url?: string }).url : undefined,
+    transport: "local",
+    command: row.command_json ? (JSON.parse(row.command_json) as string[]) : [],
     env: row.env_json ? (JSON.parse(row.env_json) as Record<string, string>) : undefined,
-    cwd: row.cwd ?? undefined,
     toolAllowlist: row.tool_allowlist_json
       ? (JSON.parse(row.tool_allowlist_json) as string[])
       : null,
@@ -71,9 +69,7 @@ export function upsertProjectMcpConfig(
         display_name: config.displayName,
         transport: config.transport,
         command_json: JSON.stringify(config.command ?? []),
-        args_json: config.url ? JSON.stringify({ url: config.url }) : null,
         env_json: config.env ? JSON.stringify(config.env) : null,
-        cwd: config.cwd ?? null,
         tool_allowlist_json: config.toolAllowlist ? JSON.stringify(config.toolAllowlist) : null,
         enabled: config.enabled ? 1 : 0,
         updated_at: now,
@@ -91,9 +87,7 @@ export function upsertProjectMcpConfig(
       display_name: config.displayName,
       transport: config.transport,
       command_json: JSON.stringify(config.command ?? []),
-      args_json: config.url ? JSON.stringify({ url: config.url }) : null,
       env_json: config.env ? JSON.stringify(config.env) : null,
-      cwd: config.cwd ?? null,
       tool_allowlist_json: config.toolAllowlist ? JSON.stringify(config.toolAllowlist) : null,
       enabled: config.enabled ? 1 : 0,
       created_at: now,
@@ -129,6 +123,15 @@ export function presetDefaultMcpConfigs(db: Db, projectId: string): void {
  * Convert project MCP configs into the opencode server `Config["mcp"]` shape
  * (for the code agent / opencode harness path). Only enabled local servers
  * are included.
+ *
+ * IMPORTANT: opencode's McpLocalConfig has no tool-level allowlist field, so
+ * the code agent (which calls MCP servers directly via opencode) CANNOT enforce
+ * a toolAllowlist. Therefore:
+ *   - configs with toolAllowlist === null (passthrough) are injected here;
+ *   - configs with an explicit toolAllowlist are NOT injected into opencode,
+ *     because we cannot honor the restriction and a half-enforced allowlist
+ *     is worse than none. Those servers are only reachable via the structured
+ *     agent path (callIntegrationTool), which does enforce the allowlist.
  */
 export function projectMcpConfigsToOpencode(
   configs: ProjectMcpConfig[],
@@ -142,6 +145,9 @@ export function projectMcpConfigsToOpencode(
   }> = {};
   for (const config of configs) {
     if (!config.enabled) continue;
+    // Skip servers that declare a tool allowlist — it can't be enforced on the
+    // opencode direct-connect path. They remain available via callIntegrationTool.
+    if (config.toolAllowlist !== null && config.toolAllowlist !== undefined) continue;
     if (config.transport === "local" && config.command) {
       result[config.serverId] = {
         type: "local",

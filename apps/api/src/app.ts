@@ -1,4 +1,5 @@
 import { createDb, type Db } from "@oc/shared";
+import { shutdownProjectServer } from "@oc/agent-core";
 import { Hono } from "hono";
 import { broadcastEvent } from "./events/broadcast.js";
 import { createEventRoutes } from "./events/routes.js";
@@ -132,7 +133,25 @@ export function createApp(deps: AppDependencies) {
   app.route("/projects", createProjectIntegrationRoutes(integrations));
   app.route(
     "/projects",
-    createProjectMcpRoutes(deps.db, (id) => projects.getProject(id) !== null),
+    createProjectMcpRoutes(
+      deps.db,
+      (id) => projects.getProject(id) !== null,
+      // Flush the cached opencode server when MCP config changes so the next
+      // slice/review picks up the new server set.
+      (projectId) => {
+        try {
+          const project = projects.getProject(projectId);
+          if (project) {
+            const ws = workspace?.ensureForProject(project);
+            if (ws) {
+              void shutdownProjectServer(ws.repo, { projectId });
+            }
+          }
+        } catch {
+          // best-effort; a missing workspace just means no server to flush
+        }
+      },
+    ),
   );
 
   return {
