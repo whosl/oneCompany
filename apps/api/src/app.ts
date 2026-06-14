@@ -11,6 +11,7 @@ import { createDevelopmentService } from "./development/service.js";
 import type { DevelopmentService } from "./development/service.js";
 import { createTestingRoutes } from "./testing/routes.js";
 import { createTestingService } from "./testing/service.js";
+import type { TestingService } from "./testing/service.js";
 import type { RequirementService } from "./requirement/service.js";
 import { createOrchestrationRoutes } from "./orchestration/routes.js";
 import { createInterruptRoutes } from "./projects/interrupt-routes.js";
@@ -77,17 +78,34 @@ export function createApp(deps: AppDependencies) {
   );
   const devCtx = { db: deps.db, projects, gates, workspace, onEvent };
   const requirement = createRequirementService(deps.db, projects, gates, workspace, onEvent);
-  const development = createDevelopmentService(deps.db, projects, gates, workspace, onEvent);
+  const testingRef: { current?: TestingService } = {};
+  const development = createDevelopmentService(
+    deps.db,
+    projects,
+    gates,
+    workspace,
+    onEvent,
+    {
+      onFinalRepairCompleted: async ({ projectId, requestDeploy }) => {
+        if (!testingRef.current) {
+          throw new Error("Testing service is not initialized");
+        }
+        await testingRef.current.start(projectId, { requestDeploy });
+      },
+    },
+  );
   const changeRequests = createChangeRequestService(deps.db, projects, devCtx);
   const testing = createTestingService(
     deps.db,
     projects,
     gates,
     workspace,
+    development,
     deployment,
     delivery,
     onEvent,
   );
+  testingRef.current = testing;
   const panel = createPanelService(deps.db, projects, workspace);
   const consoleService = createConsoleService(deps.db, projects, gates);
   const environment = createEnvironmentService();

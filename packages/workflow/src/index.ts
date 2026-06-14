@@ -45,6 +45,11 @@ export {
 export { isSliceLoopActive } from "./development/slice-loop-registry.js";
 export { getSliceLoopBackgroundError } from "./development/engine-legacy.js";
 export {
+  MAX_AUTOMATIC_FINAL_REPAIR_ATTEMPTS,
+  startFinalRepair,
+  type StartFinalRepairInput,
+} from "./development/final-repair.js";
+export {
   allSlicesPassed,
   getCurrentSlice,
   hasPendingSlices,
@@ -65,6 +70,7 @@ export type {
   DevelopmentSessionPayload,
   DevelopmentWorkflowDeps,
   DevelopmentWorkflowPhase,
+  FinalRepairMeta,
 } from "./development/types.js";
 export {
   TECH_PLAN_CONFIRM_GATE,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runTestingPhase, getTestingStatus } from "./engine.js";
 import { setupTestingTest } from "../test-utils.js";
+import { loadDevSession, saveDevSession } from "../development/state.js";
 
 describe("testing phase engine", () => {
   it("runs full suite and moves to Awaiting Acceptance when all pass", async () => {
@@ -50,6 +51,32 @@ describe("testing phase engine", () => {
       await runTestingPhase(deps, { projectId });
       const status = getTestingStatus(deps, projectId);
       expect(status.suiteResults.length).toBe(4);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("runs QA after a repaired final failure and clears repair state", async () => {
+    const { db, deps, projectId, cleanup } = setupTestingTest();
+    try {
+      const payload = loadDevSession(db, projectId);
+      saveDevSession(db, projectId, {
+        ...payload,
+        meta: {
+          ...payload.meta,
+          finalRepair: {
+            attempt: 1,
+            failedSuites: ["final:typecheck"],
+            qaNotes: ["fix types"],
+            requestDeploy: false,
+            pendingRetest: false,
+          },
+        },
+      });
+
+      const result = await runTestingPhase(deps, { projectId });
+      expect(result.qaNotes).toContain("final acceptance suite passed");
+      expect(loadDevSession(db, projectId).meta.finalRepair).toBeUndefined();
     } finally {
       cleanup();
     }

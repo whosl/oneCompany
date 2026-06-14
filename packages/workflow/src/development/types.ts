@@ -39,6 +39,14 @@ export type DeliverySessionMeta = {
   reportGenerated?: boolean;
 };
 
+export type FinalRepairMeta = {
+  attempt: number;
+  failedSuites: string[];
+  qaNotes: string[];
+  requestDeploy: boolean;
+  pendingRetest: boolean;
+};
+
 export type DevelopmentSessionMeta = {
   phase: DevelopmentWorkflowPhase;
   profile: DevFixtureProfile;
@@ -48,6 +56,7 @@ export type DevelopmentSessionMeta = {
   pendingChangeRequestId?: string;
   pendingChangeRequestKind?: "skip_slice" | "requirement_change";
   sliceRetryBudgetExtension?: number;
+  finalRepair?: FinalRepairMeta;
 };
 
 export type DevelopmentSessionPayload = {
@@ -87,6 +96,11 @@ export type DevelopmentWorkflowDeps = {
   logsPath?: string;
   runGovernedCommand?: DevContext["runGovernedCommand"];
   classifyShellRisk?: DevContext["classifyShellRisk"];
+  onFinalRepairCompleted?: (input: {
+    projectId: string;
+    attempt: number;
+    requestDeploy: boolean;
+  }) => Promise<void> | void;
 };
 
 export type DevelopmentRunResult = {
@@ -129,7 +143,7 @@ export function buildSliceSpec(
   return {
     projectId: state.projectId,
     sliceId: slice.id,
-    goal: slice.title,
+    goal: slice.description ? `${slice.title}\n\n${slice.description}` : slice.title,
     acceptanceChecks: slice.acceptanceChecks ?? [],
     testCommand,
     expectedFiles: slice.expectedFiles,

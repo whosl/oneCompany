@@ -31,6 +31,7 @@ export type DevelopmentServiceContext = {
 
 export type DevelopmentDepsOptions = {
   profile?: DevFixtureProfile;
+  onFinalRepairCompleted?: DevelopmentWorkflowDeps["onFinalRepairCompleted"];
 };
 
 export function createDevelopmentDeps(
@@ -135,5 +136,6 @@ export function createDevelopmentDeps(
       }
       return row.status;
     },
+    onFinalRepairCompleted: options.onFinalRepairCompleted,
   };
 }

@@ -361,6 +361,40 @@ function emitSliceLoopFailure(
   }
 }
 
+function takeFinalRepairCompletion(
+  deps: DevelopmentWorkflowDeps,
+  projectId: string,
+): { projectId: string; attempt: number; requestDeploy: boolean } | undefined {
+  const payload = loadDevSession(deps.db, projectId);
+  const repair = payload.meta.finalRepair;
+  if (payload.meta.phase !== "completed" || !repair?.pendingRetest) {
+    return undefined;
+  }
+
+  saveDevSession(deps.db, projectId, {
+    ...payload,
+    meta: {
+      ...payload.meta,
+      finalRepair: { ...repair, pendingRetest: false },
+    },
+  });
+  return { projectId, attempt: repair.attempt, requestDeploy: repair.requestDeploy };
+}
+
+async function triggerFinalRepairRetest(
+  deps: DevelopmentWorkflowDeps,
+  projectId: string,
+): Promise<void> {
+  if (!deps.onFinalRepairCompleted) {
+    return;
+  }
+  const completion = takeFinalRepairCompletion(deps, projectId);
+  if (!completion) {
+    return;
+  }
+  await deps.onFinalRepairCompleted(completion);
+}
+
 /** Run the slice loop on a background task; HTTP handlers return immediately. */
 export function beginSliceLoopInBackground(
   deps: DevelopmentWorkflowDeps,
@@ -375,14 +409,26 @@ export function beginSliceLoopInBackground(
   markSliceLoopActive(projectId);
 
   void (async () => {
+    let completedNormally = false;
     try {
       await runSliceLoopUntilHaltInner(deps, payload);
+      completedNormally = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       sliceLoopBackgroundErrors.set(projectId, message);
       emitSliceLoopFailure(deps, projectId, message);
     } finally {
       markSliceLoopInactive(projectId);
+    }
+
+    if (completedNormally) {
+      try {
+        await triggerFinalRepairRetest(deps, projectId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        sliceLoopBackgroundErrors.set(projectId, message);
+        emitSliceLoopFailure(deps, projectId, `自动复测启动失败：${message}`);
+      }
     }
   })();
 
@@ -398,8 +444,9 @@ export async function runSliceLoopUntilHalt(
     throw new Error(`Slice loop already running for project: ${projectId}`);
   }
   markSliceLoopActive(projectId);
+  let result: DevelopmentRunResult;
   try {
-    return await runSliceLoopUntilHaltInner(deps, payload);
+    result = await runSliceLoopUntilHaltInner(deps, payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     sliceLoopBackgroundErrors.set(projectId, message);
@@ -408,6 +455,8 @@ export async function runSliceLoopUntilHalt(
   } finally {
     markSliceLoopInactive(projectId);
   }
+  await triggerFinalRepairRetest(deps, projectId);
+  return result;
 }
 
 /**

@@ -32,6 +32,7 @@ import type { ProjectService } from "../projects/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
 import type { DeploymentService } from "../deployment/service.js";
 import type { DeliveryService } from "../delivery/service.js";
+import type { DevelopmentService } from "../development/service.js";
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const DEFAULT_SKILL_PACKS_ROOT = path.join(REPO_ROOT, "skill-packs");
@@ -41,6 +42,7 @@ export function createTestingService(
   projects: ProjectService,
   gates: GateService,
   workspace: WorkspaceService,
+  development: DevelopmentService,
   deployment: DeploymentService,
   delivery: DeliveryService,
   onEvent: (envelope: EventEnvelope) => void,
@@ -159,6 +161,15 @@ export function createTestingService(
       options: { requestDeploy?: boolean } = {},
     ): Promise<TestingRunResult> {
       const result = await runTestingPhase(buildDeps(projectId), { projectId, ...options });
+      if (result.phase === "failed") {
+        development.startFinalRepair({
+          projectId,
+          suiteResults: result.suiteResults,
+          qaNotes: result.qaNotes,
+          requestDeploy: options.requestDeploy,
+        });
+        return result;
+      }
       const status = projects.getProject(projectId)?.status;
       if (status === "Deploying") {
         deployment.start(projectId);

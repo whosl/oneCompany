@@ -2,8 +2,11 @@ import { registerDevelopmentAgents, type DevFixtureProfile } from "@oc/agent-cor
 import {
   getDevelopmentStatus,
   resumeDevelopmentAfterGate,
+  startFinalRepair as startFinalRepairWorkflow,
   startDevelopment,
+  type StartFinalRepairInput,
   type DevelopmentRunResult,
+  type DevelopmentWorkflowDeps,
 } from "@oc/workflow";
 import type { Db, EventEnvelope } from "@oc/shared";
 import type { GateService } from "../gates/service.js";
@@ -17,6 +20,9 @@ export function createDevelopmentService(
   gates: GateService,
   workspace: WorkspaceService,
   onEvent: (envelope: EventEnvelope) => void,
+  options: {
+    onFinalRepairCompleted?: DevelopmentWorkflowDeps["onFinalRepairCompleted"];
+  } = {},
 ) {
   registerDevelopmentAgents(db);
 
@@ -38,7 +44,10 @@ export function createDevelopmentService(
         throw new Error("Requirement confirmation gate must be approved before development");
       }
       const paths = workspace.ensureForProject(project);
-      const deps = createDevelopmentDeps(ctx, projectId, { profile });
+      const deps = createDevelopmentDeps(ctx, projectId, {
+        profile,
+        onFinalRepairCompleted: options.onFinalRepairCompleted,
+      });
       return startDevelopment(deps, {
         projectId,
         repoPath: paths.repo,
@@ -51,12 +60,23 @@ export function createDevelopmentService(
       projectId: string,
       decision: string,
     ): Promise<DevelopmentRunResult> {
-      const deps = createDevelopmentDeps(ctx, projectId);
+      const deps = createDevelopmentDeps(ctx, projectId, {
+        onFinalRepairCompleted: options.onFinalRepairCompleted,
+      });
       return resumeDevelopmentAfterGate(deps, { projectId, decision });
     },
 
+    startFinalRepair(input: StartFinalRepairInput): DevelopmentRunResult {
+      const deps = createDevelopmentDeps(ctx, input.projectId, {
+        onFinalRepairCompleted: options.onFinalRepairCompleted,
+      });
+      return startFinalRepairWorkflow(deps, input);
+    },
+
     getStatus(projectId: string): DevelopmentRunResult {
-      const deps = createDevelopmentDeps(ctx, projectId);
+      const deps = createDevelopmentDeps(ctx, projectId, {
+        onFinalRepairCompleted: options.onFinalRepairCompleted,
+      });
       return getDevelopmentStatus(deps, projectId);
     },
   };

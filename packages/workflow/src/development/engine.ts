@@ -1,5 +1,7 @@
 import type { DevFixtureProfile } from "@oc/agent-core";
 import type { DevelopmentRunResult, DevelopmentWorkflowDeps } from "./types.js";
+import { startFinalRepair } from "./final-repair.js";
+import { loadDevSession } from "./state.js";
 import {
   resumeDevelopmentAfterGateGraph,
   startDevelopmentGraph,
@@ -28,6 +30,15 @@ export async function startDevelopment(
   // crash) can be resumed from the persisted dev session. The session payload
   // is engine-agnostic, so the legacy slice loop resumes either engine's run.
   if (deps.getProjectStatus(input.projectId) === "Developing") {
+    const payload = loadDevSession(deps.db, input.projectId);
+    if (payload.meta.phase === "completed" && payload.testing?.phase === "failed") {
+      return startFinalRepair(deps, {
+        projectId: input.projectId,
+        suiteResults: payload.testing.suiteResults,
+        qaNotes: payload.testing.qaNotes,
+        requestDeploy: payload.testing.requestDeploy,
+      });
+    }
     return resumeOrphanedSliceLoop(deps, input.projectId);
   }
   if (useGraphDevelopmentEngine()) {

@@ -3,38 +3,42 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Level 03 三级考题说明 - 多智能体工程交付系统</title>
+<title>OneCompany Level 03 提交进度看板</title>
 <style>
 :root {
-  --bg: #f6f8fc;
+  --bg: #f4f7fb;
   --panel: #ffffff;
-  --ink: #111f3c;
-  --muted: #657187;
-  --line: #e3e8f2;
+  --ink: #12203b;
+  --muted: #66738a;
+  --line: #dfe6f1;
   --blue: #2563eb;
   --blue-soft: #eaf0ff;
-  --orange: #ff8a25;
-  --orange-soft: #fff3e9;
-  --green: #16a34a;
-  --green-soft: #eaf8ef;
-  --purple: #7c3aed;
+  --orange: #ea7a20;
+  --orange-soft: #fff2e7;
+  --green: #16803c;
+  --green-soft: #e9f8ee;
+  --red: #c53939;
+  --red-soft: #fff0f0;
+  --gray-soft: #f2f4f7;
   --shadow: 0 18px 50px rgba(17,31,60,.08);
   --radius: 22px;
 }
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
-  background: radial-gradient(circle at top right, #eef4ff 0, #f8fafc 36%, #f6f8fc 100%);
-  line-height: 1.75;
+  background: radial-gradient(circle at top right, #eaf1ff 0, #f8fafc 34%, var(--bg) 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  line-height: 1.72;
 }
 a { color: inherit; text-decoration: none; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .layout {
   display: grid;
-  grid-template-columns: 292px 1fr;
+  grid-template-columns: 292px minmax(0, 1fr);
   gap: 22px;
-  max-width: 1440px;
+  max-width: 1460px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -43,614 +47,644 @@ a { color: inherit; text-decoration: none; }
   top: 20px;
   align-self: start;
   height: calc(100vh - 40px);
-  background: rgba(255,255,255,.82);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 18px;
   overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,.86);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
 }
-.logo {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  margin-bottom: 18px;
-}
+.logo { display: flex; gap: 13px; align-items: center; margin-bottom: 16px; }
 .badge {
-  width: 68px; height: 68px;
-  border-radius: 20px;
-  display: grid; place-items: center;
-  color: white;
+  width: 66px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 19px;
+  color: #fff;
   background: linear-gradient(135deg, #ff7a1a, #ffb35f);
-  font-weight: 900;
-  font-size: 28px;
   box-shadow: 0 14px 30px rgba(255,138,37,.28);
+  font-size: 27px;
+  font-weight: 900;
 }
-.logo h1 {
-  font-size: 18px;
-  line-height: 1.25;
-  margin: 0;
-}
-.logo p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.logo h1 { margin: 0; font-size: 18px; line-height: 1.25; }
+.logo p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .search {
   width: 100%;
+  margin: 8px 0 14px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 12px 14px;
   outline: none;
-  color: var(--ink);
   background: #fff;
-  margin: 8px 0 14px;
+  color: var(--ink);
 }
+.search:focus { border-color: #93b4ff; box-shadow: 0 0 0 3px var(--blue-soft); }
 .nav a {
   display: flex;
   align-items: center;
   gap: 9px;
+  margin: 2px 0;
   padding: 9px 10px;
   border-radius: 12px;
-  color: #39455a;
+  color: #3d4960;
   font-size: 14px;
-  margin: 2px 0;
 }
-.nav a:hover, .nav a.active { background: var(--blue-soft); color: var(--blue); }
-.dot { width: 7px; height: 7px; border-radius: 99px; background: currentColor; opacity: .75; }
+.nav a:hover, .nav a.active { color: var(--blue); background: var(--blue-soft); }
+.dot { width: 7px; height: 7px; border-radius: 99px; background: currentColor; opacity: .72; }
+.side-note {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--red-soft);
+  color: #8c2929;
+  font-size: 12px;
+}
 .main { min-width: 0; }
 .hero {
-  background: linear-gradient(135deg, #fff 0%, #fff 55%, #eef5ff 100%);
+  margin-bottom: 20px;
+  padding: 40px;
   border: 1px solid var(--line);
   border-radius: 30px;
+  background: linear-gradient(135deg, #fff 0%, #fff 56%, #edf4ff 100%);
   box-shadow: var(--shadow);
-  padding: 42px;
-  margin-bottom: 22px;
 }
-.hero .label {
+.hero-top { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.label, .status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: var(--orange-soft);
-  color: #ad4c11;
-  padding: 8px 14px;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
   border-radius: 999px;
+  font-size: 12px;
   font-weight: 800;
-  font-size: 14px;
+  white-space: nowrap;
 }
+.label { color: #a34b13; background: var(--orange-soft); border-color: #ffd6b7; }
+.status.done { color: #166534; background: var(--green-soft); border-color: #bce7c9; }
+.status.partial { color: #9a4b0d; background: var(--orange-soft); border-color: #ffd6b7; }
+.status.todo { color: #586477; background: var(--gray-soft); }
+.status.block { color: #a42626; background: var(--red-soft); border-color: #f3c7c7; }
 .hero h2 {
-  font-size: clamp(28px, 4vw, 46px);
-  line-height: 1.16;
-  margin: 18px 0 14px;
+  max-width: 1050px;
+  margin: 17px 0 12px;
+  font-size: clamp(30px, 4vw, 47px);
+  line-height: 1.14;
   letter-spacing: -.04em;
 }
-.hero p { color: var(--muted); font-size: 18px; margin: 0; max-width: 980px; }
+.hero p { max-width: 1050px; margin: 0; color: var(--muted); font-size: 17px; }
+.hero-callout {
+  margin-top: 20px;
+  padding: 15px 17px;
+  border-left: 4px solid var(--red);
+  border-radius: 0 14px 14px 0;
+  color: #842727;
+  background: var(--red-soft);
+}
 .quick {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin: 20px 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 13px;
+  margin: 18px 0;
 }
 .stat {
-  background: var(--panel);
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  padding: 16px;
+  background: var(--panel);
   box-shadow: 0 10px 30px rgba(17,31,60,.04);
 }
-.stat b { display:block; font-size: 28px; color: var(--blue); line-height: 1.2; }
-.stat span { color: var(--muted); font-size: 13px; }
-.toolbar {
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  margin: 12px 0 22px;
-}
+.stat b { display: block; color: var(--blue); font-size: 27px; line-height: 1.15; }
+.stat b.danger { color: var(--red); }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 9px; margin: 12px 0 20px; }
 .tab, .btn {
-  border: 1px solid var(--line);
-  background: #fff;
-  color: #334155;
   padding: 10px 14px;
+  border: 1px solid var(--line);
   border-radius: 999px;
+  background: #fff;
+  color: #354158;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 750;
 }
-.tab.active, .btn.primary {
-  background: var(--blue);
-  color: #fff;
-  border-color: var(--blue);
-}
+.tab.active, .btn.primary { color: #fff; background: var(--blue); border-color: var(--blue); }
 .section {
-  background: rgba(255,255,255,.9);
+  margin-bottom: 18px;
+  padding: 28px;
   border: 1px solid var(--line);
   border-radius: 24px;
-  padding: 28px;
-  margin-bottom: 18px;
+  background: rgba(255,255,255,.93);
   box-shadow: 0 14px 40px rgba(17,31,60,.05);
 }
-.section h3 {
-  margin: 0 0 10px;
-  font-size: 26px;
-  line-height: 1.25;
-}
-.section p { color: var(--muted); margin: 0 0 14px; }
-.grid2 {
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
-  gap: 16px;
-}
-.grid3 {
-  display:grid;
-  grid-template-columns: repeat(3, minmax(0,1fr));
-  gap: 16px;
-}
+.section h3 { margin: 0 0 9px; font-size: 25px; line-height: 1.25; }
+.section > p { margin: 0 0 14px; color: var(--muted); }
+.section-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.grid2, .grid3 { display: grid; gap: 15px; }
+.grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .card {
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: #fff;
-  padding: 18px;
 }
-.card h4 { margin: 0 0 8px; font-size: 18px; }
+.card h4 { margin: 0 0 8px; font-size: 17px; }
 .card p, .card li { color: var(--muted); }
-.chipline { display:flex; gap:10px; flex-wrap:wrap; }
-.chip {
-  border: 1px solid var(--line);
-  background: #fff;
+.card ul { margin: 8px 0 0; padding-left: 20px; }
+.metric { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.metric strong { font-size: 22px; color: var(--blue); }
+.progress {
+  height: 11px;
+  margin: 13px 0 5px;
+  overflow: hidden;
   border-radius: 999px;
-  padding: 8px 12px;
-  font-weight: 700;
-  color: #344054;
+  background: #e9edf4;
 }
-.chip.pass { background: var(--green-soft); color: #166534; border-color: #bde8ca; }
-.chip.warn { background: var(--orange-soft); color: #a64b0f; border-color: #ffd9bd; }
+.progress > span { display: block; width: 70%; height: 100%; background: linear-gradient(90deg, #2563eb, #5f8fff); }
 .steps {
   counter-reset: step;
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
 }
 .step {
   position: relative;
-  border:1px solid var(--line);
-  border-radius: 20px;
+  min-height: 126px;
+  padding: 21px 20px 18px 74px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
   background: #fff;
-  padding: 22px 22px 20px 78px;
-  min-height: 128px;
 }
 .step::before {
   counter-increment: step;
   content: counter(step);
-  position:absolute;
-  left:22px; top:22px;
-  width:40px; height:40px;
+  position: absolute;
+  top: 21px;
+  left: 20px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
+  color: #fff;
   background: var(--blue);
-  color:#fff;
-  display:grid; place-items:center;
-  font-weight:900;
+  font-weight: 900;
 }
-.step h4 { margin:0 0 8px; font-size:20px; }
-.step p { margin:0; color: var(--muted); }
-.codebox {
-  background: #0f172a;
-  color: #dbeafe;
-  border-radius: 18px;
-  padding: 18px;
-  position: relative;
-  border: 1px solid rgba(255,255,255,.08);
+.step h4 { margin: 0 0 6px; font-size: 18px; }
+.step p { margin: 0; color: var(--muted); }
+.placeholder {
+  margin-top: 12px;
+  padding: 13px 15px;
+  border: 1px dashed #efad78;
+  border-radius: 14px;
+  color: #8f4714;
+  background: #fff8f1;
 }
-.codebox pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-}
-.copy {
-  position:absolute;
-  right:12px;
-  top:12px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(255,255,255,.12);
-  color:#fff;
-  padding: 7px 10px;
-  cursor:pointer;
-}
+.placeholder code { font-weight: 800; }
+.chipline { display: flex; flex-wrap: wrap; gap: 9px; }
 table {
-  width:100%;
+  width: 100%;
   border-collapse: collapse;
   overflow: hidden;
-  border-radius: 18px;
-  background:#fff;
-  border:1px solid var(--line);
-}
-th, td {
-  text-align:left;
-  padding: 14px 16px;
-  border-bottom:1px solid var(--line);
-  vertical-align: top;
-}
-th { background:#eef3ff; color:#14213f; }
-tr:last-child td { border-bottom:0; }
-.score-input {
-  width: 76px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 17px;
+  background: #fff;
+}
+th, td { padding: 13px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { color: #152441; background: #edf3ff; }
+tr:last-child td { border-bottom: 0; }
+.score-input {
+  width: 70px;
   padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
   font-weight: 800;
 }
 .scorebar {
   position: sticky;
-  bottom: 16px;
-  background: rgba(17,31,60,.94);
-  color:#fff;
-  padding: 16px 18px;
-  border-radius: 18px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
+  bottom: 14px;
+  z-index: 4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
+  margin-top: 15px;
+  padding: 15px 17px;
+  border-radius: 17px;
+  color: #fff;
+  background: rgba(17,31,60,.95);
   box-shadow: var(--shadow);
-  margin-top: 16px;
 }
-.scorebar b { font-size: 26px; }
-.passText { color:#86efac; font-weight:900; }
-.failText { color:#fdba74; font-weight:900; }
-.checklist {
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
-  gap: 12px;
-}
-.check {
-  display:flex; gap: 10px; align-items:flex-start;
-  border:1px solid var(--line);
-  background:#fff;
-  border-radius: 16px;
+.scorebar b { font-size: 25px; }
+.passText { color: #86efac; font-weight: 900; }
+.failText { color: #fdba74; font-weight: 900; }
+.hard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.hard-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
   padding: 13px;
-  cursor:pointer;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fff;
 }
-.check input { margin-top: 6px; transform: scale(1.15); }
-.check.done { background: var(--green-soft); border-color:#bde8ca; }
+.hard-item .mark { font-weight: 900; }
+.hard-item.done { background: var(--green-soft); border-color: #bce7c9; }
+.hard-item.partial { background: var(--orange-soft); border-color: #ffd6b7; }
+.hard-item.block { background: var(--red-soft); border-color: #f3c7c7; }
 .accordion button {
-  width:100%;
-  text-align:left;
-  border:1px solid var(--line);
-  border-radius: 16px;
-  padding: 16px 18px;
-  background:#fff;
-  color:var(--ink);
-  cursor:pointer;
-  font-size: 17px;
-  font-weight: 900;
+  width: 100%;
   margin-top: 10px;
+  padding: 15px 17px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 850;
 }
 .panel {
-  display:none;
-  border:1px solid var(--line);
-  border-top:0;
-  border-radius:0 0 16px 16px;
-  padding: 16px 18px;
+  display: none;
+  padding: 15px 17px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 15px 15px;
   color: var(--muted);
-  background:#fff;
+  background: #fff;
 }
-.panel.open { display:block; }
-.hidden { display:none !important; }
-mark { background: #fff2a8; border-radius: 4px; padding: 0 2px; }
-.footer {
-  text-align:center;
-  color: var(--muted);
-  padding: 30px 0 10px;
+.panel.open { display: block; }
+.codebox {
+  position: relative;
+  padding: 18px;
+  border-radius: 17px;
+  color: #dbeafe;
+  background: #0f172a;
 }
-@media (max-width: 980px) {
-  .layout { grid-template-columns: 1fr; padding: 14px; }
-  .sidebar { position:relative; height:auto; top:auto; }
-  .quick { grid-template-columns: repeat(2, 1fr); }
-  .steps, .grid2, .grid3, .checklist { grid-template-columns: 1fr; }
-  .hero { padding: 26px; }
-  table { font-size: 14px; }
-  th, td { padding: 10px; }
+.codebox pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.copy {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: rgba(255,255,255,.13);
+  cursor: pointer;
+}
+.hidden { display: none !important; }
+.footer { padding: 28px 0 10px; color: var(--muted); text-align: center; }
+@media (max-width: 1080px) {
+  .quick { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; padding: 13px; }
+  .sidebar { position: relative; top: auto; height: auto; }
+  .quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid2, .grid3, .steps, .hard-grid { grid-template-columns: 1fr; }
+  .hero { padding: 25px; }
+  .section { max-width: 100%; padding: 21px; overflow: hidden; }
+  .step, .card { width: 100%; min-width: 0; }
+  table { display: block; max-width: 100%; overflow-x: auto; font-size: 13px; }
+  code { overflow-wrap: anywhere; word-break: break-word; }
+  th, td { padding: 9px; }
 }
 @media print {
-  .sidebar, .toolbar, .scorebar, .copy { display:none; }
-  .layout { display:block; }
-  .section, .hero { box-shadow:none; break-inside: avoid; }
+  .sidebar, .toolbar, .scorebar, .copy, .btn { display: none; }
+  .layout { display: block; padding: 0; }
+  .hero, .section { box-shadow: none; break-inside: avoid; }
+  .hidden { display: block !important; }
 }
 </style>
 </head>
-<body>
+<body data-hard-pass="false">
 <div class="layout">
   <aside class="sidebar">
     <div class="logo">
-      <div class="badge">03</div>
+      <div class="badge">L3</div>
       <div>
-        <h1>三级考题说明</h1>
-        <p>多智能体工程交付系统</p>
+        <h1>OneCompany 提交看板</h1>
+        <p>Level 03 · 当前进度版</p>
       </div>
     </div>
-    <input id="search" class="search" placeholder="搜索关键点：如 Agent、测试、部署..." />
+    <input id="search" class="search" placeholder="搜索 Agent、MCP、权限、delivery_app..." />
     <nav class="nav" id="nav">
-      <a href="#overview"><span class="dot"></span>题目概览</a><a href="#input"><span class="dot"></span>统一测试输入</a><a href="#flow"><span class="dot"></span>运行流程</a><a href="#features"><span class="dot"></span>系统功能</a><a href="#agent"><span class="dot"></span>Agent 架构</a><a href="#delivery"><span class="dot"></span>交付标准</a><a href="#path"><span class="dot"></span>最低验收路径</a><a href="#deliverables"><span class="dot"></span>三级交付物</a><a href="#scoring"><span class="dot"></span>评分标准</a><a href="#review"><span class="dot"></span>评分流程</a><a href="#core"><span class="dot"></span>核心判断</a>
+      <a href="#summary"><span class="dot"></span>当前结论</a>
+      <a href="#flow"><span class="dot"></span>交付闭环</a>
+      <a href="#agents"><span class="dot"></span>Agent 架构</a>
+      <a href="#tools"><span class="dot"></span>工具与 MCP</a>
+      <a href="#testing"><span class="dot"></span>测试证据</a>
+      <a href="#sales"><span class="dot"></span>销售线索样例</a>
+      <a href="#score"><span class="dot"></span>当前估分</a>
+      <a href="#hard"><span class="dot"></span>硬性条件</a>
+      <a href="#deliverables"><span class="dot"></span>交付矩阵</a>
+      <a href="#priority"><span class="dot"></span>修复优先级</a>
+      <a href="#run"><span class="dot"></span>运行方式</a>
     </nav>
+    <div class="side-note">正式判定当前为“不通过”：总分低于 75，且缺少 <code>delivery_app</code>、销售/主管权限和业务数据持久化。</div>
   </aside>
 
   <main class="main">
     <section class="hero" id="top">
-      <span class="label">独立项目题目 · Level 03</span>
-      <h2>复杂需求到可验证工程项目的多智能体交付系统</h2>
-      <p>学员需要开发一个多智能体工程交付系统。用户输入复杂业务需求后，系统自动完成计划、架构、代码生成、测试执行、自我评审、缺陷修复和部署说明，最终输出可运行、可测试、可部署的工程项目。</p>
+      <div class="hero-top">
+        <span class="label">Level 03 · 2026-06-14</span>
+        <span class="status partial">当前进度版</span>
+        <span class="status block">硬性条件未满足</span>
+      </div>
+      <h2>OneCompany 多智能体工程交付系统</h2>
+      <p>本页不再只是考试说明，而是按当前仓库、数据库记录和实际测试结果生成的提交进度看板。已完成项给出证据，未完成项保留明确占位，不把计划中的能力写成已交付事实。</p>
+      <div class="hero-callout"><strong>当前严格估分：70 / 100。</strong> 平台架构和测试能力较完整，主要阻塞是销售线索统一样例、<code>delivery_app</code> 命名、持久化/RBAC，以及最终集成失败后的自动修复循环。</div>
     </section>
 
     <div class="quick">
-      <div class="stat"><b>100</b><span>满分</span></div>
-      <div class="stat"><b>75</b><span>建议通过线</span></div>
-      <div class="stat"><b>4+</b><span>角色或子 Agent</span></div>
-      <div class="stat"><b>8+</b><span>工具能力</span></div>
+      <div class="stat"><b>70</b><span>当前严格估分</span></div>
+      <div class="stat"><b>12</b><span>注册 Agent</span></div>
+      <div class="stat"><b>9</b><span>标准项目工具类型</span></div>
+      <div class="stat"><b>443</b><span>平台测试通过</span></div>
+      <div class="stat"><b class="danger">4</b><span>P0 硬阻塞方向</span></div>
     </div>
 
     <div class="toolbar">
       <button class="tab active" data-tab="all">全部</button>
-      <button class="tab" data-tab="must">硬性条件</button>
-      <button class="tab" data-tab="score">评分表</button>
-      <button class="tab" data-tab="flow">流程</button>
+      <button class="tab" data-tab="status">当前状态</button>
+      <button class="tab" data-tab="evidence">证据</button>
+      <button class="tab" data-tab="gaps">缺口占位</button>
+      <button class="tab" data-tab="score">评分</button>
       <button class="tab" data-tab="deliver">交付物</button>
+      <button class="btn" id="resetScore">重置估分</button>
       <button class="btn" onclick="window.print()">打印 / 导出 PDF</button>
     </div>
 
-    <section class="section search-item" id="overview" data-group="all">
-      <h3>1. 题目概览</h3>
-      <p><b>核心重点：</b>不是直接手写一个固定的 AI 销售线索管理助手，而是实现一个可以根据输入需求自动生成或维护 <code>delivery_app</code> 的多智能体交付系统。</p>
+    <section class="section search-item" id="summary" data-group="status score">
+      <div class="section-head">
+        <div><h3>1. 当前结论</h3><p>能力框架基本具备，但当前提交仍不能通过 Level 03 硬性预检。</p></div>
+        <span class="status block">正式不通过</span>
+      </div>
       <div class="grid3">
-        <div class="card"><h4>计划与架构</h4><p>需求梳理、范围边界、风险分析、任务拆解、架构设计。</p></div>
-        <div class="card"><h4>生成与执行</h4><p>代码生成、文件管理、依赖安装、测试执行、失败修复。</p></div>
-        <div class="card"><h4>验证与交付</h4><p>自我评审、部署说明、验收用例、最终交付报告。</p></div>
+        <div class="card"><div class="metric"><h4>平台能力</h4><strong>较完整</strong></div><p>多 Agent、工具治理、状态机、Gate、测试、日志和导出均有代码与测试。</p></div>
+        <div class="card"><div class="metric"><h4>业务交付</h4><strong style="color:var(--orange)">部分</strong></div><p>已有多个生成应用，但尚未完成统一销售线索业务路径。</p></div>
+        <div class="card"><div class="metric"><h4>硬性条件</h4><strong style="color:var(--red)">阻塞</strong></div><p>缺少规范的 delivery_app、真实角色权限和业务数据持久化。</p></div>
       </div>
+      <div class="progress"><span></span></div>
+      <p>当前估分进度 70%。分数不是唯一条件，即使手动调到 75 分，硬性条件未补齐时仍不能判定通过。</p>
     </section>
 
-    <section class="section search-item" id="input" data-group="all">
-      <h3>2. 统一测试输入示例</h3>
-      <p>评分人员会把下面这段需求输入到你的多智能体交付系统中，检查系统是否能自动生成或维护 <code>delivery_app</code>。</p>
-      <div class="codebox">
-        <button class="copy" data-copy="sampleInput">复制</button>
-        <pre id="sampleInput">设计并实现一个 AI 销售线索管理助手。销售人员可以导入客户线索，系统自动判断客户意向等级，生成跟进建议，记录跟进历史。普通销售只能查看自己的客户，销售主管可以查看团队客户数据。系统需要支持客户列表、线索评分、跟进记录、权限控制和数据统计。</pre>
-      </div>
-    </section>
-
-    <section class="section search-item" id="flow" data-group="flow">
-      <h3>3. 用户运行和使用交付工程的流程</h3>
+    <section class="section search-item" id="flow" data-group="status gaps">
+      <h3>2. 交付闭环</h3>
       <div class="steps">
-        <div class="step"><h4>输入业务目标</h4><p>用户输入业务需求、目标用户、期望技术栈或默认约束。</p></div>
-        <div class="step"><h4>确认计划</h4><p>智能体生成交付计划、范围边界、风险和任务拆解。</p></div>
-        <div class="step"><h4>自动实现</h4><p>系统生成 <code>delivery_app</code> 工程代码、数据模型、页面、接口或本地服务。</p></div>
-        <div class="step"><h4>测试自检</h4><p>智能体运行测试或验证脚本，根据失败结果进行修复。</p></div>
-        <div class="step"><h4>运行验收</h4><p>用户启动 <code>delivery_app</code>，以不同角色登录或切换身份，完成核心业务流程。</p></div>
-        <div class="step"><h4>交付报告</h4><p>系统输出已实现内容、验证结果、已知限制和后续迭代建议。</p></div>
+        <div class="step"><h4>需求分析 <span class="status done">已完成</span></h4><p>规范化、完整度评分、澄清、PRD、验收标准与需求确认 Gate。</p></div>
+        <div class="step"><h4>架构与计划 <span class="status done">已完成</span></h4><p>技术方案、功能切片、测试命令、风险和技术方案确认 Gate。</p></div>
+        <div class="step"><h4>切片开发 <span class="status done">已完成</span></h4><p>Coding Harness 编辑真实文件；权威测试、Review、Git 提交和失败重试已实现。</p></div>
+        <div class="step"><h4>最终集成 <span class="status partial">部分完成</span></h4><p>可运行 Typecheck/Build/Vitest/Playwright，但最终失败后不能自动重开修复循环。</p></div>
+        <div class="step"><h4>销售线索验收 <span class="status todo">待完成</span></h4><p>统一输入对应的客户、评分、建议、跟进、统计和权限路径尚未生成验收。</p></div>
+        <div class="step"><h4>最终提交包 <span class="status partial">部分完成</span></h4><p>已有导出器和部署材料；目录命名、缓存清理与独立验证仍需收尾。</p></div>
       </div>
+      <div class="placeholder"><code>[PLACEHOLDER: L3-FINAL-REPAIR]</code> 最终测试失败时创建修复切片或重开受影响切片，完成修复、复测和重新交付。</div>
     </section>
 
-    <section class="section search-item" id="features" data-group="all">
-      <h3>4. 学员需要实现的系统功能</h3>
-      <div class="grid2">
-        <div class="card"><h4>任务入口</h4><p>用户输入复杂业务需求，系统创建一次工程交付任务。</p></div>
-        <div class="card"><h4>计划面板</h4><p>展示需求梳理、架构方案、任务拆解、优先级和风险。</p></div>
-        <div class="card"><h4>代码生成与文件管理</h4><p>生成可运行工程项目所需文件，并记录修改历史。</p></div>
-        <div class="card"><h4>测试与验证</h4><p>生成并执行测试脚本或验证步骤，展示测试结果。</p></div>
-        <div class="card"><h4>自我评审</h4><p>对功能完整性、权限边界、数据状态、运行路径进行检查。</p></div>
-        <div class="card"><h4>交付中心</h4><p>提供运行说明、账号说明、验收用例和最终报告。</p></div>
-      </div>
-    </section>
-
-    <section class="section search-item" id="agent" data-group="must">
-      <h3>5. Agent 架构要求</h3>
-      <div class="chipline">
-        <span class="chip pass">至少 4 个角色或子 Agent</span>
-        <span class="chip pass">至少 8 个工具能力</span>
-        <span class="chip pass">至少 2 个 MCP 或等价服务</span>
-        <span class="chip warn">必须有测试执行工具</span>
-        <span class="chip warn">必须有评审或自检阶段</span>
+    <section class="section search-item" id="agents" data-group="evidence status">
+      <div class="section-head"><div><h3>3. Agent 架构</h3><p>当前共 12 个注册 Agent，职责、Schema、模型层级、权限和事件可追踪。</p></div><span class="status done">18 / 18</span></div>
+      <div class="grid3">
+        <div class="card"><h4>需求组 · 5</h4><ul><li>Intake</li><li>Requirement Analyst</li><li>Completeness Scorer</li><li>Question Planner</li><li>PRD & Acceptance</li></ul></div>
+        <div class="card"><h4>开发组 · 6</h4><ul><li>Architect</li><li>Planner</li><li>Coding</li><li>Review</li><li>QA</li><li>DevOps & Delivery</li></ul></div>
+        <div class="card"><h4>调度组 · 1</h4><ul><li>Taizi</li><li>动作意图路由</li><li>只读项目调研</li><li>状态感知回复</li></ul></div>
       </div>
       <div class="accordion">
-        <button>展开详细架构要求</button>
-        <div class="panel">
-          <ol>
-            <li>至少包含 4 个角色或子 Agent，例如 Planner、Architect、Builder、Tester、Reviewer、Reporter。</li>
-            <li>至少封装 8 个工具能力，例如文件读写、代码生成、依赖安装、测试执行、数据初始化、权限检查、报告生成、部署配置生成。</li>
-            <li>至少接入 2 个 MCP 或等价工具服务，例如文件系统、数据库、代码执行、测试运行、网页检索或容器构建服务。</li>
-            <li>交付工程的生成或维护过程必须由多智能体系统完成，不能预先手写固定业务应用后只做包装。</li>
-            <li>必须生成 <code>delivery_app</code> 目录，并提供 Dockerfile、<code>docker-compose.yml</code> 或等价一键启动脚本。</li>
-          </ol>
-          <p>角色可以是真正的多智能体，也可以是一个智能体内部的多阶段状态机，但职责边界、输入输出和调用日志必须清楚。</p>
-        </div>
+        <button type="button">展开 Agent 证据位置</button>
+        <div class="panel"><code>packages/agent-core/src/agents/requirement/definitions.ts</code><br><code>packages/agent-core/src/agents/development/definitions.ts</code><br><code>packages/agent-core/src/agents/taizi/definitions.ts</code></div>
       </div>
     </section>
 
-    <section class="section search-item" id="delivery" data-group="must">
-      <h3>6. 三级交付标准</h3>
-      <p>三级的关键不是页面更多，而是工程闭环更完整。</p>
-      <div class="grid2">
-        <div class="card">
-          <h4>工程完整性最低要求</h4>
-          <ul>
-            <li>有可运行应用，不只是静态页面。</li>
-            <li>有数据存储：LocalStorage、JSON、SQLite 或数据库。</li>
-            <li>有角色差异：至少普通销售和销售主管。</li>
-            <li>有核心业务对象：客户线索、跟进记录、评分结果、建议内容。</li>
-            <li>有测试或验证脚本。</li>
-            <li>有 Dockerfile、Compose 或等价一键启动脚本。</li>
-          </ul>
-        </div>
-        <div class="card">
-          <h4>验证完整性最低要求</h4>
-          <ul>
-            <li>新用户能按说明启动系统并进入测试账号。</li>
-            <li>普通销售只能看到自己的线索，主管能看到团队数据。</li>
-            <li>新增线索后，系统能产生评分和跟进建议。</li>
-            <li>新增跟进记录后，列表、详情或统计中能看到变化。</li>
-            <li>异常状态有提示，例如空列表、缺少字段、无权限访问。</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <section class="section search-item" id="path" data-group="flow">
-      <h3>7. AI 销售线索管理助手最低验收路径</h3>
-      <div class="steps">
-        <div class="step"><h4>销售进入系统</h4><p>以销售身份进入系统，导入或新增客户线索。</p></div>
-        <div class="step"><h4>系统生成评分</h4><p>根据行业、规模、预算、需求描述等字段生成意向等级。</p></div>
-        <div class="step"><h4>给出跟进建议</h4><p>系统给出下一步建议，并说明判断依据。</p></div>
-        <div class="step"><h4>添加跟进记录</h4><p>销售添加一次跟进记录，状态在客户详情中更新。</p></div>
-        <div class="step"><h4>主管查看团队数据</h4><p>切换为销售主管，查看团队客户列表和统计摘要。</p></div>
-        <div class="step"><h4>验证权限边界</h4><p>尝试访问非授权数据，系统应限制或给出清晰提示。</p></div>
-      </div>
-    </section>
-
-    <section class="section search-item" id="deliverables" data-group="deliver">
-      <h3>8. 三级交付物</h3>
+    <section class="section search-item" id="tools" data-group="evidence gaps">
+      <div class="section-head"><div><h3>4. 工具与 MCP</h3><p>标准项目数据库中已有 9 类工具调用；CodeGraph 和 Context7 已配置启用。</p></div><span class="status partial">14 / 17</span></div>
       <table>
-        <thead><tr><th>交付物</th><th>内容</th></tr></thead>
+        <thead><tr><th>工具</th><th>调用次数</th><th>实际用途</th></tr></thead>
         <tbody>
-          <tr><td><b>多智能体系统源码</b></td><td>角色编排、模型调用、工具封装、MCP 或等价服务接入、测试执行和日志记录。</td></tr>
-          <tr><td><b>delivery_app</b></td><td>可运行业务应用、数据存储、角色差异、核心业务流程和测试入口。</td></tr>
-          <tr><td><b>任务拆解与架构文档</b></td><td>Agent 角色、工具清单、模块划分、数据模型、接口设计和任务依赖。</td></tr>
-          <tr><td><b>测试与验证材料</b></td><td>自动化测试、验证脚本、测试结果和失败修复记录。</td></tr>
-          <tr><td><b>部署材料</b></td><td>Dockerfile、docker-compose.yml 或等价一键启动脚本，以及初始化数据说明。</td></tr>
-          <tr><td><b>最终交付报告</b></td><td>已实现内容、运行方式、验证结果、已知限制、自检结论和后续建议。</td></tr>
+          <tr><td><code>workspace-read</code></td><td>59</td><td>读取生成项目源码和目录</td></tr>
+          <tr><td><code>shell</code></td><td>13</td><td>执行测试、类型检查和开发命令</td></tr>
+          <tr><td><code>list-recent-events</code></td><td>13</td><td>调研工作流事件和失败原因</td></tr>
+          <tr><td><code>project-overview</code></td><td>5</td><td>获取项目状态与事件概览</td></tr>
+          <tr><td><code>list-project-gates</code></td><td>5</td><td>读取人工 Gate 与历史决策</td></tr>
+          <tr><td><code>read-dev-session</code></td><td>4</td><td>读取切片、测试和风险</td></tr>
+          <tr><td><code>read-artifact</code></td><td>3</td><td>读取 PRD 和验收标准</td></tr>
+          <tr><td><code>read-requirement-session</code></td><td>2</td><td>读取需求完整度和澄清轮次</td></tr>
+          <tr><td><code>requirement-context</code></td><td>1</td><td>向需求 Agent 提供最新状态</td></tr>
         </tbody>
       </table>
+      <div class="placeholder"><code>[PLACEHOLDER: L3-MCP-EVIDENCE]</code> 在最终销售线索样例中实际调用至少两个 MCP/等价服务，并保存输入、输出和结果进入后续流程的证据。目前只有配置，缺少标准样例调用记录。</div>
     </section>
 
-    <section class="section search-item" id="scoring" data-group="score">
-      <h3>9. 评分标准与快速估分</h3>
-      <p>每项输入预计得分，页面会自动计算总分并判断是否达到建议通过线。</p>
+    <section class="section search-item" id="testing" data-group="evidence status">
+      <div class="section-head"><div><h3>5. 测试与自我评审</h3><p>测试机制本身完整；主要问题是当前 oneCompany 生成项目最终集成仍失败。</p></div><span class="status done">12 / 14</span></div>
+      <div class="grid3">
+        <div class="card"><h4>平台全量测试</h4><p><strong>443 passed</strong><br>6 skipped，12 个 Turborepo 任务成功。</p></div>
+        <div class="card"><h4>AI 面试助手样例</h4><p><strong>47 passed</strong><br>Typecheck、Vitest 和 Build 独立验证通过。</p></div>
+        <div class="card"><h4>当前失败样例</h4><p><strong style="color:var(--red)">4 个 TS6059</strong><br><code>rootDir: src</code> 与 <code>include: tests</code> 冲突。</p></div>
+      </div>
+      <div class="accordion">
+        <button type="button">展开当前失败闭环说明</button>
+        <div class="panel">项目的 4 个开发切片都已通过，但最终 TypeScript 检查失败。用户输入“修复错误，然后重跑集成测试”时，Taizi 路由到已结束的 <code>development.start</code>，返回 <code>Cannot resume development from phase: completed</code>。因此只能证明失败被记录，尚不能证明系统能自主完成最终修复。</div>
+      </div>
+    </section>
+
+    <section class="section search-item" id="sales" data-group="gaps deliver">
+      <div class="section-head"><div><h3>6. Level 03 销售线索统一样例</h3><p>这是正式通过前必须由 OneCompany 自身工作流生成和验证的目标应用。</p></div><span class="status block">未完成</span></div>
+      <div class="steps">
+        <div class="step"><h4>销售身份</h4><p>登录或切换销售账号，只能查看自己的客户线索。</p></div>
+        <div class="step"><h4>新增线索</h4><p>录入行业、规模、预算、需求描述和归属销售。</p></div>
+        <div class="step"><h4>评分与建议</h4><p>生成意向等级、判断依据和下一步跟进建议。</p></div>
+        <div class="step"><h4>跟进记录</h4><p>添加记录后同步更新详情、列表状态和统计。</p></div>
+        <div class="step"><h4>主管视角</h4><p>查看团队客户列表、汇总统计和销售分布。</p></div>
+        <div class="step"><h4>权限边界</h4><p>普通销售访问他人客户时被拒绝并显示清晰提示。</p></div>
+      </div>
+      <div class="placeholder"><code>[PLACEHOLDER: L3-SALES-APP]</code> 生成并交付以上业务路径，包含持久化、初始化数据、测试账号、权限测试、Docker 和独立验证。</div>
+      <div class="placeholder"><code>[PLACEHOLDER: L3-DATA/RBAC]</code> 当前面试样例业务数据使用内存 Map，HR/Admin 只是模型字段，不能替代销售/主管真实鉴权和数据隔离。</div>
+    </section>
+
+    <section class="section search-item" id="score" data-group="score">
+      <h3>7. 当前严格估分</h3>
+      <p>默认值来自 2026-06-14 的仓库、数据库和命令验证。可以临时调整，刷新后保留；点击“重置估分”恢复当前基线。</p>
       <table id="scoreTable">
-        <thead><tr><th>评分项</th><th>满分</th><th>预计得分</th><th>优秀表现</th><th>主要扣分点</th></tr></thead>
+        <thead><tr><th>评分项</th><th>满分</th><th>当前分</th><th>主要依据</th></tr></thead>
         <tbody>
-          <tr><td><b>交付工程功能完成度</b></td><td>18</td><td><input class="score-input" type="number" min="0" max="18" value="0" data-max="18"></td><td>客户线索、评分建议、跟进记录、团队视图和统计摘要可用</td><td>只有页面展示，没有真实数据状态；核心流程不能走通</td></tr><tr><td><b>多 Agent 架构</b></td><td>18</td><td><input class="score-input" type="number" min="0" max="18" value="0" data-max="18"></td><td>至少 4 个角色或子 Agent 职责清楚，输入输出明确，过程可追踪</td><td>角色只是命名，没有独立输入输出；数量不足；缺少日志和状态管理</td></tr><tr><td><b>Tools 与 MCP 集成</b></td><td>17</td><td><input class="score-input" type="number" min="0" max="17" value="0" data-max="17"></td><td>至少 8 个工具能力和 2 个 MCP 或等价工具服务被有效调用，结果进入后续执行</td><td>工具数量不足；工具调用只是展示；MCP 或等价工具服务缺失</td></tr><tr><td><b>代码生成与执行闭环</b></td><td>15</td><td><input class="score-input" type="number" min="0" max="15" value="0" data-max="15"></td><td>智能体能生成 delivery_app 项目文件、运行验证，并根据结果修复明显问题</td><td>代码需要大量手工补齐；智能体无法处理失败结果</td></tr><tr><td><b>测试与自我评审</b></td><td>14</td><td><input class="score-input" type="number" min="0" max="14" value="0" data-max="14"></td><td>包含主流程、权限、异常和数据状态验证，能记录失败、修复和复测结果</td><td>没有测试或只有截图；自评审流于形式</td></tr><tr><td><b>权限、数据与边界处理</b></td><td>8</td><td><input class="score-input" type="number" min="0" max="8" value="0" data-max="8"></td><td>普通销售和主管角色差异明确，关键数据有持久化和异常提示</td><td>权限只是文案说明；刷新后数据丢失且无解释；无异常状态</td></tr><tr><td><b>部署与交付材料</b></td><td>6</td><td><input class="score-input" type="number" min="0" max="6" value="0" data-max="6"></td><td>Dockerfile、Compose 或一键启动脚本可用，运行说明、架构文档、验收清单清楚完整</td><td>缺少启动命令、账号说明、验证依据或部署材料</td></tr><tr><td><b>运行完整性与扩展性</b></td><td>4</td><td><input class="score-input" type="number" min="0" max="4" value="0" data-max="4"></td><td>评分人员能按说明启动、登录或切换角色，完成核心验收路径，并看到清晰扩展点</td><td>入口混乱、路径断裂、关键操作无反馈；完全写死在示例需求中</td></tr>
+          <tr><td><b>交付工程功能完成度</b></td><td>18</td><td><input class="score-input" type="number" min="0" max="18" value="8" data-default="8" data-max="18"></td><td>有多个生成应用；无销售线索统一样例</td></tr>
+          <tr><td><b>多 Agent 架构</b></td><td>18</td><td><input class="score-input" type="number" min="0" max="18" value="18" data-default="18" data-max="18"></td><td>12 个 Agent，职责和状态清楚</td></tr>
+          <tr><td><b>Tools 与 MCP 集成</b></td><td>17</td><td><input class="score-input" type="number" min="0" max="17" value="14" data-default="14" data-max="17"></td><td>9 类工具有调用；MCP 调用证据不足</td></tr>
+          <tr><td><b>代码生成与执行闭环</b></td><td>15</td><td><input class="score-input" type="number" min="0" max="15" value="9" data-default="9" data-max="15"></td><td>切片闭环有效；最终修复循环断裂</td></tr>
+          <tr><td><b>测试与自我评审</b></td><td>14</td><td><input class="score-input" type="number" min="0" max="14" value="12" data-default="12" data-max="14"></td><td>平台和样例测试充分</td></tr>
+          <tr><td><b>权限、数据与边界处理</b></td><td>8</td><td><input class="score-input" type="number" min="0" max="8" value="2" data-default="2" data-max="8"></td><td>业务样例缺持久化和真实授权</td></tr>
+          <tr><td><b>部署与交付材料</b></td><td>6</td><td><input class="score-input" type="number" min="0" max="6" value="4" data-default="4" data-max="6"></td><td>材料机制已有；命名和清理待完成</td></tr>
+          <tr><td><b>运行完整性与扩展性</b></td><td>4</td><td><input class="score-input" type="number" min="0" max="4" value="3" data-default="3" data-max="4"></td><td>可生成多类应用，标准路径仍有断点</td></tr>
         </tbody>
       </table>
       <div class="scorebar">
-        <div>当前估分：<b id="totalScore">0</b> / 100</div>
-        <div id="passStatus" class="failText">未达到建议通过线 75 分</div>
+        <div>当前估分：<b id="totalScore">70</b> / 100</div>
+        <div id="passStatus" class="failText">未达到 75 分，且硬性条件未满足</div>
       </div>
     </section>
 
-    <section class="section search-item" id="must" data-group="must">
-      <h3>10. 三级硬性通过条件清单</h3>
-      <p>勾选状态会保存在浏览器本地，方便你反复对照。</p>
-      <div class="checklist" id="checklist">
-        <label class="check"><input type="checkbox" data-key="check0"><span>总分不低于 75 分</span></label><label class="check"><input type="checkbox" data-key="check1"><span>必须有 delivery_app</span></label><label class="check"><input type="checkbox" data-key="check2"><span>至少 4 个角色或子 Agent</span></label><label class="check"><input type="checkbox" data-key="check3"><span>至少 8 个工具能力</span></label><label class="check"><input type="checkbox" data-key="check4"><span>至少 2 个 MCP 或等价工具服务</span></label><label class="check"><input type="checkbox" data-key="check5"><span>必须包含数据存储</span></label><label class="check"><input type="checkbox" data-key="check6"><span>必须体现角色或权限差异</span></label><label class="check"><input type="checkbox" data-key="check7"><span>必须有测试或验证脚本</span></label><label class="check"><input type="checkbox" data-key="check8"><span>必须有自检或评审阶段</span></label><label class="check"><input type="checkbox" data-key="check9"><span>必须有 Dockerfile、Compose 或一键启动脚本</span></label><label class="check"><input type="checkbox" data-key="check10"><span>必须提交完整交付报告</span></label>
+    <section class="section search-item" id="hard" data-group="score gaps">
+      <h3>8. 硬性通过条件</h3>
+      <div class="hard-grid">
+        <div class="hard-item block"><span class="mark">×</span><span>总分不低于 75：当前 70</span></div>
+        <div class="hard-item block"><span class="mark">×</span><span>必须有 <code>delivery_app</code>：当前为 <code>generated_app</code></span></div>
+        <div class="hard-item done"><span class="mark">✓</span><span>至少 4 个 Agent：当前 12 个</span></div>
+        <div class="hard-item done"><span class="mark">✓</span><span>至少 8 个工具能力：已有 9 类调用证据</span></div>
+        <div class="hard-item partial"><span class="mark">△</span><span>至少 2 个 MCP：已配置，标准样例调用证据待补</span></div>
+        <div class="hard-item block"><span class="mark">×</span><span>业务数据存储：销售线索应用尚未完成</span></div>
+        <div class="hard-item block"><span class="mark">×</span><span>角色/权限差异：销售/主管真实授权尚未完成</span></div>
+        <div class="hard-item done"><span class="mark">✓</span><span>测试或验证脚本：已完成</span></div>
+        <div class="hard-item done"><span class="mark">✓</span><span>自检或评审阶段：Review、QA、风险报告已实现</span></div>
+        <div class="hard-item partial"><span class="mark">△</span><span>Docker/Compose：生成机制已有，最终样例待验证</span></div>
+        <div class="hard-item partial"><span class="mark">△</span><span>完整交付报告：当前进度版已写，最终证据待补</span></div>
       </div>
     </section>
 
-    <section class="section search-item" id="review" data-group="flow">
-      <h3>11. 提交后的评分流程</h3>
+    <section class="section search-item" id="deliverables" data-group="deliver gaps">
+      <h3>9. Level 03 交付矩阵</h3>
+      <table>
+        <thead><tr><th>交付物</th><th>状态</th><th>当前证据或占位</th></tr></thead>
+        <tbody>
+          <tr><td>多智能体系统源码</td><td><span class="status done">已完成</span></td><td><code>apps/</code>、<code>packages/</code>、Agent/Workflow/Workspace/Integration</td></tr>
+          <tr><td><code>delivery_app</code></td><td><span class="status block">未完成</span></td><td><code>[PLACEHOLDER: L3-EXPORT]</code> 导出器目前生成 <code>generated_app</code></td></tr>
+          <tr><td>销售线索核心业务</td><td><span class="status block">未完成</span></td><td><code>[PLACEHOLDER: L3-SALES-APP]</code></td></tr>
+          <tr><td>持久化与角色权限</td><td><span class="status block">未完成</span></td><td><code>[PLACEHOLDER: L3-DATA/RBAC]</code></td></tr>
+          <tr><td>任务拆解与架构文档</td><td><span class="status done">已完成机制</span></td><td>PRD、AC、Technical Plan、Slice Queue</td></tr>
+          <tr><td>测试与验证材料</td><td><span class="status partial">部分完成</span></td><td>平台与面试样例证据已有；销售样例待补</td></tr>
+          <tr><td>部署材料</td><td><span class="status partial">部分完成</span></td><td>Dockerfile、Compose、RUN 生成机制已有</td></tr>
+          <tr><td>完整交付报告</td><td><span class="status partial">进行中</span></td><td><code>docs/week3-level3-submission.md</code></td></tr>
+          <tr><td>干净提交压缩包</td><td><span class="status todo">待完成</span></td><td><code>[PLACEHOLDER: L3-PACKAGE-CLEAN]</code> 清理缓存、构建产物和临时结果</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section search-item" id="priority" data-group="gaps status">
+      <h3>10. 提交前修复优先级</h3>
       <div class="grid3">
-        <div class="card"><h4>第一步：材料预检</h4><p>检查压缩包命名、目录结构、必交文件、构建产物、敏感信息、README、环境变量示例、日志和输出样例。</p></div>
-        <div class="card"><h4>第二步：AI 评测</h4><p>按 README 执行安装、启动和测试命令，使用统一示例需求检查生成结果和运行日志。</p></div>
-        <div class="card"><h4>第三步：人工复核</h4><p>复核关键扣分项和争议项，检查 Agent 阶段、结构化输出、测试证据和交付报告。</p></div>
+        <div class="card" style="border-color:#f3c7c7;background:var(--red-soft)"><h4>P0 · 决定通过</h4><ol><li>改为导出 <code>delivery_app</code></li><li>生成销售线索标准应用</li><li>实现持久化和销售/主管 RBAC</li><li>修复最终失败恢复循环</li><li>跑通全部验收路径</li></ol></div>
+        <div class="card" style="border-color:#ffd6b7;background:var(--orange-soft)"><h4>P1 · 冲击 85+</h4><ol><li>补两个 MCP 实际调用</li><li>增加权限与边界 E2E</li><li>清理提交包</li><li>统一文档与实际技术栈</li><li>全新目录和 Docker 复验</li></ol></div>
+        <div class="card"><h4>P2 · 展示质量</h4><ol><li>固定 Level 03 演示入口</li><li>突出用户消息和 Agent 结论</li><li>默认折叠工具噪声</li><li>生成截图索引和演示脚本</li></ol></div>
       </div>
     </section>
 
-    <section class="section search-item" id="core" data-group="all">
-      <h3>12. 核心判断</h3>
+    <section class="section search-item" id="run" data-group="deliver evidence">
+      <h3>11. 运行与验证</h3>
       <div class="grid2">
-        <div class="card" style="background:var(--green-soft)">
-          <h4>合格提交</h4>
-          <p>多智能体交付系统 + <code>delivery_app</code> + 测试验证 + 部署材料 + 交付报告。</p>
-        </div>
-        <div class="card" style="background:var(--orange-soft)">
-          <h4>典型不合格</h4>
-          <p>只有页面样例，没有数据、权限、测试或自检。</p>
-        </div>
+        <div class="codebox"><button class="copy" data-copy="platformCommands">复制</button><pre id="platformCommands">pnpm install
+pnpm migrate
+pnpm api
+pnpm webui
+# 或：pnpm tui2
+pnpm test</pre></div>
+        <div class="card"><h4>正式提交仍需补充</h4><p><code>delivery_app/README.md</code> 和 <code>RUN.md</code> 必须提供测试账号、身份切换、初始化数据、安装、测试、构建、启动和 Docker 命令。</p><div class="placeholder"><code>[PLACEHOLDER: L3-RUN-ACCOUNT]</code> 最终销售线索应用账号与验收说明。</div></div>
       </div>
     </section>
 
-    <div class="footer">Level 03 三级考题说明 · 快速查看版</div>
+    <div class="footer">OneCompany Level 03 Submission Progress · Source: docs/week3-level3-submission.md</div>
   </main>
 </div>
 
 <script>
 const tabs = document.querySelectorAll('.tab');
 const sections = document.querySelectorAll('.search-item');
+
+function applyTab(group) {
+  sections.forEach(section => {
+    const groups = (section.dataset.group || '').split(/\s+/);
+    section.classList.toggle('hidden', group !== 'all' && !groups.includes(group));
+  });
+}
+
 tabs.forEach(tab => {
   tab.addEventListener('click', () => {
-    tabs.forEach(t => t.classList.remove('active'));
+    tabs.forEach(item => item.classList.remove('active'));
     tab.classList.add('active');
-    const g = tab.dataset.tab;
-    sections.forEach(s => {
-      const show = g === 'all' || s.dataset.group === g || (g === 'must' && s.id === 'must') || (g === 'score' && s.id === 'scoring') || (g === 'deliver' && s.id === 'deliverables');
-      s.classList.toggle('hidden', !show);
-    });
+    applyTab(tab.dataset.tab);
   });
 });
 
-document.querySelectorAll('.copy').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const id = btn.dataset.copy;
-    const text = document.getElementById(id).innerText;
-    await navigator.clipboard.writeText(text);
-    const old = btn.innerText;
-    btn.innerText = '已复制';
-    setTimeout(() => btn.innerText = old, 1200);
-  });
+document.querySelectorAll('.accordion button').forEach(button => {
+  button.addEventListener('click', () => button.nextElementSibling.classList.toggle('open'));
 });
 
-document.querySelectorAll('.accordion button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    btn.nextElementSibling.classList.toggle('open');
+document.querySelectorAll('.copy').forEach(button => {
+  button.addEventListener('click', async () => {
+    const text = document.getElementById(button.dataset.copy).innerText;
+    const previous = button.innerText;
+    try {
+      await navigator.clipboard.writeText(text);
+      button.innerText = '已复制';
+    } catch {
+      button.innerText = '请手动复制';
+    }
+    setTimeout(() => { button.innerText = previous; }, 1400);
   });
 });
 
 const scoreInputs = document.querySelectorAll('.score-input');
 function updateScore() {
   let total = 0;
-  scoreInputs.forEach(inp => {
-    const max = Number(inp.dataset.max);
-    let val = Number(inp.value || 0);
-    if (val > max) { val = max; inp.value = max; }
-    if (val < 0) { val = 0; inp.value = 0; }
-    total += val;
+  scoreInputs.forEach((input, index) => {
+    const max = Number(input.dataset.max);
+    let value = Number(input.value || 0);
+    value = Math.max(0, Math.min(max, value));
+    input.value = value;
+    localStorage.setItem(`level03_score_${index}`, String(value));
+    total += value;
   });
   document.getElementById('totalScore').innerText = total;
   const status = document.getElementById('passStatus');
-  if (total >= 75) {
+  const hardPass = document.body.dataset.hardPass === 'true';
+  if (total >= 75 && hardPass) {
     status.className = 'passText';
-    status.innerText = '达到建议通过线';
+    status.innerText = '达到分数线且硬性条件已满足';
+  } else if (total >= 75) {
+    status.className = 'failText';
+    status.innerText = '达到分数线，但硬性条件仍未满足';
   } else {
     status.className = 'failText';
-    status.innerText = '未达到建议通过线 75 分';
+    status.innerText = '未达到 75 分，且硬性条件未满足';
   }
 }
-scoreInputs.forEach(inp => inp.addEventListener('input', updateScore));
-updateScore();
 
-document.querySelectorAll('#checklist input').forEach(inp => {
-  const key = 'level03_' + inp.dataset.key;
-  inp.checked = localStorage.getItem(key) === '1';
-  inp.closest('.check').classList.toggle('done', inp.checked);
-  inp.addEventListener('change', () => {
-    localStorage.setItem(key, inp.checked ? '1' : '0');
-    inp.closest('.check').classList.toggle('done', inp.checked);
-  });
+scoreInputs.forEach((input, index) => {
+  const saved = localStorage.getItem(`level03_score_${index}`);
+  if (saved !== null) input.value = saved;
+  input.addEventListener('input', updateScore);
 });
+
+document.getElementById('resetScore').addEventListener('click', () => {
+  scoreInputs.forEach((input, index) => {
+    input.value = input.dataset.default;
+    localStorage.removeItem(`level03_score_${index}`);
+  });
+  updateScore();
+});
+updateScore();
 
 const search = document.getElementById('search');
 search.addEventListener('input', () => {
-  const q = search.value.trim().toLowerCase();
-  sections.forEach(s => {
-    const text = s.innerText.toLowerCase();
-    s.classList.toggle('hidden', q && !text.includes(q));
-  });
-  if (!q) {
-    document.querySelector('.tab.active')?.click();
+  const query = search.value.trim().toLowerCase();
+  if (!query) {
+    applyTab(document.querySelector('.tab.active').dataset.tab);
+    return;
   }
+  sections.forEach(section => section.classList.toggle('hidden', !section.innerText.toLowerCase().includes(query)));
 });
 
 const navLinks = document.querySelectorAll('.nav a');
 const observer = new IntersectionObserver(entries => {
   entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + entry.target.id));
-    }
+    if (!entry.isIntersecting) return;
+    navLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${entry.target.id}`));
   });
-}, { rootMargin: '-40% 0px -55% 0px' });
-document.querySelectorAll('section[id]').forEach(sec => observer.observe(sec));
+}, { rootMargin: '-38% 0px -56% 0px' });
+document.querySelectorAll('section[id]').forEach(section => observer.observe(section));
 </script>
 </body>
 </html>

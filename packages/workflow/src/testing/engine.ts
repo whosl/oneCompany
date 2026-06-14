@@ -86,6 +86,7 @@ export async function runTestingPhase(
     state: { ...payload.state, previewUrl: preview.url },
     testing: {
       phase: "running",
+      requestDeploy: input.requestDeploy ?? false,
       previewUrl: preview.url,
       lastRunAt: new Date().toISOString(),
       suiteResults: [],
@@ -148,6 +149,7 @@ export async function runTestingPhase(
       },
       testing: {
         phase: "failed",
+        requestDeploy: input.requestDeploy ?? false,
         previewUrl: preview.url,
         lastRunAt: new Date().toISOString(),
         suiteResults,
@@ -161,6 +163,9 @@ export async function runTestingPhase(
     return toResult(deps, payload);
   }
 
+  const repairedFinalFailure = Boolean(payload.meta.finalRepair);
+  const qaNotes = repairedFinalFailure ? await runQaReview(deps, payload, []) : undefined;
+
   const nextStatus = input.requestDeploy ? "Deploying" : "Awaiting Acceptance";
   deps.setStatus(
     input.projectId,
@@ -170,11 +175,16 @@ export async function runTestingPhase(
 
   payload = {
     ...payload,
+    meta: repairedFinalFailure
+      ? { ...payload.meta, finalRepair: undefined }
+      : payload.meta,
     testing: {
       phase: "passed",
+      requestDeploy: input.requestDeploy ?? false,
       previewUrl: preview.url,
       lastRunAt: new Date().toISOString(),
       suiteResults,
+      qaNotes,
       integrationArtifacts: baseline.artifacts,
       integrationNotes: baseline.notes,
     },

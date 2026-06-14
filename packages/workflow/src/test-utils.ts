@@ -233,6 +233,7 @@ export function seedPrdReadyProject(db: Db, name = "M6 Dev Project"): { projectI
 export type DevelopmentDepsOptions = {
   authoritativeAttemptsBeforePass?: number;
   alwaysFail?: boolean;
+  onFinalRepairCompleted?: DevelopmentWorkflowDeps["onFinalRepairCompleted"];
 };
 
 export function createDevelopmentDeps(
@@ -271,6 +272,7 @@ export function createDevelopmentDeps(
     createGate: (projectId, gateType) => createGate(db, projectId, gateType),
     setStatus: (projectId, status, trigger) => setProjectStatus(db, projectId, status, trigger),
     getProjectStatus: (projectId) => getProjectStatus(db, projectId),
+    onFinalRepairCompleted: options.onFinalRepairCompleted,
   };
 }
 

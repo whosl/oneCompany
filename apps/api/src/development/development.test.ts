@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import path from "node:path";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { createDevSession, saveDevSession } from "@oc/workflow";
+import {
+  createDevSession,
+  getSliceLoopBackgroundError,
+  loadDevSession,
+  saveDevSession,
+} from "@oc/workflow";
 import {
   acceptanceCriteriaVersions,
   prdVersions,
@@ -133,6 +140,78 @@ describe("development API — M6", () => {
       expect(body.running).toBe(true);
       expect(body.phase).toBe("slicing");
     } finally {
+      cleanup();
+    }
+  });
+
+  it("repairs completed development after final testing failure and automatically retests", async () => {
+    process.env.OC_TESTING_FIXTURE = "1";
+    const { app, db, projects, workspace, cleanup } = setupTestApp();
+    try {
+      const projectId = randomUUID();
+      seedPrdReady(db, projectId);
+      const project = projects.getProject(projectId)!;
+      const repoPath = workspace.ensureForProject(project).repo;
+      rmSync(path.join(repoPath, "package.json"), { force: true });
+      const payload = createDevSession(db, projectId, repoPath, "minimal");
+      saveDevSession(db, projectId, {
+        ...payload,
+        state: {
+          ...payload.state,
+          techPlanVersion: "tp-1",
+          taskQueue: [
+            {
+              id: "slice-1",
+              title: "Done",
+              testCommand: "pnpm vitest run --reporter=json",
+              status: "passed",
+            },
+          ],
+        },
+        meta: { ...payload.meta, phase: "completed" },
+        testing: {
+          phase: "failed",
+          requestDeploy: false,
+          suiteResults: [
+            { suite: "final:typecheck", status: "failed", details: "fixture type error" },
+          ],
+          qaNotes: ["fix type error"],
+        },
+      });
+      const preview = await app.request(`/projects/${projectId}/preview/start`, {
+        method: "POST",
+      });
+      expect(preview.status).toBe(200);
+      const now = new Date().toISOString();
+      db.update(projectsTable)
+        .set({ status: "Developing", updated_at: now })
+        .where(eq(projectsTable.id, projectId))
+        .run();
+
+      const response = await app.request(`/projects/${projectId}/development/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(response.status).toBe(202);
+
+      const deadline = Date.now() + 5_000;
+      while (projects.getProject(projectId)?.status !== "Awaiting Acceptance" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+
+      const completed = loadDevSession(db, projectId);
+      expect(
+        projects.getProject(projectId)?.status,
+        getSliceLoopBackgroundError(projectId),
+      ).toBe("Awaiting Acceptance");
+      expect(completed.testing?.phase).toBe("passed");
+      expect(completed.state.taskQueue.find((task) => task.id === "final-repair-1")?.status).toBe(
+        "passed",
+      );
+      await app.request(`/projects/${projectId}/preview/stop`, { method: "POST" });
+    } finally {
+      delete process.env.OC_TESTING_FIXTURE;
       cleanup();
     }
   });

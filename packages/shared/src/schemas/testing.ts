@@ -29,6 +29,7 @@ export const IntegrationVerificationArtifactSchema = z.object({
 
 export const TestingSessionMetaSchema = z.object({
   phase: z.enum(["idle", "running", "passed", "failed"]),
+  requestDeploy: z.boolean().optional(),
   previewUrl: z.string().optional(),
   lastRunAt: z.string().optional(),
   suiteResults: z.array(NormalizedRunnerResultSchema),
