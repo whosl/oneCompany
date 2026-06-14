@@ -25,9 +25,10 @@ if (!readiness.opencodeModelReady) {
 
 const { app } = createDefaultApp(getDbPath());
 const port = Number(process.env.PORT ?? 3001);
+const hostname = process.env.HOST ?? "0.0.0.0";
 
 console.log(
   `[onecompany] Engine readiness: llm=${readiness.workflowLlmReady} opencode_cli=${readiness.opencodeCliReady} opencode_model=${readiness.opencodeModelReady}`,
 );
-console.log(`API listening on http://localhost:${port}`);
-serve({ fetch: app.fetch, port });
+console.log(`API listening on http://${hostname}:${port}`);
+serve({ fetch: app.fetch, hostname, port });

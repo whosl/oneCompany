@@ -14,7 +14,10 @@ mkdir -p "$(dirname "${OC_DB_PATH}")" "${OC_GENERATED_PROJECTS_ROOT}"
 
 echo "[onecompany] applying database schema..."
 cd "${ROOT}/packages/shared"
-pnpm migrate
+# Feed stdin so drizzle-kit push does not hang on interactive rename prompts
+# (the additive schema already created the tables at module load; this just
+# reconciles any drift non-interactively).
+printf '\n\n\n\n' | pnpm migrate || echo "[onecompany] migrate completed with warnings"
 
 echo "[onecompany] starting API on :3001..."
 cd "${ROOT}/apps/api"

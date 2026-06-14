@@ -1,15 +1,26 @@
+# OneCompany — API + WebUI two-container deployment
+#
+# Usage:
+#   cp .env.docker.example .env.docker   # fill in API keys
+#   docker compose up --build
+#
+# Access:
+#   WebUI:  http://localhost:3010
+#   API:    http://localhost:3001
+#   TUI:    docker compose exec onecompany-api pnpm tui2 --api http://127.0.0.1:3001
+
 services:
-  onecompany:
+  onecompany-api:
     build:
       context: .
       dockerfile: Dockerfile
-    image: onecompany:local
+    image: onecompany-api:local
     ports:
       - "3001:3001"
     stdin_open: true
     tty: true
     environment:
-      # Required for real agent workflows (mount via env_file)
+      # Required for real agent workflows (set via .env.docker)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OC_LLM_API_KEY: ${OC_LLM_API_KEY:-}
       OC_LLM_BASE_URL: ${OC_LLM_BASE_URL:-}
@@ -21,7 +32,7 @@ services:
       PLAYWRIGHT_BROWSERS_PATH: /opt/playwright-browsers
       OC_INTEGRATION_ADAPTER_MODE: ${OC_INTEGRATION_ADAPTER_MODE:-real}
       OC_TESTING_INTEGRATION_CHECKS: ${OC_TESTING_INTEGRATION_CHECKS:-1}
-      # MCP servers (pre-installed under mcp-servers/; spawn config for PR-D)
+      # MCP servers (pre-installed under mcp-servers/)
       OC_MCP_SERVERS_ROOT: /opt/onecompany/mcp-servers
       OC_INTEGRATION_MCP_MANIFEST: /opt/onecompany/config/integration-mcp-manifest.json
       OC_GATEWAY_MCP_CONFIG: /opt/onecompany/config/oc-gateway-mcp.json
@@ -48,6 +59,17 @@ services:
     volumes:
       - onecompany-data:/opt/onecompany/data
       - onecompany-projects:/var/lib/onecompany/generated-projects
+    restart: unless-stopped
+
+  onecompany-webui:
+    build:
+      context: .
+      dockerfile: apps/webui/Dockerfile
+    image: onecompany-webui:local
+    ports:
+      - "3010:80"
+    depends_on:
+      - onecompany-api
     restart: unless-stopped
 
 volumes:

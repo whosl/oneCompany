@@ -19,3 +19,17 @@ agent-transcripts
 terminals
 *.log
 .DS_Store
+# Local dev/eval artifacts — never needed in the image
+deepswe*
+run-deepswe*
+monitor-deepswe*
+check-deepswe*
+test-deepswe*
+.codegraph
+.mcp.json
+.opencode
+.env.deepswe
+deepswe-results
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

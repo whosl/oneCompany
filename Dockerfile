@@ -1,11 +1,12 @@
-# OneCompany — API runtime for the TUI2 submission build
+# OneCompany — API runtime
 # syntax=docker/dockerfile:1
 
+# ─── Builder: install deps, build, bake playwright/mcp/opencode/codegraph ───
 FROM ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PNPM_HOME=/root/.local/share/pnpm
-ENV PATH="${PNPM_HOME}:${PATH}"
+ENV PATH="${PNPM_HOME}:/usr/local/bin:${PATH}"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -15,7 +16,7 @@ RUN apt-get update \
     python3 \
     make \
     g++ \
-  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
   && corepack enable \
   && corepack prepare pnpm@9.15.0 --activate \
@@ -43,6 +44,11 @@ RUN chmod +x scripts/docker-install-playwright.sh scripts/docker-install-mcp-ser
   && scripts/docker-install-playwright.sh /opt/onecompany \
   && scripts/docker-install-mcp-servers.sh /opt/onecompany \
   && scripts/docker-install-opencode.sh
+
+# codegraph CLI — used by project-level MCP to provide code intelligence.
+# Installed globally so it lands on PATH for both build-time init and runtime serve.
+RUN npm install -g @colbymchenry/codegraph
+
 RUN pnpm --filter @oc/oc-gateway-mcp build
 RUN pnpm build
 
@@ -52,11 +58,12 @@ RUN mkdir -p /opt/onecompany/data \
   && cd packages/shared \
   && pnpm migrate
 
+# ─── Runtime: slim production image ─────────────────────────────────────────
 FROM ubuntu:22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PNPM_HOME=/root/.local/share/pnpm
-ENV PATH="${PNPM_HOME}:${PATH}"
+ENV PATH="${PNPM_HOME}:/usr/local/bin:/usr/lib/node_modules/.bin:${PATH}"
 ENV NODE_ENV=production
 
 RUN apt-get update \
@@ -65,7 +72,7 @@ RUN apt-get update \
     curl \
     git \
     tini \
-  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
   && corepack enable \
   && corepack prepare pnpm@9.15.0 --activate \
@@ -73,8 +80,18 @@ RUN apt-get update \
 
 WORKDIR /opt/onecompany
 
+# Copy the built application and baked-in assets from builder.
 COPY --from=builder /opt/onecompany /opt/onecompany
 COPY --from=builder /opt/playwright-browsers /opt/playwright-browsers
+# Global npm packages (codegraph + opencode-ai) — copy node_modules and recreate
+# the bin symlinks since /usr/local/bin symlinks don't survive the COPY.
+COPY --from=builder /usr/lib/node_modules /usr/lib/node_modules
+RUN ln -sf /usr/lib/node_modules/@colbymchenry/codegraph/npm-shim.js /usr/local/bin/codegraph \
+  && ln -sf /usr/lib/node_modules/opencode-ai/bin/opencode.exe /usr/local/bin/opencode
+
+# Prune devDependencies to shrink the image (keeps dist/ + prod deps + scripts).
+RUN pnpm prune --prod \
+  && rm -rf /root/.local/share/pnpm/store /tmp/*
 
 RUN mkdir -p /var/lib/onecompany/generated-projects /opt/onecompany/data \
   && apt-get update \
