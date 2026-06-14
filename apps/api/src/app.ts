@@ -41,6 +41,7 @@ import { createIntegrationService } from "./integrations/service.js";
 import { createTaiziRoutes } from "./taizi/routes.js";
 import { createTaiziService } from "./taizi/service.js";
 import { createPluginRoutes } from "./plugin/routes.js";
+import { createAgentRoutes } from "./agents/routes.js";
 
 export type AppDependencies = {
   db: Db;
@@ -112,6 +113,7 @@ export function createApp(deps: AppDependencies) {
 
   app.get("/health", (c) => c.json({ ok: true }));
   app.route("/plugin", createPluginRoutes());
+  app.route("/", createAgentRoutes(deps.db));
   app.route("/", createIntegrationRoutes(integrations));
   app.route("/environment", createEnvironmentRoutes(environment));
   app.route("/projects", createProjectRoutes(projects, workspace));

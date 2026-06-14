@@ -5,6 +5,7 @@ export {
   parseIdAtVersion,
   registerAgent,
 } from "./registry.js";
+export { toAgentCard, type AgentCard } from "./a2a/agent-card.js";
 export { pickModel, type ModelTier } from "./router.js";
 export {
   runAgent,
