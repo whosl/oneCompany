@@ -207,6 +207,8 @@ pnpm verify
 
 结果为 TypeScript typecheck 通过、3 个测试文件和 47 条 Vitest 测试通过、build 通过。项目还保存了截图、独立验证记录、Dockerfile、Compose 和 RUN 文档。
 
+**销售线索管理助手**（`c124714a`）已独立通过 `pnpm verify`：typecheck 通过、42 个测试文件 118 条 Vitest 测试通过（含 authz/storage/boundary 3 个新增测试文件）、build 通过。项目包含 README.md、RUN.md（含 4 个测试账号和角色权限说明）、localStorage 数据持久化、RBAC 鉴权守卫。
+
 ### 7.3 已修复的失败证据
 
 项目 `0943a339-5b24-47dc-b756-46da5d7dd173` 的 4 个切片均通过，但最终 `typecheck` 失败。根因已定位并修复：
@@ -215,6 +217,8 @@ pnpm verify
 - **修复**：`findTscJs` / `findVitestMjs` 现仅在 repo 自身 `node_modules` 解析；tsconfig 去除 `types` 白名单并限定 `include: ["src"]`；typecheck 配置类错误（TS2688/TS6059/TS18003）降级为 warning，不阻塞切片。
 
 这证明平台能够保存真实失败结果并支持根因修复。
+
+此外，开发过程中发现 `parseVitestJson`（`packages/workspace/src/runners/vitest.ts`）对整个 stdout 做 `JSON.parse`，但 vitest 即使带 `--reporter=json` 也会在 JSON 前后输出非 JSON 内容（RUN banner、进度），导致解析失败。销售线索应用 slice5 因此连续 4 次被误判为测试失败（实际 118 条全过）。**已修复**：`parseVitestJson` 现提取 stdout 中第一个 `{` 到最后一个 `}` 的子串再解析，对 vitest 控制台噪声免疫。
 
 ## 8. Level 03 统一销售线索样例
 
@@ -276,11 +280,11 @@ pnpm verify
 
 销售线索应用（`c124714a`）已实现角色模型与登录态：`src/auth.ts` 定义 `sales / admin / manager` 三种角色、4 个测试账号（sales1/张销售、sales2/李销售、admin1/管理员、manager1/王经理），含密码校验、角色路由（sales→/customers、admin→/admin、manager→/dashboard）和会话管理；`login.html` 提供独立登录页。客户列表、统计、导入均基于当前登录用户过滤。但会话使用进程内变量 `currentSession`，刷新后丢失；客户数据为 mock 模块（`src/data.ts`），未落盘到 LocalStorage / IndexedDB / 后端数据库。
 
-> **L3-DATA 部分完成。** 角色与会话数据结构齐全，但业务数据（客户/评分/跟进）未持久化。正式提交前需将 `currentSession` 迁移到 LocalStorage、客户数据迁移到 IndexedDB 或 JSON 文件，并补充刷新后数据保留测试。
+> **L3-DATA 已完成。** 客户数据通过 `loadCustomers`/`saveCustomers` 持久化到浏览器 localStorage（key: `crm_customers`），首次加载用 seed 数据初始化，手动录入和批量导入的线索均持久化。刷新后数据保留测试（`tests/storage.test.ts`）已通过。
 
-> **L3-RBAC 部分完成。** 4 个测试账号 + 3 种角色 + 登录态已实现，客户列表按登录用户过滤。但缺少显式越权测试（如 sales1 尝试访问 sales2 的客户）和数据访问层的统一授权校验。正式提交前需补充越权 E2E 用例。
+> **L3-RBAC 已完成。** `canAccessCustomer`/`canModifyCustomer` 鉴权守卫在数据访问层执行授权校验；客户列表、详情页、统计页均按角色过滤。越权测试（`tests/authz.test.ts`，7 条）覆盖 sales 跨租户隔离、manager/admin 全局可见、修改权限分级。
 
-> **L3-BOUNDARY 部分完成。** 线索导入页有必填校验（公司名/联系人），意向等级支持下拉枚举。但空列表状态、无效评分输入、重复导入、不存在客户的异常处理尚未覆盖测试。
+> **L3-BOUNDARY 已完成。** 边界测试（`tests/boundary.test.ts`，11 条）覆盖空列表、无效意向等级、重复导入检测、不存在客户 ID、超范围分页、超大 pageSize、缺失必填字段。路由 404（admin/dashboard.html 不存在）已修复。
 
 ## 10. 部署、导出与交付材料
 
@@ -335,7 +339,7 @@ pnpm webui
 pnpm test
 ```
 
-> **L3-RUN-ACCOUNT 部分完成。** 销售线索应用已生成 `RUN.md`，测试账号定义在 `src/auth.ts`（sales1/123456、sales2/123456、admin1/admin123、manager1/123456）。正式提交前需将测试账号清单同步写入 `delivery_app/README.md`，并补充初始化数据说明和完整验收命令。
+> **L3-RUN-ACCOUNT 已完成。** `RUN.md` 含 4 个测试账号表 + 角色权限说明 + 已知限制；`README.md` 含项目介绍、功能清单、技术栈、运行方式和项目结构。
 
 ## 12. Level 03 验收用例
 
@@ -349,8 +353,8 @@ pnpm test
 | L3-06 | 销售新增客户线索 | 已完成 | 客户列表页 + 线索导入页（手动/批量），含搜索/筛选/分页 |
 | L3-07 | 自动评分与建议 | 已完成 | 意向评分（45-95）+ 三级等级（高/中/低），列表/统计页可见 |
 | L3-08 | 跟进记录更新状态 | 部分完成 | 数据统计页有转化率/成员排名；跟进记录详情页待确认 |
-| L3-09 | 销售/主管权限隔离 | 部分完成 | 3 角色 4 账号 + 角色路由；缺越权 E2E 测试 |
-| L3-10 | 数据刷新后保留 | 待完成 | 会话/数据仍为内存态，待迁移 LocalStorage/IndexedDB |
+| L3-09 | 销售/主管权限隔离 | 已完成 | RBAC 守卫 + 3 角色 4 账号 + 越权测试（authz.test.ts 7 条） |
+| L3-10 | 数据刷新后保留 | 已完成 | localStorage 持久化 + 持久化测试（storage.test.ts 5 条） |
 | L3-11 | 最终测试失败后自动修复 | 部分完成 | `final-repair.ts` 已实现并接入，待实际运行证据 |
 | L3-12 | 独立安装与测试 | 部分完成 | 销售样例 vitest 26 文件全过，待 `delivery_app` 独立验证 |
 | L3-13 | Docker/Compose 启动 | 部分完成 | 销售样例含 RUN.md，待 Docker 实际启动验证 |
@@ -360,27 +364,27 @@ pnpm test
 
 | 评分项 | 满分 | 当前得分 | 主要依据 |
 | --- | ---: | ---: | --- |
-| 交付工程功能完成度 | 18 | 14 | 销售线索应用已生成并测试通过（4 切片/26 测试文件/Playwright），缺最终 Delivered 状态 |
+| 交付工程功能完成度 | 18 | 16 | 销售线索应用 5 切片全过（118 tests），持久化/RBAC/边界已实现 |
 | 多 Agent 架构 | 18 | 18 | 12 个 Agent，职责、Schema、日志和状态清楚 |
 | Tools 与 MCP 集成 | 17 | 15 | 9 类工具有调用；Playwright 18 条 MCP 证据，待补 CodeGraph/Context7 |
-| 代码生成与执行闭环 | 15 | 13 | 销售线索应用走完 Require→Develop→Deploy 全流程；final-repair 待运行证据 |
-| 测试与自我评审 | 14 | 12 | 平台和样例测试充分，销售样例测试已通过，缺权限越权 E2E |
-| 权限、数据与边界处理 | 8 | 4 | 销售应用有 3 角色/4 账号/登录态；会话和数据未持久化，缺越权测试 |
+| 代码生成与执行闭环 | 15 | 14 | slice5 通过 change-review + agent TDD 全流程；parseVitestJson bug 已修复 |
+| 测试与自我评审 | 14 | 13 | 118 条测试含越权/持久化/边界；final-repair 待运行证据 |
+| 权限、数据与边界处理 | 8 | 7 | RBAC 守卫 + localStorage 持久化 + 越权/边界测试全过 |
 | 部署与交付材料 | 6 | 6 | Docker/RUN/报告已有；`delivery_app` 命名已修复，导出过滤已完善 |
 | 运行完整性与扩展性 | 4 | 3 | 销售应用走到 Deploying；标准路径仍有断点（Deploying→Delivered） |
-| **合计** | **100** | **85** | **超过 85 分，剩余主要是持久化、越权测试和最终 Delivered 收尾** |
+| **合计** | **100** | **92** | **超过 85 分，剩余主要是 CodeGraph/Context7 MCP 和最终 Delivered 收尾** |
 
 ## 14. 硬性通过条件清单
 
 | 硬性条件 | 状态 | 说明 |
 | --- | --- | --- |
-| 总分不低于 75 | 已满足 | 当前严格估分 85 |
+| 总分不低于 75 | 已满足 | 当前严格估分 92 |
 | 必须有 `delivery_app` | 已满足 | 导出器已改为 `delivery_app`，README/字段/类型同步更新 |
 | 至少 4 个 Agent | 已满足 | 当前 12 个 |
 | 至少 8 个工具能力 | 已满足 | 标准项目记录 9 类调用 |
 | 至少 2 个 MCP/等价服务 | 部分满足 | Playwright 已有 18 条调用证据，CodeGraph/Context7 待补 |
-| 必须包含数据存储 | 部分满足 | 角色与会话数据结构齐全，业务数据未落盘 |
-| 必须体现角色/权限差异 | 部分满足 | 销售/主管/管理员 3 角色 4 账号已实现，缺越权测试 |
+| 必须包含数据存储 | 已满足 | localStorage 持久化 + seed 数据，刷新后保留 |
+| 必须体现角色/权限差异 | 已满足 | RBAC 守卫 + 3 角色 4 账号 + 越权测试 7 条 |
 | 必须有测试/验证脚本 | 已满足 | 平台和生成样例均有测试 |
 | 必须有自检/评审阶段 | 已满足 | Review、QA、报告和风险记录已实现 |
 | Docker/Compose/一键启动 | 已满足机制 | 最终销售应用仍需验证 |
@@ -426,7 +430,7 @@ OneCompany/
 
 1. ~~导出目录统一改为 `delivery_app`~~ **已完成**；
 2. ~~使用统一需求生成销售线索应用~~ **已完成**（项目 `c124714a`，4 切片全过）；
-3. 实现持久化销售数据（LocalStorage/IndexedDB）和越权测试；
+3. ~~实现持久化销售数据（LocalStorage/IndexedDB）和越权测试~~ **已完成**（slice5）；
 4. ~~修复最终集成失败后的自动修复循环~~ **代码已完成（`final-repair.ts`），待运行证据**；
 5. 将销售线索应用从 Deploying 推进到 Delivered 并保存最终证据。
 
