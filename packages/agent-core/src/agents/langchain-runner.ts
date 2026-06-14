@@ -210,7 +210,13 @@ export async function runLangChainRequirementAgent(
   agentIdAtVersion: string,
   task: RequirementAgentTask,
 ): Promise<LangChainAgentResult> {
-  const payload = { state: task.state };
+  // Include lifecycle context (round index, score history, prior topics) in
+  // the human payload so the agent sees *where* it is in the clarification
+  // loop, not just the raw state. This is the agent's "memory of its own run".
+  const lifecycleSummary = formatRequirementLifecycle(task.lifecycleContext);
+  const payload = lifecycleSummary
+    ? { state: task.state, lifecycle: lifecycleSummary }
+    : { state: task.state };
 
   switch (agentIdAtVersion) {
     case REQUIREMENT_AGENT_IDS.intake:
@@ -261,4 +267,34 @@ export async function runLangChainDevAgent(
     default:
       throw new Error(`Unknown development agent: ${agentIdAtVersion}`);
   }
+}
+
+/**
+ * Render the requirement lifecycle context as a concise Chinese string for the
+ * human payload. Returns undefined when there is no lifecycle context (first
+ * run), so the payload stays minimal.
+ */
+function formatRequirementLifecycle(
+  ctx: RequirementAgentTask["lifecycleContext"],
+): string | undefined {
+  if (!ctx) return undefined;
+  if (ctx.roundIndex === 0 && ctx.scoreHistory.length === 0) {
+    return "【生命周期】这是需求澄清的第一轮，尚无历史。";
+  }
+  const lines = [`【生命周期】这是需求澄清的第 ${ctx.roundIndex + 1} 轮。`];
+  if (ctx.scoreHistory.length > 0) {
+    const trend = ctx.scoreHistory.join(" → ");
+    const last = ctx.scoreHistory.at(-1) ?? 0;
+    lines.push(`历史完整度分数：${trend}（当前 ${last}）`);
+    if (ctx.scoreHistory.length >= 2) {
+      const delta = last - ctx.scoreHistory.at(-2)!;
+      if (delta < 3) {
+        lines.push(`注意：上一轮提升仅 ${delta} 分（< 3），存在 stuck 风险，请本轮聚焦最高价值缺口。`);
+      }
+    }
+  }
+  if (ctx.priorTopics.length > 0) {
+    lines.push(`已追问过的主题（请勿重复）：${ctx.priorTopics.join("、")}`);
+  }
+  return lines.join("\n");
 }

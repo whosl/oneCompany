@@ -122,6 +122,7 @@ export function buildSliceSpec(
   slice: FunctionSliceTask,
   state: DevState,
   repoPath?: string,
+  previousFailure?: SliceSpec["previousFailure"],
 ): SliceSpec {
   const testCommand = repoPath
     ? normalizeSliceTestCommand(repoPath, slice.testCommand, slice.id)
@@ -134,6 +135,7 @@ export function buildSliceSpec(
     testCommand,
     expectedFiles: slice.expectedFiles,
     modelTier: "strong",
+    previousFailure,
   };
 }
 

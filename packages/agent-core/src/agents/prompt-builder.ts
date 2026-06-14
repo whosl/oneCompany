@@ -1,5 +1,5 @@
 import type { Db } from "@oc/shared";
-import { getAgent } from "../registry.js";
+import { getAgent, listAgents } from "../registry.js";
 import type { ReviewSpec, SliceSpec } from "../harness/types.js";
 import { DEVELOPMENT_AGENT_IDS } from "./development/definitions.js";
 import { REQUIREMENT_AGENT_IDS } from "./requirement/definitions.js";
@@ -97,6 +97,8 @@ export function buildAgentSystemPrompt(db: Db, agentIdAtVersion: string): string
     `你是 OneCompany 软件交付流水线中的「${agent.role}」。`,
     agent.description,
     AGENT_GUIDANCE[agentIdAtVersion] ?? "",
+    agent.outputHandoff ? `【你的职责边界】${agent.outputHandoff}` : "",
+    buildPipelineContext(db, agentIdAtVersion),
     "所有面向用户的文本（plan、observation、reflection、问题、总结等）一律使用简体中文。",
     "在给出最终答案之前，可以调用已注册的工具。",
     "最终回答必须且只能是一个 JSON 对象。",
@@ -105,6 +107,112 @@ export function buildAgentSystemPrompt(db: Db, agentIdAtVersion: string): string
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/**
+ * Build a "pipeline context" section for an agent's system prompt so each agent
+ * knows where it sits in the full delivery pipeline: its upstream (who feeds
+ * it), its downstream (who consumes its output), and the other agents visible
+ * in the registry. This is the per-agent view of the A2A Agent Card registry,
+ * rendered as Chinese text for the LLM.
+ *
+ * Falls back to a minimal generic line if the registry is empty (e.g. during
+ * early bootstrap before agents are registered).
+ */
+function buildPipelineContext(db: Db, agentIdAtVersion: string): string {
+  let allAgents: ReturnType<typeof listAgents>;
+  try {
+    allAgents = listAgents(db);
+  } catch {
+    return "【流水线职责】你处于 OneCompany 软件交付流水线（agent 注册表暂未初始化，跳过全景展示）。";
+  }
+  if (allAgents.length === 0) {
+    return "【流水线职责】你处于 OneCompany 软件交付流水线（暂无其它已注册 agent）。";
+  }
+
+  const current = allAgents.find((a) => `${a.id}@${a.version}` === agentIdAtVersion);
+  const groupOrder: Array<"requirement" | "development" | "orchestration"> = [
+    "requirement",
+    "development",
+    "orchestration",
+  ];
+  const groupLabel: Record<string, string> = {
+    requirement: "需求确定组",
+    development: "开发交付组",
+    orchestration: "调度组",
+  };
+
+  // Pipeline chain ordered by group, then by a stable in-group order.
+  const inGroupOrder: Record<string, string[]> = {
+    requirement: [
+      "intake",
+      "requirement-analyst",
+      "completeness-scorer",
+      "question-planner",
+      "prd-acceptance",
+    ],
+    development: [
+      "architect",
+      "planner",
+      "coding",
+      "review",
+      "qa",
+      "devops-delivery",
+    ],
+    orchestration: ["taizi"],
+  };
+
+  const sortByGroupOrder = (a: { id: string; group: string }, b: { id: string; group: string }) => {
+    const ga = groupOrder.indexOf(a.group as (typeof groupOrder)[number]);
+    const gb = groupOrder.indexOf(b.group as (typeof groupOrder)[number]);
+    if (ga !== gb) return ga - gb;
+    const la = inGroupOrder[a.group]?.indexOf(a.id) ?? 99;
+    const lb = inGroupOrder[b.group]?.indexOf(b.id) ?? 99;
+    return la - lb;
+  };
+
+  const sorted = [...allAgents].sort(sortByGroupOrder);
+  const chain = sorted
+    .map((a) => `${a.role}(${a.id})`)
+    .join(" → ");
+
+  // Upstream/downstream derived from position in the sorted chain.
+  const currentIdx = current ? sorted.findIndex((a) => a.id === current.id) : -1;
+  const upstream =
+    currentIdx > 0
+      ? sorted.slice(0, currentIdx).map((a) => `${a.role}(${a.id})`)
+      : [];
+  const downstream =
+    currentIdx >= 0 && currentIdx < sorted.length - 1
+      ? sorted.slice(currentIdx + 1).map((a) => `${a.role}(${a.id})`)
+      : [];
+
+  const lines = ["【流水线职责】你处于 OneCompany 软件交付流水线，以下是完整 agent 链："];
+  lines.push(`全链：${chain}`);
+  if (current) {
+    lines.push(
+      `你的位置：${current.role}(${current.id})`,
+      upstream.length > 0
+        ? `你的上游（输入来源）：${upstream.join(" → ")}`
+        : "你的上游：无（你是流水线起点）",
+      downstream.length > 0
+        ? `你的下游（输出交给谁）：${downstream.join(" → ")}`
+        : "你的下游：无（你是流水线终点）",
+    );
+  }
+  lines.push(
+    `分组：${groupOrder
+      .map((g) => {
+        const members = sorted.filter((a) => a.group === g).map((a) => a.id);
+        return members.length > 0 ? `${groupLabel[g]}=[${members.join(", ")}]` : null;
+      })
+      .filter(Boolean)
+      .join("；")}`,
+  );
+  lines.push(
+    "协作约定：你不直接调用其他 agent；你的产出经持久化产物（PRD/技术方案/DevState）或事件流交接，由工作流编排决定下游何时运行。",
+  );
+  return lines.join("\n");
 }
 
 export function buildStructuredAgentPrompts(
@@ -133,6 +241,8 @@ export function buildTddPrompt(slice: SliceSpec): string {
       ? slice.expectedFiles.map((file, index) => `${index + 1}. ${file}`).join("\n")
       : "";
 
+  const previousFailureSection = formatPreviousFailure(slice.previousFailure);
+
   return [
     `Implement slice "${slice.sliceId}" using strict TDD.`,
     `Goal: ${slice.goal}`,
@@ -153,9 +263,48 @@ export function buildTddPrompt(slice: SliceSpec): string {
     "Do not run npm/pnpm install; vitest is already available from the workspace toolchain.",
     "Write failing tests first, implement code, run the scoped test command via shell tools, then stop.",
     "Do not claim success without producing file changes and running the scoped test command.",
+    previousFailureSection,
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * Render the prior-attempt context (if any) as a Chinese prompt section so the
+ * coding agent retries with knowledge of *why* the last attempt failed, rather
+ * than starting each retry from a blank prompt and re-running into the same
+ * wall. Returns undefined when there is no prior failure (first attempt).
+ */
+function formatPreviousFailure(
+  failure: SliceSpec["previousFailure"],
+): string | undefined {
+  if (!failure) return undefined;
+  const lines = [
+    `⚠️ 这是本切片的第 ${failure.attempt + 1} 次尝试。上一次（第 ${failure.attempt} 次）失败，请针对性修复，不要重复同样的错误：`,
+  ];
+  if (failure.testDetails) {
+    lines.push(
+      `【平台权威测试输出】\n${truncate(failure.testDetails, 2000)}`,
+    );
+  }
+  if (failure.typecheckDetails) {
+    lines.push(`【类型检查输出】\n${truncate(failure.typecheckDetails, 1500)}`);
+  }
+  if (failure.reviewFindings && failure.reviewFindings.length > 0) {
+    const findings = failure.reviewFindings
+      .map((finding, index) => `${index + 1}. ${finding}`)
+      .join("\n");
+    lines.push(`【代码审查发现】\n${findings}`);
+  }
+  lines.push(
+    "请先理解上述失败的根因，再做最小必要修改；不要只是重复上一次的实现。",
+  );
+  return lines.join("\n");
+}
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n…（已截断，共 ${text.length} 字符）`;
 }
 
 export function buildReviewPrompt(review: ReviewSpec): string {

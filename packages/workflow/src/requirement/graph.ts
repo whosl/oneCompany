@@ -59,7 +59,24 @@ function makeTask(
   state: RequirementGraphState["payload"]["state"],
   profile: RequirementGraphState["payload"]["meta"]["profile"],
 ): RequirementAgentTask {
-  return { state, profile };
+  const rounds = state.questionRounds;
+  // Derive lifecycle context from the durable state so each requirement agent
+  // sees "this is round N, prior scores were X→Y, these topics were already
+  // asked" without a separate storage layer. Empty on the very first run.
+  const scoreHistory = rounds
+    .map((r) => r.scoreAfter)
+    .filter((s) => typeof s === "number" && s > 0);
+  const priorTopics = rounds.map((r) => r.topic).filter(Boolean);
+  const lifecycleContext =
+    rounds.length > 0 || scoreHistory.length > 0
+      ? {
+          currentAgentId: "",
+          roundIndex: rounds.length,
+          scoreHistory,
+          priorTopics,
+        }
+      : undefined;
+  return { state, profile, lifecycleContext };
 }
 
 function toResult(

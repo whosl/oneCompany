@@ -7,6 +7,18 @@ export interface SliceSpec {
   /** Planner hints — coding agent should create these when feasible. */
   expectedFiles?: string[];
   modelTier: "cheap" | "standard" | "strong";
+  /**
+   * Prior attempt context injected by the engine on retries. Lets the coding
+   * agent see the last failure (test/typecheck output) and any review findings
+   * instead of starting each retry from a blank prompt. Undefined on the first
+   * attempt of a slice.
+   */
+  previousFailure?: {
+    attempt: number;
+    testDetails?: string;
+    typecheckDetails?: string;
+    reviewFindings?: string[];
+  };
 }
 
 export interface ToolOp {
