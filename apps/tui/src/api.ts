@@ -100,10 +100,10 @@ export class ApiClient {
     return (body.files as string[]) ?? [];
   }
 
-  exportSubmission(projectId: string): Promise<{ packagePath: string; generatedAppPath: string; files: string[] }> {
+  exportSubmission(projectId: string): Promise<{ packagePath: string; deliveryAppPath: string; files: string[] }> {
     return this.post(`/projects/${projectId}/delivery/export`, {}) as Promise<{
       packagePath: string;
-      generatedAppPath: string;
+      deliveryAppPath: string;
       files: string[];
     }>;
   }

@@ -14,7 +14,8 @@ export type SubmissionExportInput = {
 
 export type SubmissionExportResult = {
   packagePath: string;
-  generatedAppPath: string;
+  /** Path to the exported application source directory (delivery_app). */
+  deliveryAppPath: string;
   files: string[];
 };
 
@@ -23,10 +24,47 @@ function rmAndMkdir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+/**
+ * Directories that should never appear in a submission package. Covers build
+ * artifacts, dependency trees, VCS, caches, and test runners' transient state.
+ * Keeping these out makes the exported package clean and independently
+ * verifiable (per Level 03 L3-PACKAGE-CLEAN).
+ */
+const EXCLUDED_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".turbo",
+  ".pytest_cache",
+  "__pycache__",
+  "test-results",
+  ".nyc_output",
+  "coverage",
+  ".vitest-cache",
+  ".onecompany",
+]);
+
+/**
+ * File suffixes/patterns that are transient or machine-specific and should be
+ * excluded from the submission package.
+ */
+function isExcludedFile(name: string): boolean {
+  if (name.endsWith(".tsbuildinfo")) return true;
+  if (name.endsWith(".pyc")) return true;
+  if (name === ".DS_Store") return true;
+  if (name === ".env" || name.startsWith(".env.")) return true;
+  if (name === "pnpm-lock.yaml") return false; // keep lockfiles
+  return false;
+}
+
 function copyDirFiltered(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") {
+    if (EXCLUDED_DIRS.has(entry.name)) {
+      continue;
+    }
+    if (!entry.isDirectory() && isExcludedFile(entry.name)) {
       continue;
     }
     const from = path.join(src, entry.name);
@@ -45,7 +83,10 @@ function listRepoFiles(repoPath: string, prefix = ""): string[] {
     return out;
   }
   for (const entry of fs.readdirSync(repoPath, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") {
+    if (EXCLUDED_DIRS.has(entry.name)) {
+      continue;
+    }
+    if (!entry.isDirectory() && isExcludedFile(entry.name)) {
       continue;
     }
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
@@ -76,7 +117,7 @@ export function exportSubmissionPackage(
   input: SubmissionExportInput,
 ): SubmissionExportResult {
   const root = path.join(input.artifactsPath, "submission-package");
-  const generatedApp = path.join(root, "generated_app");
+  const deliveryApp = path.join(root, "delivery_app");
   const logsDir = path.join(root, "logs");
   const outputsDir = path.join(root, "outputs");
 
@@ -85,11 +126,11 @@ export function exportSubmissionPackage(
   fs.mkdirSync(outputsDir, { recursive: true });
 
   if (fs.existsSync(input.repoPath)) {
-    copyDirFiltered(input.repoPath, generatedApp);
+    copyDirFiltered(input.repoPath, deliveryApp);
   } else {
-    fs.mkdirSync(generatedApp, { recursive: true });
+    fs.mkdirSync(deliveryApp, { recursive: true });
   }
-  ensurePackageRunnable(generatedApp);
+  ensurePackageRunnable(deliveryApp);
 
   const toolLog = buildToolCallLog(db, input.projectId);
   fs.writeFileSync(path.join(logsDir, "tool-call-log.json"), JSON.stringify(toolLog, null, 2));
@@ -152,7 +193,7 @@ export function exportSubmissionPackage(
     "",
     "评委一键导出包，包含：",
     "",
-    "- `generated_app/` — 智能体生成的目标应用源码",
+    "- `delivery_app/` — 智能体生成的目标应用源码",
     "- `logs/tool-call-log.json` — 工具调用日志",
     "- `outputs/requirement.json` — 需求解析结果",
     "- `outputs/plan.json` — 技术方案与切片计划",
@@ -160,10 +201,10 @@ export function exportSubmissionPackage(
     "- `outputs/test-cases.json` — 验收用例",
     "- `outputs/prd-latest.md` / `ac-latest.md` / `tp-latest.md`（如已生成）",
     "",
-    "## 验证 generated_app",
+    "## 验证 delivery_app",
     "",
     "```bash",
-    "cd generated_app",
+    "cd delivery_app",
     "npm install   # standalone; use pnpm install if pnpm-lock.yaml is present",
     "npm run typecheck",
     "npm test",
@@ -191,7 +232,7 @@ export function exportSubmissionPackage(
 
   return {
     packagePath: root,
-    generatedAppPath: generatedApp,
+    deliveryAppPath: deliveryApp,
     files,
   };
 }

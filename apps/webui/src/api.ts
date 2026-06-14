@@ -50,7 +50,7 @@ export const api = {
   startPreview: (id: string) => post<{ url: string; health: { reachable: boolean } }>(`/projects/${id}/preview/start`),
   stopPreview: (id: string) => post(`/projects/${id}/preview/stop`),
   previewStatus: (id: string) => request<{ url?: string; health: { reachable: boolean } }>(`/projects/${id}/preview/status`),
-  exportSubmission: (id: string) => post<{ packagePath: string; generatedAppPath: string }>(`/projects/${id}/delivery/export`),
+  exportSubmission: (id: string) => post<{ packagePath: string; deliveryAppPath: string }>(`/projects/${id}/delivery/export`),
 };
 
 export function openEventStream(
