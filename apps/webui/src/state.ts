@@ -101,15 +101,19 @@ export function deriveAgents(snapshot: ConsoleSnapshot): AgentView[] {
 
 const at = (timestamp: string) => timestamp.slice(11, 19);
 const line = (value: unknown, fallback = "") => String(value ?? fallback).replace(/\s+/g, " ").trim();
+const block = (value: unknown, fallback = "") => String(value ?? fallback)
+  .replace(/\r\n/g, "\n")
+  .replace(/[ \t]+\n/g, "\n")
+  .replace(/\n[ \t]+/g, "\n")
+  .replace(/\n{3,}/g, "\n\n")
+  .trim();
 const taiziText = (value: unknown) => {
   const raw = String(value ?? "");
   const tools = uniqueMatches(raw, /invoke name=["']([^"']+)["']/g);
-  const cleaned = raw
+  const cleaned = block(raw
     .replace(/<｜｜DSML｜｜tool_calls>[\s\S]*?<\/｜｜DSML｜｜tool_calls>/g, "")
     .replace(/<｜｜DSML｜｜[^>]+>/g, "")
-    .replace(/<\/｜｜DSML｜｜[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/<\/｜｜DSML｜｜[^>]+>/g, ""));
   if (cleaned) return cleaned;
   return tools.length > 0 ? `正在调用 ${tools.join("、")} 收集信息…` : "正在处理你的请求…";
 };
@@ -139,20 +143,20 @@ export function eventToTimeline(event: EventEnvelope): TimelineEntry | undefined
     case "project.created": return { ...base, kind: "status", tag: "INIT", text: `project created: ${line(p.name)}` };
     case "project.status_changed": return { ...base, kind: "status", tag: "PHASE", text: `status → ${line(p.status)}` };
     case "agent.started": return { ...base, kind: "agent", tag: "AGENT", agent, text: `${agent ?? "Agent"} started` };
-    case "agent.plan": return { ...base, kind: "reason", tag: "PLAN", agent, text: line(p.summary, "正在制定计划") };
-    case "agent.act": return { ...base, kind: "reason", tag: "ACT", agent, text: line(p.summary, "正在执行") };
-    case "agent.observe": return { ...base, kind: "reason", tag: "OBS", agent, text: line(p.summary, "正在观察结果") };
-    case "agent.reflect": return { ...base, kind: "reason", tag: "REFLT", agent, text: line(p.summary, "阶段完成") };
+    case "agent.plan": return { ...base, kind: "reason", tag: "PLAN", agent, text: block(p.summary, "正在制定计划") };
+    case "agent.act": return { ...base, kind: "reason", tag: "ACT", agent, text: block(p.summary, "正在执行") };
+    case "agent.observe": return { ...base, kind: "reason", tag: "OBS", agent, text: block(p.summary, "正在观察结果") };
+    case "agent.reflect": return { ...base, kind: "reason", tag: "REFLT", agent, text: block(p.summary, "阶段完成") };
     case "agent.error":
     case "run.failed": return { ...base, kind: "error", tag: "ERR", agent, text: line(p.message ?? p.reason, "Agent failed") };
     case "tool_call.started": return { ...base, kind: "tool", tag: "TOOL", agent, tool: line(p.toolName, "tool"), summary: line(p.summary), text: "" };
-    case "tool_call.output": return { ...base, kind: "tool_ok", tag: "OK", agent, tool: line(p.toolName, "tool"), summary: line(p.summary), text: line(p.output).slice(0, 500) };
-    case "tool_call.failed": return { ...base, kind: "tool_err", tag: "FAIL", agent, tool: line(p.toolName, "tool"), text: line(p.error, "Tool failed") };
+    case "tool_call.output": return { ...base, kind: "tool_ok", tag: "OK", agent, tool: line(p.toolName, "tool"), summary: line(p.summary), text: block(p.output).slice(0, 500) };
+    case "tool_call.failed": return { ...base, kind: "tool_err", tag: "FAIL", agent, tool: line(p.toolName, "tool"), text: block(p.error, "Tool failed") };
     case "human_gate.created": return { ...base, kind: "gate", tag: "GATE", text: `${line(p.gateType, "确认项")} — 等待你的决定` };
     case "human_gate.resolved": return { ...base, kind: "gate_ok", tag: "GATE", text: `gate resolved → ${line(p.decision, "done")}` };
     case "artifact.created": return { ...base, kind: "artifact", tag: "FILE", agent, text: line(p.path, "artifact created") };
     case "user.message":
-    case "user.interjection": return { ...base, kind: "user", tag: "USER", text: line(p.text ?? p.message) };
+    case "user.interjection": return { ...base, kind: "user", tag: "USER", text: block(p.text ?? p.message) };
     case "taizi.reply":
     case "taizi.routed": return { ...base, kind: "taizi", tag: "TAIZI", text: taiziText(p.reply ?? p.text), summary: line(p.action) };
     default: return undefined;
@@ -163,6 +167,26 @@ export function deriveTimeline(snapshot: ConsoleSnapshot): TimelineEntry[] {
   const entries: TimelineEntry[] = [];
   const toolEntries = new Map<string, TimelineEntry>();
   for (const event of snapshot.events) {
+    if (event.payload.type === "taizi.routed") {
+      const message = block(event.payload.message);
+      const lastUser = [...entries].reverse().find((entry) => entry.kind === "user");
+      if (message && (!lastUser || lastUser.text !== message || event.seq - lastUser.seq > 2)) {
+        entries.push({
+          id: `${event.seq}-taizi-user`,
+          seq: event.seq,
+          at: at(event.timestamp),
+          kind: "user",
+          tag: "USER",
+          text: message,
+        });
+      }
+      const reply = eventToTimeline(event);
+      if (reply) {
+        reply.id = `${event.seq}-taizi-reply`;
+        entries.push(reply);
+      }
+      continue;
+    }
     const toolCallId = String(event.payload.toolCallId ?? "");
     if (event.payload.type === "tool_call.started" && toolCallId) {
       const entry = eventToTimeline(event);
@@ -177,7 +201,7 @@ export function deriveTimeline(snapshot: ConsoleSnapshot): TimelineEntry[] {
       const existing = toolEntries.get(toolCallId);
       if (existing) {
         existing.kind = event.payload.type === "tool_call.output" ? "tool_ok" : "tool_err";
-        existing.text = line(event.payload.output ?? event.payload.error).slice(0, 500);
+        existing.text = block(event.payload.output ?? event.payload.error).slice(0, 500);
         if (!existing.summary) existing.summary = inferToolSummary(event.payload.output ?? event.payload.error);
         continue;
       }

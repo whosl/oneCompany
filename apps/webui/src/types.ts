@@ -98,6 +98,7 @@ export type TimelineEntry = {
   tool?: string;
   summary?: string;
   output?: string;
+  localState?: "sending" | "failed";
 };
 
 export type FileResult = {

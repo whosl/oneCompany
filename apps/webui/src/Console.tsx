@@ -20,6 +20,8 @@ import {
   FileCode2,
   FileText,
   FlaskConical,
+  Folder,
+  FolderOpen,
   FolderTree,
   Moon,
   Pause,
@@ -36,12 +38,15 @@ import {
 } from "lucide-react";
 import { api, openEventStream } from "./api";
 import { AGENTS, GATES, LIFECYCLE, OPTION_LABELS, REVIEW_ARTIFACTS } from "./catalog";
+import { buildFileTree, filterRepoPaths, flattenFileTree } from "./file-tree";
+import { Markdown } from "./Markdown";
 import { appendEvent, deriveAgents, deriveTimeline } from "./state";
 import type { AgentView, ConsoleSnapshot, FileResult, GateInfo, TimelineEntry } from "./types";
 
 type Theme = "dark" | "light";
 type MobilePanel = "agents" | "stream" | "inspector";
 type Notice = { type: "success" | "error" | "info"; text: string };
+type PendingMessage = { id: string; text: string; at: string; afterSeq: number; status: "sending" | "failed" };
 
 const statusTone = (status: string) => {
   if (status === "Delivered") return "success";
@@ -71,6 +76,7 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   const [viewer, setViewer] = useState<FileResult | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [draftAnswers, setDraftAnswers] = useState<string[]>([]);
   const [gateFeedback, setGateFeedback] = useState("");
   const [pendingGateDecision, setPendingGateDecision] = useState<string>();
@@ -147,22 +153,31 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
   }, [snapshot?.lastSeq, snapshot?.openGates.length]);
 
-  const run = async (label: string, task: () => Promise<unknown>, success: string) => {
-    if (busy.includes(label)) return;
+  const run = async (label: string, task: () => Promise<unknown>, success: string): Promise<boolean> => {
+    if (busy.includes(label)) return false;
     setBusy((items) => [...items, label]);
     try {
       await task();
       setNotice({ type: "success", text: success });
       await refresh();
+      return true;
     } catch (reason) {
       setNotice({ type: "error", text: reason instanceof Error ? reason.message : String(reason) });
+      return false;
     } finally {
       setBusy((items) => items.filter((item) => item !== label));
     }
   };
 
   const agents = useMemo(() => (snapshot ? deriveAgents(snapshot) : []), [snapshot]);
-  const timeline = useMemo(() => (snapshot ? deriveTimeline(snapshot) : []), [snapshot]);
+  const timeline = useMemo(() => {
+    if (!snapshot) return [];
+    const serverEntries = deriveTimeline(snapshot);
+    const localEntries = pendingMessages
+      .filter((pending) => !serverEntries.some((entry) => entry.kind === "user" && entry.text === pending.text && (entry.seq > pending.afterSeq || entry.id === "seed-requirement")))
+      .map<TimelineEntry>((pending) => ({ id: pending.id, seq: Number.MAX_SAFE_INTEGER, at: pending.at, kind: "user", tag: "USER", text: pending.text, localState: pending.status }));
+    return [...serverEntries, ...localEntries];
+  }, [snapshot, pendingMessages]);
   const activeGate = snapshot?.openGates[0];
   const questions = snapshot?.requirement?.pendingQuestions ?? [];
   const previewUrl = snapshot?.testing?.previewUrl ?? snapshot?.dev?.previewUrl;
@@ -219,12 +234,24 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
     event?.preventDefault();
     const text = message.trim();
     if (!text || !snapshot) return;
+    const pending: PendingMessage = {
+      id: `local-user-${Date.now()}`,
+      text,
+      at: new Date().toTimeString().slice(0, 8),
+      afterSeq: snapshot.lastSeq,
+      status: "sending",
+    };
+    setPendingMessages((items) => [...items, pending]);
     setMessage("");
+    let sent = false;
     if (snapshot.project.status === "Draft Requirement") {
-      await run("requirement", () => api.startRequirement(projectId, text), "需求已提交，需求 Agent 组开始分析");
-      return;
+      sent = await run("requirement", () => api.startRequirement(projectId, text), "需求已提交，需求 Agent 组开始分析");
+    } else {
+      sent = await run("taizi", () => api.taizi(projectId, text), "指令已交给太子调度");
     }
-    await run("taizi", () => api.taizi(projectId, text), "指令已交给太子调度");
+    if (!sent) {
+      setPendingMessages((items) => items.map((item) => item.id === pending.id ? { ...item, status: "failed" } : item));
+    }
   };
 
   const togglePause = () => {
@@ -352,15 +379,36 @@ function AgentColumn({ agents, selected, onSelect }: { agents: AgentView[]; sele
 function Stream({ entries }: { entries: TimelineEntry[] }) {
   const visible = entries.slice(-300);
   if (visible.length === 0) return <div className="waiting-line">waiting for events…</div>;
-  return <div className="timeline">{visible.map((entry) => <TimelineRow key={entry.id} entry={entry} />)}</div>;
+  const groups: Array<{ kind: "entry"; entry: TimelineEntry } | { kind: "tools"; id: string; entries: TimelineEntry[] }> = [];
+  for (const entry of visible) {
+    const isTool = ["tool", "tool_ok", "tool_err"].includes(entry.kind);
+    const previous = groups.at(-1);
+    if (isTool && previous?.kind === "tools") {
+      previous.entries.push(entry);
+    } else if (isTool) {
+      groups.push({ kind: "tools", id: `tools-${entry.id}`, entries: [entry] });
+    } else {
+      groups.push({ kind: "entry", entry });
+    }
+  }
+  return <div className="timeline">{groups.map((group) => group.kind === "tools" ? <ToolGroup key={group.id} entries={group.entries} /> : <TimelineRow key={group.entry.id} entry={group.entry} />)}</div>;
 }
 
 function TimelineRow({ entry }: { entry: TimelineEntry }) {
-  if (entry.kind === "user") return <article className="user-message"><header><span>┌</span><strong>用户</strong><time>{entry.at}</time></header><p>{entry.text}</p><footer>└────────────────</footer></article>;
-  if (entry.kind === "taizi") return <article className="taizi-message"><strong>◆ 太子</strong><p>{entry.text}</p>{entry.summary && <small>({entry.summary})</small>}</article>;
-  if (entry.kind === "reason") return <article className={`reason-entry ${entry.tag === "REFLT" ? "conclusion" : ""}`}><header><span className="tag">{entry.tag}</span><strong>{entry.agent}</strong><time>{entry.at}</time></header><p>{entry.text}</p></article>;
-  if (["tool", "tool_ok", "tool_err"].includes(entry.kind)) return <details className={`tool-entry ${entry.kind}`} open={entry.kind === "tool_err"}><summary><span>{entry.kind === "tool" ? "◌" : entry.kind === "tool_ok" ? "✓" : "×"}</span><strong>{entry.tool ?? "tool"}</strong><em>{entry.summary}</em><time>{entry.at}</time><ChevronDown size={13} /></summary>{entry.text && <pre>{entry.text}</pre>}</details>;
-  return <div className={`event-line ${entry.kind}`}><span>{entry.kind === "error" ? "×" : entry.kind === "gate" ? "!" : entry.kind === "gate_ok" ? "✓" : entry.kind === "artifact" ? "▤" : "◆"}</span><strong>{entry.text}</strong><time>{entry.at}</time></div>;
+  if (entry.kind === "user") return <article className={`user-message ${entry.localState ?? ""}`}><header><span>┌</span><strong>用户</strong><time>{entry.localState === "sending" ? "发送中…" : entry.localState === "failed" ? "发送失败" : entry.at}</time></header><Markdown>{entry.text}</Markdown><footer>└────────────────</footer></article>;
+  if (entry.kind === "taizi") return <article className="taizi-message"><strong>◆ 太子</strong><Markdown>{entry.text}</Markdown>{entry.summary && <small>({entry.summary})</small>}</article>;
+  if (entry.kind === "reason") return <article className={`reason-entry ${entry.tag === "REFLT" ? "conclusion" : ""}`}><header><span className="tag">{entry.tag}</span><strong>{entry.agent}</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
+  return <div className={`event-line ${entry.kind}`}><span>{entry.kind === "error" ? "×" : entry.kind === "gate" ? "!" : entry.kind === "gate_ok" ? "✓" : entry.kind === "artifact" ? "▤" : "◆"}</span><Markdown className="event-copy">{entry.text}</Markdown><time>{entry.at}</time></div>;
+}
+
+function ToolGroup({ entries }: { entries: TimelineEntry[] }) {
+  const failures = entries.filter((entry) => entry.kind === "tool_err").length;
+  const running = entries.filter((entry) => entry.kind === "tool").length;
+  const names = unique(entries.map((entry) => entry.tool).filter((name): name is string => Boolean(name)));
+  return <details className={`tool-group ${failures ? "has-errors" : ""}`}>
+    <summary><Activity size={12} /><span>{running ? `正在执行 ${running} 项工具任务` : `已收起 ${entries.length} 项工具调用`}</span>{names.length > 0 && <em>{names.slice(0, 2).join("、")}{names.length > 2 ? ` +${names.length - 2}` : ""}</em>}{failures > 0 && <b>{failures} 失败</b>}<ChevronDown size={12} /></summary>
+    <div className="tool-group-items">{entries.map((entry) => <details key={entry.id} className={`tool-item ${entry.kind}`}><summary><span>{entry.kind === "tool" ? "◌" : entry.kind === "tool_ok" ? "✓" : "×"}</span><strong>{entry.tool ?? "tool"}</strong>{entry.summary && <em>{entry.summary}</em>}<time>{entry.at}</time><ChevronRight size={11} /></summary>{entry.text && <Markdown className="tool-output">{entry.text}</Markdown>}</details>)}</div>
+  </details>;
 }
 
 function GateCard(props: { gate: GateInfo; projectId: string; previewUrl?: string; yolo: boolean; previewBusy: boolean; pendingDecision?: string; feedback: string; onFeedback: (value: string) => void; onChoose: (decision: string) => void; onStartPreview: () => void; onSubmitFeedback: () => void; onCancelFeedback: () => void; onOpenFile: (path: string) => void }) {
@@ -416,12 +464,19 @@ function Composer({ snapshot, value, busy, onChange, onSubmit }: { snapshot: Con
 
 function Inspector(props: { snapshot: ConsoleSnapshot; files: string[]; tab: "artifacts" | "files"; onTab: (tab: "artifacts" | "files") => void; onOpen: (path: string) => void; previewUrl?: string; onStartPreview: () => void; onStopPreview: () => void; onExport: () => void; busy: string[] }) {
   const { snapshot } = props;
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set());
   const score = snapshot.requirement ? (snapshot.requirement.completenessScore <= 1 ? Math.round(snapshot.requirement.completenessScore * 100) : Math.round(snapshot.requirement.completenessScore)) : undefined;
   const artifacts = unique([
     ...(snapshot.project.status !== "Draft Requirement" ? [`artifacts/${snapshot.project.id}/prd-latest.md`, `artifacts/${snapshot.project.id}/ac-latest.md`] : []),
     ...(LIFECYCLE.findIndex((step) => step.statuses.includes(snapshot.project.status)) >= 2 ? [`artifacts/${snapshot.project.id}/tp-latest.md`] : []),
     ...snapshot.events.filter((event) => event.payload.type === "artifact.created").map((event) => String(event.payload.path ?? "")).filter(Boolean),
   ]);
+  const fileRows = useMemo(() => flattenFileTree(buildFileTree(filterRepoPaths(props.files)), expandedDirs), [props.files, expandedDirs]);
+  const toggleDirectory = (path: string) => setExpandedDirs((current) => {
+    const next = new Set(current);
+    if (next.has(path)) next.delete(path); else next.add(path);
+    return next;
+  });
   return <aside className="inspector-column panel-column">
     <div className="section-rule">PROJECT</div>
     <dl className="project-meta"><dt>name</dt><dd>{snapshot.project.name}</dd><dt>id</dt><dd title={snapshot.project.id}>{snapshot.project.id}</dd><dt>status</dt><dd>{snapshot.project.status}</dd><dt>phase</dt><dd>{snapshot.phase.label}</dd><dt>created</dt><dd>{snapshot.project.createdAt.slice(0, 16).replace("T", " ")}</dd>{score !== undefined && <><dt>complete</dt><dd>{score}%{snapshot.requirement?.completenessLocked ? " (locked)" : ""}</dd></>}{snapshot.dev && snapshot.dev.sliceTotal > 0 && <><dt>slices</dt><dd>{snapshot.dev.sliceIndex}/{snapshot.dev.sliceTotal}{snapshot.dev.currentSliceId ? ` · ${snapshot.dev.currentSliceId}` : ""}</dd></>}{snapshot.testing && snapshot.testing.suiteTotal > 0 && <><dt>tests</dt><dd>{snapshot.testing.suitePassed}/{snapshot.testing.suiteTotal} passed</dd></>}{props.previewUrl && <><dt>preview</dt><dd><a href={props.previewUrl} target="_blank" rel="noreferrer">{props.previewUrl}</a></dd></>}</dl>
@@ -429,12 +484,13 @@ function Inspector(props: { snapshot: ConsoleSnapshot; files: string[]; tab: "ar
     {(snapshot.integrations?.length ?? 0) > 0 && <><div className="section-rule">INTEGRATIONS</div><div className="integrations">{snapshot.integrations!.slice(0, 5).map((item) => <div key={item.integrationId}><span>• {item.displayName}</span><em className={item.status}>{item.status}</em></div>)}</div></>}
     <div className="section-rule">PANEL</div>
     <div className="inspector-tabs"><button className={props.tab === "artifacts" ? "active" : ""} onClick={() => props.onTab("artifacts")}><FileText size={14} />Artifacts</button><button className={props.tab === "files" ? "active" : ""} onClick={() => props.onTab("files")}><FolderTree size={14} />Files</button></div>
-    <div className="inspector-list">{props.tab === "artifacts" ? artifacts.map((path) => <button key={path} onClick={() => props.onOpen(path)}><FileText size={14} /><span>{path.split("/").at(-1)}</span></button>) : props.files.map((path) => <button key={path} onClick={() => props.onOpen(path)} title={path}><FileCode2 size={13} /><span>{path}</span></button>)}</div>
+    <div className="inspector-list">{props.tab === "artifacts" ? artifacts.map((path) => <button key={path} onClick={() => props.onOpen(path)}><FileText size={14} /><span>{path.split("/").at(-1)}</span></button>) : fileRows.map((row) => row.kind === "dir" ? <button key={row.path} className="file-tree-row directory" style={{ paddingLeft: `${4 + row.depth * 14}px` }} onClick={() => toggleDirectory(row.path)} title={row.path}>{row.expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{row.expanded ? <FolderOpen size={14} /> : <Folder size={14} />}<span>{row.name}</span><small>{row.childCount}</small></button> : <button key={row.path} className="file-tree-row" style={{ paddingLeft: `${22 + row.depth * 14}px` }} onClick={() => props.onOpen(row.path)} title={row.path}><FileCode2 size={13} /><span>{row.name}</span></button>)}</div>
   </aside>;
 }
 
 function FileViewer({ file, onClose }: { file: FileResult; onClose: () => void }) {
-  return <div className="overlay" role="dialog" aria-modal="true"><section className="file-viewer"><header><div><FileCode2 size={16} /><strong>{file.path}</strong></div><button className="icon-button" onClick={onClose}><X size={17} /></button></header>{file.binary ? <div className="binary-file">二进制文件无法在 WebUI 中预览。<small>{file.absolutePath}</small></div> : <pre>{file.content}</pre>}</section></div>;
+  const isMarkdown = /\.(md|markdown)$/i.test(file.path);
+  return <div className="overlay" role="dialog" aria-modal="true"><section className="file-viewer"><header><div>{isMarkdown ? <FileText size={16} /> : <FileCode2 size={16} />}<strong>{file.path}</strong></div><button className="icon-button" onClick={onClose}><X size={17} /></button></header>{file.binary ? <div className="binary-file">二进制文件无法在 WebUI 中预览。<small>{file.absolutePath}</small></div> : isMarkdown ? <div className="file-markdown-scroll"><Markdown>{file.content}</Markdown></div> : <pre>{file.content}</pre>}</section></div>;
 }
 
 function CommandPalette({ snapshot, onClose, actions }: { snapshot: ConsoleSnapshot; onClose: () => void; actions: { refresh: () => void; togglePause: () => void; toggleTheme: () => void; toggleYolo: () => void; exportProject: () => void; startPreview: () => void; stopPreview: () => void } }) {
