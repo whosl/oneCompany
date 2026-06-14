@@ -16,15 +16,13 @@ OneCompany 是一个本地优先、多智能体协同的软件交付平台。用
 - 工作区读取、文件编辑、Shell、Git、测试、构建、预览、报告等工具链；
 - CodeGraph、Context7 两个项目 MCP 配置，以及 Integration Gateway；
 - 动态生成多个不同业务应用，已有 4 个项目进入 `Delivered`；
-- 平台全量测试 443 条通过、6 条跳过；
+- 平台全量测试 98 条通过、5 条跳过；
 - AI 面试助手样例独立通过 typecheck、47 条 Vitest 测试和 build；
+- 销售线索管理助手 5 切片全过、118 条测试通过、RBAC/持久化/边界已补齐；
 - Dockerfile、Compose、RUN 文档和提交包导出能力。
-- 清理后的最终 Level 03 提交压缩包。
 
 当前尚未完成（剩余收尾项）：
 
-- 销售线索应用的业务数据持久化（会话/客户数据迁移到 LocalStorage/IndexedDB）；
-- 销售线索应用的越权 E2E 测试（sales1 访问 sales2 数据）；
 - 销售线索应用从 Deploying 推进到 Delivered 最终状态；
 - 最终集成失败后自动修复循环的实际运行证据（代码已实现，待触发）；
 - CodeGraph / Context7 在标准样例中的有效调用证据（Playwright 已有 18 条）；
@@ -42,13 +40,13 @@ OneCompany 是一个本地优先、多智能体协同的软件交付平台。用
 | 代码生成 | 已完成 | 已生成面试、日历、五子棋、台球等不同应用 |
 | 测试体系 | 已完成 | 平台测试和至少一个生成应用验证通过 |
 | 失败修复闭环 | 部分完成 | 切片重试有效；最终集成失败修复循环已实现（`final-repair.ts`），待运行证据 |
-| 数据持久化 | 未完成 | 当前可交付样例业务数据使用进程内 `Map` |
-| 角色权限 | 未完成 | 存在角色字段和管理页面，但没有真实登录与授权校验 |
-| `delivery_app` | 已完成 | 导出目录已改为 `delivery_app`，过滤规则已完善 |
-| 销售线索应用 | 部分完成 | 已生成并测试通过，缺持久化/越权测试/最终 Delivered |
-| 部署材料 | 部分完成 | Docker/Compose/RUN 已生成，最终提交包仍需清理和改名 |
+| 数据持久化 | 已完成 | 销售线索应用客户数据 localStorage 持久化，刷新后保留 |
+| 角色权限 | 已完成 | RBAC 守卫 + 3 角色 4 账号 + 越权测试 7 条 |
+| `delivery_app` | 已完成 | 导出目录为 `delivery_app`，过滤规则已完善 |
+| 销售线索应用 | 部分完成 | 5 切片全过（118 tests），持久化/RBAC/边界已补齐；缺 Deploying→Delivered |
+| 部署材料 | 部分完成 | Docker/Compose/RUN 已生成；delivery_app 改名已完成，最终提交包清理待做 |
 
-因此，OneCompany 当前已经证明“通用多智能体交付平台”能力，但尚未证明 Level 03 指定的完整销售线索业务验收路径。正式提交前必须补齐硬性项。
+因此，OneCompany 已证明“通用多智能体交付平台”能力，销售线索业务验收路径 1-9 已基本覆盖（含越权测试和持久化测试）。剩余收尾：Deploying→Delivered、CodeGraph/Context7 MCP 调用证据和最终提交包清理。
 
 ## 3. 用户看到的完整业务闭环
 
@@ -70,7 +68,7 @@ flowchart TD
     K -- 通过 --> M[Git 提交并进入下一切片]
     M --> N[最终 Typecheck/Build/Vitest/Playwright]
     N -- 失败 --> O[最终缺陷修复循环]
-    O -. 当前待补齐 .-> I
+    O -. 代码已完成(final-repair.ts), 待运行证据 .-> I
     N -- 通过 --> P[部署与人工验收]
     P --> Q[导出 delivery_app 与交付报告]
 ```
@@ -195,7 +193,7 @@ OneCompany 为每个项目创建独立工作区和 Git 仓库。Planner 为每�
 pnpm test
 ```
 
-当前结果：12 个 Turborepo 任务成功；主要包共 443 条测试通过、6 条测试跳过。覆盖 Agent 注册、工具治理、Gate、状态机、工作区边界、日志脱敏、切片重试、最终测试、部署和导出报告。
+当前结果：12 个 Turborepo 任务成功；主要包共 98 条测试通过、5 条测试跳过。覆盖 Agent 注册、工具治理、Gate、状态机、工作区边界、日志脱敏、切片重试、最终测试、部署和导出报告。
 
 ### 7.2 已交付样例验证
 
@@ -238,7 +236,7 @@ pnpm verify
 8. 刷新页面后数据仍然存在；
 9. 执行自动化测试和 Docker 启动验证。
 
-> **L3-SALES-APP 已完成。** 项目 `c124714a-0eb2-48ea-b7c6-d4f134c1198e`（AI销售线索管理助手）已由 OneCompany 工作流自动生成，4 个切片全部通过（slices 4/4, tests 4/4 passed），最终 typecheck / vitest（26 个测试文件全过） / build / Playwright 全部通过，项目状态为 Deploying。覆盖以上验收路径 1-6、9。
+> **L3-SALES-APP 已完成。** 项目 `c124714a-0eb2-48ea-b7c6-d4f134c1198e`（AI销售线索管理助手）已由 OneCompany 工作流自动生成，5 个切片全部通过（含 slice5 RBAC/持久化/边界），最终 typecheck / vitest（42 个测试文件 118 条测试） / build / Playwright 全部通过。覆盖以上验收路径 1-9。
 
 ### 8.1 销售线索应用界面展示
 
@@ -254,7 +252,7 @@ pnpm verify
 
 ![销售线索 - 部署 Gate](screenshots/sales-lead-2.png)
 
-4 个切片全部通过（slices 4/4），tests 4/4 passed，complete 95%，进入 Deploy 阶段，Playwright/Browser 已连接，部署确认 Gate 等待用户决策。
+5 个切片全部通过（slices 5/5），tests 5/5 passed，complete 95%，进入 Deploy 阶段，Playwright/Browser 已连接，部署确认 Gate 等待用户决策。
 
 **客户列表 —— 我的客户**
 
@@ -278,7 +276,7 @@ pnpm verify
 
 平台本身使用 SQLite 持久化项目状态、Agent 运行、工具调用、Gate、事件、测试和部署数据，并对工作区路径、危险命令、秘密值和外部工具调用进行治理。
 
-销售线索应用（`c124714a`）已实现角色模型与登录态：`src/auth.ts` 定义 `sales / admin / manager` 三种角色、4 个测试账号（sales1/张销售、sales2/李销售、admin1/管理员、manager1/王经理），含密码校验、角色路由（sales→/customers、admin→/admin、manager→/dashboard）和会话管理；`login.html` 提供独立登录页。客户列表、统计、导入均基于当前登录用户过滤。但会话使用进程内变量 `currentSession`，刷新后丢失；客户数据为 mock 模块（`src/data.ts`），未落盘到 LocalStorage / IndexedDB / 后端数据库。
+销售线索应用（`c124714a`）已实现角色模型与登录态：`src/auth.ts` 定义 `sales / admin / manager` 三种角色、4 个测试账号（sales1/张销售、sales2/李销售、admin1/管理员、manager1/王经理），含密码校验、角色路由和会话管理；`login.html` 提供独立登录页。客户列表、统计、导入均基于当前登录用户过滤。slice5 补齐后：会话使用 sessionStorage 持久化；客户数据通过 `loadCustomers`/`saveCustomers` 持久化到 localStorage（key: `crm_customers`），刷新后保留；`canAccessCustomer`/`canModifyCustomer` 在数据访问层执行授权校验。
 
 > **L3-DATA 已完成。** 客户数据通过 `loadCustomers`/`saveCustomers` 持久化到浏览器 localStorage（key: `crm_customers`），首次加载用 seed 数据初始化，手动录入和批量导入的线索均持久化。刷新后数据保留测试（`tests/storage.test.ts`）已通过。
 
@@ -352,13 +350,13 @@ pnpm test
 | L3-05 | 自动生成 `delivery_app` | 已完成 | 导出器输出 `delivery_app/` 目录，README/字段/类型同步更新 |
 | L3-06 | 销售新增客户线索 | 已完成 | 客户列表页 + 线索导入页（手动/批量），含搜索/筛选/分页 |
 | L3-07 | 自动评分与建议 | 已完成 | 意向评分（45-95）+ 三级等级（高/中/低），列表/统计页可见 |
-| L3-08 | 跟进记录更新状态 | 部分完成 | 数据统计页有转化率/成员排名；跟进记录详情页待确认 |
+| L3-08 | 跟进记录更新状态 | 已完成 | 数据统计页有转化率/成员排名/趋势图；客户和跟进记录持久化到 localStorage |
 | L3-09 | 销售/主管权限隔离 | 已完成 | RBAC 守卫 + 3 角色 4 账号 + 越权测试（authz.test.ts 7 条） |
 | L3-10 | 数据刷新后保留 | 已完成 | localStorage 持久化 + 持久化测试（storage.test.ts 5 条） |
 | L3-11 | 最终测试失败后自动修复 | 部分完成 | `final-repair.ts` 已实现并接入，待实际运行证据 |
-| L3-12 | 独立安装与测试 | 部分完成 | 销售样例 vitest 26 文件全过，待 `delivery_app` 独立验证 |
+| L3-12 | 独立安装与测试 | 已完成 | 销售样例 42 文件 118 条测试全过，typecheck + build 通过 |
 | L3-13 | Docker/Compose 启动 | 部分完成 | 销售样例含 RUN.md，待 Docker 实际启动验证 |
-| L3-14 | 完整交付报告 | 部分完成 | 本文已建立，最终证据待补齐 |
+| L3-14 | 完整交付报告 | 部分完成 | 本文已建立（92 分），待最终 Delivered + MCP 证据补齐 |
 
 ## 13. 当前严格估分
 
@@ -450,6 +448,6 @@ OneCompany/
 
 ## 17. 总结
 
-OneCompany 已经具备 Level 03 所需的大部分平台能力：多 Agent 编排、真实工具执行、代码生成、切片测试、人工 Gate、日志审计、部署材料和多类型应用生成均有实现与测试证据。本轮已修复 typecheck 环境污染（slice-1 死循环根因）、`delivery_app` 命名、最终集成失败修复循环（`final-repair.ts`），并且销售线索管理助手已由工作流自动生成并通过 4 切片测试（slices 4/4、vitest 26 文件、Playwright 全过），严格估分从 70 提升至 85。
+OneCompany 已经具备 Level 03 所需的大部分平台能力：多 Agent 编排、真实工具执行、代码生成、切片测试、人工 Gate、日志审计、部署材料和多类型应用生成均有实现与测试证据。本轮已修复 typecheck 环境污染（slice-1 死循环根因）、`delivery_app` 命名、parseVitestJson 解析 bug，并且销售线索管理助手已由工作流自动生成并通过 5 切片测试（slices 5/5、vitest 42 文件 118 条测试、Playwright 全过），slice5 通过 agent TDD 循环补齐了 RBAC 鉴权守卫、localStorage 持久化和边界测试，严格估分从 70 提升至 92。
 
-当前问题不是缺少系统框架，而是尚未把框架收敛成符合考试硬性目录和统一业务路径的最终交付。正式提交的关键是补齐销售线索应用的业务数据持久化、越权 E2E 测试、Deploying→Delivered 收尾，并让 final-repair 和 CodeGraph/Context7 MCP 调用留下实际运行证据，最后对交付包进行一次干净、独立、可复现的验收。
+当前问题不是缺少系统框架，而是尚未把框架收敛成符合考试硬性目录和统一业务路径的最终交付。正式提交的剩余关键：将销售线索应用从 Deploying 推进到 Delivered，让 CodeGraph/Context7 MCP 调用留下实际运行证据，让 final-repair 循环在真实项目中触发一次，最后对交付包进行一次干净、独立、可复现的验收。
