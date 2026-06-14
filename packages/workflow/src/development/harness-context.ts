@@ -141,5 +141,8 @@ export function buildHarnessContext(
       deps.onEvent?.(envelope);
     },
     authorize: deps.authorize,
+    askHuman: deps.askHuman
+      ? (question: string) => deps.askHuman!(state.projectId, question)
+      : undefined,
   };
 }

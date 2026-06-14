@@ -3,6 +3,7 @@ import {
   createDevelopmentRunner,
   resolveCodingHarness,
   resolveEngineMode,
+  createAskHuman,
   type DevAgentTask,
   type DevFixtureProfile,
 } from "@oc/agent-core";
@@ -98,6 +99,16 @@ export function createDevelopmentDeps(
         stderr: "",
       };
     },
+    askHuman:
+      mode === "stub"
+        ? undefined
+        : (_pid, question) =>
+            createAskHuman(projectId, {
+              createGate: (_p, gateType, metadata) =>
+                ctx.gates.createGate(projectId, gateType, metadata),
+              waitForGate: (gateId) =>
+                ctx.gates.waitForGate(gateId, { timeoutMs: devGateTimeoutMs }),
+            })(question),
     runAgent: async (input) =>
       runAgent(
         {

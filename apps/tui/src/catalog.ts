@@ -247,6 +247,11 @@ export const GATE_DEFINITIONS: Record<string, GateDefinition> = {
     description: "项目已交付，请验收通过或驳回重做（需说明问题）。",
     options: ["accept", "reject_and_redo"],
   },
+  coding_question: {
+    title: "Coding Agent 提问",
+    description: "编码 Agent 在实现切片时遇到歧义，需要你澄清才能继续。",
+    options: ["answer", "skip"],
+  },
 };
 
 /** Human-readable Chinese labels for gate option keys. */
@@ -267,6 +272,8 @@ export const GATE_OPTION_LABELS: Record<string, string> = {
   reject: "拒绝",
   skip_risk_and_continue: "跳过风险并继续",
   accept: "验收通过",
+  answer: "输入答案继续",
+  skip: "跳过，让 agent 自行假设",
 };
 
 /* ------------------------------------------------------------------ */

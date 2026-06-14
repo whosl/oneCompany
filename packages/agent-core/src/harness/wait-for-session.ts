@@ -10,12 +10,50 @@ export type WaitForSessionOptions = {
   onHeartbeat?: (elapsedMs: number) => void;
   heartbeatIntervalMs?: number;
   sdkCallTimeoutMs?: number;
+  /**
+   * Reads the trailing assistant message text for this session. Used to detect
+   * a structured `{"coding_question":"..."}` signal when the agent idles
+   * without producing file changes (a strong "asking rather than doing" cue).
+   * Undefined disables question detection entirely.
+   */
+  readLastAssistantText?: () => Promise<string>;
 };
+
+/**
+ * Completion outcome. "completed" = the agent finished its turn (with or
+ * without file changes). "awaiting_answer" = the agent emitted a structured
+ * clarifying question and is waiting for a human answer to continue.
+ */
+export type CompletionResult =
+  | { kind: "completed" }
+  | { kind: "awaiting_answer"; questionText: string };
+
+/**
+ * Regex that matches a trailing `{"coding_question":"..."}` JSON signal in the
+ * assistant's last message. Anchored to the end of the text; tolerant of
+ * surrounding whitespace. The question text is captured (single-line).
+ */
+const CODING_QUESTION_RE = /\{"coding_question"\s*:\s*"([^"]*)"\}\s*$/;
+
+/** Extract the clarifying-question text from the trailing assistant reply. */
+export function parseCodingQuestionSignal(text: string): string | undefined {
+  const trimmed = text.trimEnd();
+  if (!trimmed) return undefined;
+  const match = trimmed.match(CODING_QUESTION_RE);
+  if (!match) return undefined;
+  const question = match[1]?.trim();
+  return question ? question : undefined;
+}
 
 /**
  * Block until the opencode session is genuinely idle, or throw on timeout.
  * Completion requires session.idle (via the event bridge) — never "no running
  * tools" alone, which fires falsely while the model is still between turns.
+ *
+ * When the agent idles WITHOUT file changes, inspects the trailing assistant
+ * text for a `{"coding_question":"..."}` signal. If found, returns
+ * `{ kind: "awaiting_answer" }` so the caller can raise a gate, inject the
+ * human's answer, and call this again to wait for the resumed turn.
  */
 export async function waitForSessionCompletion(
   client: OpencodeClient,
@@ -24,7 +62,7 @@ export async function waitForSessionCompletion(
   directory: string,
   timeoutMs: number,
   options: WaitForSessionOptions = {},
-): Promise<void> {
+): Promise<CompletionResult> {
   const deadline = Date.now() + timeoutMs;
   const startedAt = Date.now();
   const idleGraceMs = Number(process.env.OC_OPENCODE_IDLE_GRACE_MS ?? 15_000);
@@ -33,6 +71,10 @@ export async function waitForSessionCompletion(
   const sdkCallTimeoutMs = options.sdkCallTimeoutMs ?? DEFAULT_SDK_CALL_TIMEOUT_MS;
   let idleStreak = 0;
   let lastHeartbeatAt = startedAt;
+  // Track whether a question was already surfaced for this idle spell so we
+  // don't re-poll the message API every tick once we've decided it's NOT a
+  // question (the assistant text won't change without a new turn).
+  let lastQuestionCheckAt = 0;
 
   const maybeHeartbeat = () => {
     if (!options.onHeartbeat) {
@@ -57,12 +99,34 @@ export async function waitForSessionCompletion(
       idleStreak = 0;
     }
 
+    // Agent went idle without edits — check for a structured question signal
+    // BEFORE deciding the session completed. A question means the agent is
+    // waiting for a human answer, not done working.
+    if (
+      !hasFiles &&
+      idleStreak >= 1 &&
+      options.readLastAssistantText &&
+      Date.now() - lastQuestionCheckAt > 1_000
+    ) {
+      lastQuestionCheckAt = Date.now();
+      try {
+        const text = await options.readLastAssistantText();
+        const question = parseCodingQuestionSignal(text);
+        if (question) {
+          return { kind: "awaiting_answer", questionText: question };
+        }
+      } catch {
+        // Message read failed (transient SDK hiccup) — fall through to normal
+        // completion logic; the next tick retries.
+      }
+    }
+
     if (hasFiles && idleStreak >= 1) {
-      return;
+      return { kind: "completed" };
     }
 
     if (idleStreak >= idleStreakRequired && elapsed >= idleGraceMs) {
-      return;
+      return { kind: "completed" };
     }
 
     maybeHeartbeat();
@@ -70,7 +134,7 @@ export async function waitForSessionCompletion(
   }
 
   if (bridge.isIdle()) {
-    return;
+    return { kind: "completed" };
   }
 
   // Bridge missed session.idle (rare after session.diff fix) — only trust the
@@ -78,7 +142,7 @@ export async function waitForSessionCompletion(
   if (bridge.hasSeenSessionIdle()) {
     const idleOnServer = await sessionReportsIdle(client, sessionId, directory, sdkCallTimeoutMs);
     if (idleOnServer) {
-      return;
+      return { kind: "completed" };
     }
   }
 

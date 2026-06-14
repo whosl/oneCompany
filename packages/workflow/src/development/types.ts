@@ -1,5 +1,6 @@
 import type { DevAgentTask, DevFixtureProfile, RunAgentInput, RunAgentResult } from "@oc/agent-core";
 import type {
+  AskHumanResult,
   AuthDecision,
   CodingHarness,
   DevContext,
@@ -25,7 +26,11 @@ export type DevelopmentWorkflowPhase =
   | "completed"
   | "failed";
 
-export type DevelopmentGateType = "tech_plan_confirm" | "slice_failure" | "change_review";
+export type DevelopmentGateType =
+  | "tech_plan_confirm"
+  | "slice_failure"
+  | "change_review"
+  | "coding_question";
 
 export type DeploymentSessionMeta = {
   phase: "idle" | "awaiting_gate" | "completed";
@@ -87,6 +92,12 @@ export type DevelopmentWorkflowDeps = {
   logsPath?: string;
   runGovernedCommand?: DevContext["runGovernedCommand"];
   classifyShellRisk?: DevContext["classifyShellRisk"];
+  /**
+   * Optional callback that lets the opencode coding agent ask the human a
+   * clarifying question mid-slice. Undefined in stub mode or when gate
+   * infrastructure is unavailable — the harness degrades gracefully.
+   */
+  askHuman?: (projectId: string, question: string) => Promise<AskHumanResult>;
 };
 
 export type DevelopmentRunResult = {

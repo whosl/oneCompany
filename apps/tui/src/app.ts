@@ -546,6 +546,32 @@ export class App {
     );
   }
 
+  private submitCodingAnswer(gateId: string, answer: string): void {
+    const state = this.console;
+    if (!state) return;
+    pushUserMessage(state, `coding answer: ${answer}`);
+    this.runAction(
+      `gate:${gateId}`,
+      async () => {
+        // "answer" carries the free-text reply as customText; the server's
+        // normalizeDecision stores it as `answer:<text>` and the harness's
+        // blocking waitForGate resolves to inject it into the opencode session.
+        await this.api.resolveGate(gateId, "answer", answer);
+        return `coding answer submitted`;
+      },
+      {
+        hint: "答案已发送 — Coding Agent 继续实现…",
+        apply: (s) => {
+          s.dismissedGateIds.add(gateId);
+          persistDismissedGate(s.projectId, gateId);
+          if (s.snapshot) {
+            s.snapshot.openGates = s.snapshot.openGates.filter((gate) => gate.id !== gateId);
+          }
+        },
+      },
+    );
+  }
+
   /**
    * Taizi（太子）统一入口：任意模式下的自由文本都送到这里。
    * 服务端判断意图（继续/暂停/打断/变更/门禁/导出/进度…）并分发到目标
@@ -1040,6 +1066,30 @@ export class App {
           const url = composer.input.trim();
           if (url && composer.gateId) {
             this.submitDeploymentUrl(composer.gateId, url);
+            composer.input = "";
+          } else if (composer.gateId && options[composer.gateCursor]) {
+            this.chooseGateOption(state, options[composer.gateCursor]!);
+          }
+        } else if (key.type === "backspace") {
+          composer.input = [...composer.input].slice(0, -1).join("");
+        } else if (key.type === "char") {
+          composer.input += key.ch;
+        }
+        return;
+      }
+
+      case "coding_question": {
+        const options = composer.gateOptions;
+        if (key.type === "left") {
+          composer.gateCursor = (composer.gateCursor + options.length - 1) % Math.max(1, options.length);
+        } else if (key.type === "right") {
+          composer.gateCursor = (composer.gateCursor + 1) % Math.max(1, options.length);
+        } else if (key.type === "enter") {
+          const answer = composer.input.trim();
+          // If the user typed an answer, submit it via the "answer" option.
+          // Otherwise fall back to the highlighted option (e.g. cursor on "skip").
+          if (answer && composer.gateId) {
+            this.submitCodingAnswer(composer.gateId, answer);
             composer.input = "";
           } else if (composer.gateId && options[composer.gateCursor]) {
             this.chooseGateOption(state, options[composer.gateCursor]!);

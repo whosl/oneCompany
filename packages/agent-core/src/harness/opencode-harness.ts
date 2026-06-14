@@ -200,16 +200,70 @@ export function createOpencodeHarness(): CodingHarness {
           "opencode session.promptAsync",
         );
 
-        await waitForSessionCompletion(
-          client,
-          bridge,
-          session.id,
-          directory,
-          DEFAULT_SLICE_TIMEOUT_MS,
-          {
-            onHeartbeat: (elapsedMs) => harnessHeartbeat(ctx, "act", elapsedMs),
-          },
-        );
+        // Drive the slice to completion, allowing the coding agent to ask the
+        // human clarifying questions mid-session. Each `awaiting_answer` raises
+        // a gate (via ctx.askHuman), injects the human's reply into the same
+        // opencode session, and loops back to wait for the resumed turn. The
+        // bridge stays alive across turns so resumed generation is observable.
+        let askRound = 0;
+        for (;;) {
+          const completion = await waitForSessionCompletion(
+            client,
+            bridge,
+            session.id,
+            directory,
+            DEFAULT_SLICE_TIMEOUT_MS,
+            {
+              onHeartbeat: (elapsedMs) => harnessHeartbeat(ctx, "act", elapsedMs),
+              readLastAssistantText: () =>
+                lastAssistantText(client, session.id, directory),
+            },
+          );
+          if (completion.kind === "completed") {
+            break;
+          }
+          // awaiting_answer: the agent emitted a structured question.
+          if (!ctx.askHuman) {
+            // No gate infrastructure (stub mode / unconfigured) — treat as a
+            // no-file-change outcome and let the authoritative test decide.
+            emitPhase(
+              ctx,
+              "observe",
+              `agent 提问但 askHuman 不可用（${completion.questionText.slice(0, 80)}），按无文件改动处理`,
+            );
+            break;
+          }
+          askRound += 1;
+          emitPhase(
+            ctx,
+            "plan",
+            `coding agent 第 ${askRound} 次提问：${completion.questionText}`,
+          );
+          const verdict = await ctx.askHuman(completion.questionText);
+          const replyText =
+            verdict.kind === "answered"
+              ? `[人类回答 — 请据此继续]\n${verdict.answer}`
+              : `[人类跳过 — 请按最佳实践自行假设并继续]`;
+          emitPhase(
+            ctx,
+            "act",
+            verdict.kind === "answered"
+              ? `答案已注入（${verdict.answer.slice(0, 60)}），等待 agent 继续…`
+              : `已跳过，要求 agent 自行假设并继续…`,
+          );
+          await withTimeout(
+            client.session.promptAsync({
+              path: { id: session.id },
+              query: { directory },
+              body: {
+                parts: [{ type: "text", text: replyText }],
+              },
+            }),
+            DEFAULT_SLICE_TIMEOUT_MS,
+            "opencode session.promptAsync (question reply)",
+          );
+          // Loop back: wait for the resumed turn to complete (or raise again).
+        }
         bridge.stop();
 
         const changedFiles = await collectChangedFiles(client, directory, bridge.changedFiles);

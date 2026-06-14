@@ -7,6 +7,7 @@ export const GATE_TYPES = [
   "deployment",
   "dangerous_operation",
   "final_acceptance",
+  "coding_question",
 ] as const;
 
 export type GateTypeId = (typeof GATE_TYPES)[number];

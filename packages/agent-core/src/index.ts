@@ -121,8 +121,14 @@ export {
   steerHarnessSession,
 } from "./harness/session-registry.js";
 export { handlePermission, toToolOp, type AuthorizeFn } from "./harness/permission-bridge.js";
+export {
+  CODING_QUESTION_GATE,
+  createAskHuman,
+  type AskHumanDeps,
+} from "./harness/question-bridge.js";
 export { shutdownProjectServer } from "./harness/opencode-server.js";
 export type {
+  AskHumanResult,
   AuthDecision,
   CodingHarness,
   DevContext,

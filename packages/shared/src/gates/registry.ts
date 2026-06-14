@@ -57,6 +57,13 @@ export const GATE_DEFINITIONS: Record<GateTypeId, GateDefinition> = {
     allowedOptions: ["accept", "reject_and_redo"],
     allowsCustom: false,
   },
+  coding_question: {
+    id: "coding_question",
+    title: "Coding Question",
+    descriptionTemplate: "The coding agent needs a clarification to proceed.",
+    allowedOptions: ["answer", "skip"],
+    allowsCustom: true,
+  },
 };
 
 export function getGateDefinition(gateType: string): GateDefinition {

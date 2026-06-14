@@ -4,10 +4,17 @@ import { gateTypeForbidsSkipRisk } from "./policy.js";
 import { GATE_TYPES } from "./types.js";
 
 describe("gate registry — M4", () => {
-  it("defines all eight gate types", () => {
+  it("defines every declared gate type", () => {
     for (const gateType of GATE_TYPES) {
       expect(GATE_DEFINITIONS[gateType]).toBeDefined();
     }
+  });
+
+  it("defines coding_question with answer/skip options", () => {
+    expect(getGateDefinition("coding_question").allowedOptions).toEqual([
+      "answer",
+      "skip",
+    ]);
   });
 
   it("does not include skip_risk_and_continue on forbidden gate types", () => {

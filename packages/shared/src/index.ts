@@ -35,6 +35,7 @@ export {
   isApprovalDecision,
   normalizeDecision,
   parseDecision,
+  resolveCodingQuestionDecision,
   resolveGateDecision,
 } from "./gates/policy.js";
 export { GateResumeConflictError, GateResumeFailedError } from "./gates/errors.js";

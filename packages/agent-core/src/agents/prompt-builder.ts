@@ -263,6 +263,9 @@ export function buildTddPrompt(slice: SliceSpec): string {
     "Do not run npm/pnpm install; vitest is already available from the workspace toolchain.",
     "Write failing tests first, implement code, run the scoped test command via shell tools, then stop.",
     "Do not claim success without producing file changes and running the scoped test command.",
+    "If you hit a GENUINE ambiguity that blocks implementation (NOT solvable by a reasonable assumption), output EXACTLY this JSON object on the last line and stop, without making any file edits:",
+    '{"coding_question":"<简体中文，一句话描述你的问题>"}',
+    "Only ask when truly blocked — your default should be to make a reasonable assumption and continue. You may ask multiple times if new ambiguities arise.",
     previousFailureSection,
   ]
     .filter(Boolean)

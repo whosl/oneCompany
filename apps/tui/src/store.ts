@@ -161,6 +161,7 @@ export type ComposerMode =
   | "gate_decision"
   | "gate_custom"
   | "deployment_url"
+  | "coding_question"
   | "change_request"
   | "read_only"
   | "paused";
@@ -1305,10 +1306,13 @@ function computeComposer(state: ConsoleState): ComposerState {
   const gate = snapshot.openGates[0];
   if (gate) {
     const def = gateDefinition(gate.gateType);
-    const composer = emptyComposer(
-      gate.gateType === "deployment" ? "deployment_url" : "gate_decision",
-      `${def.title} — ${def.description}`,
-    );
+    const mode =
+      gate.gateType === "deployment"
+        ? "deployment_url"
+        : gate.gateType === "coding_question"
+          ? "coding_question"
+          : "gate_decision";
+    const composer = emptyComposer(mode, `${def.title} — ${def.description}`);
     composer.gateId = gate.id;
     composer.gateType = gate.gateType;
     composer.gateOptions = gate.options.length ? gate.options : def.options;

@@ -698,6 +698,22 @@ function buildGateBox(state: ConsoleState, width: number): HitLine[] {
       });
     }
   }
+  if (gate.gateType === "coding_question") {
+    // The agent's question is carried in gate.metadata.operation. Wrap it for
+    // readability so a long question doesn't blow past the box width.
+    const question = String(
+      (gate.metadata as { operation?: string } | undefined)?.operation ?? "",
+    ).trim();
+    if (question) {
+      for (const line of wrapPreservingNewlines(question, width - 4)) {
+        lines.push({ text: boxRow(pc.cyan(line), tint, width) });
+      }
+    } else {
+      lines.push({
+        text: boxRow(pc.yellow("Agent 有问题需要澄清 — 在下方输入框作答，Enter 发送"), tint, width),
+      });
+    }
+  }
   options.forEach((option, i) => {
     const active = composer.gateId === gate.id && composer.gateCursor === i;
     const zh =
@@ -1038,6 +1054,12 @@ function composerLabel(state: ConsoleState): string {
       return preview
         ? `部署 URL 已就绪 — Enter 确认并放行（${preview}）`
         : "输入部署 URL — Enter 确认并放行";
+    }
+    case "coding_question": {
+      const answer = composer.input.trim();
+      return answer
+        ? `答案已就绪 — Enter 发送（${answer.slice(0, 40)}）`
+        : "回答 Coding Agent 的问题 — Enter 发送，或 ←→ 切到「跳过」";
     }
     case "change_request":
       return "太子在线 — 插话 / 变更 / 继续 / 暂停 / 导出…（! 开头立即打断）";

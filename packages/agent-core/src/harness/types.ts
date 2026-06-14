@@ -37,6 +37,15 @@ export type CommandExecResult = {
 
 export type ShellRiskLevel = "low" | "medium" | "medium_constrained" | "high" | "high_deploy";
 
+/**
+ * Outcome of asking the human a clarifying question from inside a coding slice.
+ * - "answered": the human provided a free-text answer to inject into the session.
+ * - "skipped": the human declined; the agent should make a reasonable assumption.
+ */
+export type AskHumanResult =
+  | { kind: "answered"; answer: string }
+  | { kind: "skipped" };
+
 export interface DevContext {
   repoPath: string;
   projectId: string;
@@ -46,6 +55,15 @@ export interface DevContext {
   formatToolOutput?: (toolCallId: string, raw: string) => string;
   classifyShellRisk?: (command: string) => ShellRiskLevel;
   runGovernedCommand?: (command: string) => Promise<CommandExecResult>;
+  /**
+   * Surface a clarifying question to the human and block until they answer or
+   * skip. Used when the coding agent outputs a structured question signal. The
+   * returned answer is re-injected into the same opencode session so work
+   * continues with the human's guidance. Undefined when the deployment cannot
+   * surface gates (stub mode / unconfigured); the harness treats that as a
+   * no-file-change outcome and lets the authoritative test decide.
+   */
+  askHuman?: (question: string) => Promise<AskHumanResult>;
   /**
    * Pre-resolved project-level MCP servers in opencode Config["mcp"] shape.
    * The caller (development service) reads project_mcp_configs and converts

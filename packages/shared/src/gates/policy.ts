@@ -41,6 +41,12 @@ export function normalizeDecision(input: ResolveGateInput): string {
       return `reject_and_redo:${feedback}`;
     }
   }
+  if (decision === "answer") {
+    const answer = input.customText?.trim();
+    if (answer) {
+      return `answer:${answer}`;
+    }
+  }
   return decision;
 }
 
@@ -58,6 +64,9 @@ export function isAllowedDecision(
   }
   if (decision.startsWith("reject_and_redo:")) {
     return allowed.includes("reject_and_redo");
+  }
+  if (decision.startsWith("answer:")) {
+    return allowed.includes("answer");
   }
   return false;
 }
@@ -92,6 +101,10 @@ export function parseDecision(decision: string): ParsedDecision {
     const customText = decision.slice("reject_and_redo:".length);
     return { raw: decision, kind: "reject_and_redo", customText, isCustom: false };
   }
+  if (decision.startsWith("answer:")) {
+    const customText = decision.slice("answer:".length);
+    return { raw: decision, kind: "answer", customText, isCustom: false };
+  }
   return { raw: decision, kind: decision, isCustom: false };
 }
 
@@ -116,6 +129,21 @@ export function resolveGateDecision(
     default:
       throw new Error(`Custom decision not supported for gate type: ${gateType}`);
   }
+}
+
+/** Resolve a coding_question gate decision into an answer/skip verdict. */
+export function resolveCodingQuestionDecision(
+  decision: string,
+): { kind: "answered"; answer: string } | { kind: "skipped" } {
+  const parsed = parseDecision(decision);
+  if (parsed.kind === "answer") {
+    return { kind: "answered", answer: parsed.customText ?? "" };
+  }
+  if (parsed.kind === "skip") {
+    return { kind: "skipped" };
+  }
+  // Fallback: treat any other decision as skip to avoid blocking the slice.
+  return { kind: "skipped" };
 }
 
 export function appendCustomGateNote(

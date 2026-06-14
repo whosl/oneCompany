@@ -9,6 +9,7 @@ const DEVELOPMENT_GATE_TYPES = new Set([
   "tech_plan_confirm",
   "slice_failure",
   "change_review",
+  "coding_question",
 ]);
 
 function isStaleGateError(error: unknown): error is Error {

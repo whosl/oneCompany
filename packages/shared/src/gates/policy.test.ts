@@ -6,6 +6,7 @@ import {
   isApprovalDecision,
   normalizeDecision,
   parseDecision,
+  resolveCodingQuestionDecision,
   resolveGateDecision,
 } from "./policy.js";
 
@@ -94,5 +95,35 @@ describe("gate policy — M4", () => {
     expect(isApprovalDecision("dangerous_operation", { riskLevel: "high" }, "custom:ok")).toBe(
       true,
     );
+  });
+
+  it("normalizes answer decisions carrying free-text replies", () => {
+    expect(
+      normalizeDecision({ decision: "answer", customText: "用 React" }),
+    ).toBe("answer:用 React");
+    // answer without customText stays bare (skip-style or no-text).
+    expect(normalizeDecision({ decision: "answer" })).toBe("answer");
+  });
+
+  it("parses and allows answer:* decisions on coding_question", () => {
+    expect(parseDecision("answer:用 React")).toEqual({
+      raw: "answer:用 React",
+      kind: "answer",
+      customText: "用 React",
+      isCustom: false,
+    });
+    expect(isAllowedDecision("coding_question", "answer:用 React")).toBe(true);
+    expect(isAllowedDecision("coding_question", "skip")).toBe(true);
+    expect(isAllowedDecision("coding_question", "approve")).toBe(false);
+  });
+
+  it("resolves coding_question decisions into answered/skipped verdicts", () => {
+    expect(resolveCodingQuestionDecision("answer:用 React")).toEqual({
+      kind: "answered",
+      answer: "用 React",
+    });
+    expect(resolveCodingQuestionDecision("skip")).toEqual({ kind: "skipped" });
+    // Unknown decision falls back to skip so the slice is never blocked.
+    expect(resolveCodingQuestionDecision("garbage")).toEqual({ kind: "skipped" });
   });
 });
