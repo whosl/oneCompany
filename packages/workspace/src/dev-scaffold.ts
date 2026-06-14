@@ -3,20 +3,19 @@ import path from "node:path";
 import { initRepo } from "./git.js";
 import { SCAFFOLD_PLACEHOLDER_TITLE } from "./web-layer.js";
 
-export function findVitestMjs(startDir: string): string | undefined {
-  let dir = path.resolve(startDir);
-  for (let depth = 0; depth < 10; depth += 1) {
-    const candidate = path.join(dir, "node_modules", "vitest", "vitest.mjs");
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      break;
-    }
-    dir = parent;
-  }
-  return undefined;
+/**
+ * Resolve vitest only from the generated repo's own node_modules.
+ *
+ * Previously this walked up to 10 parent directories, which in a monorepo
+ * silently resolved to the host workspace's vitest — and when combined with
+ * pnpm/turbo boundary leakage caused test commands to run in the wrong
+ * package context. Generated repos must own their toolchain; if they don't
+ * have one yet, return undefined and let callers decide (skip or require
+ * install).
+ */
+export function findVitestMjs(repoPath: string): string | undefined {
+  const candidate = path.join(repoPath, "node_modules", "vitest", "vitest.mjs");
+  return fs.existsSync(candidate) ? candidate : undefined;
 }
 
 /** Run slice tests in the generated repo cwd using the workspace vitest binary (no local install). */
@@ -91,26 +90,29 @@ export function normalizeSliceTestCommand(
   return resolveSliceTestCommand(repoPath, "pnpm vitest run --reporter=json");
 }
 
-function findTscJs(startDir: string): string | undefined {
-  let dir = path.resolve(startDir);
-  for (let depth = 0; depth < 10; depth += 1) {
-    const candidate = path.join(dir, "node_modules", "typescript", "lib", "tsc.js");
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      break;
-    }
-    dir = parent;
-  }
-  return undefined;
+/**
+ * Resolve tsc only from the generated repo's own node_modules.
+ *
+ * Previously this walked up to 10 parent directories and, inside the OneCompany
+ * monorepo, resolved to the host workspace's TypeScript. That tsc then compiled
+ * with the host's file resolution and could pick up sibling generated-projects
+ * (observed: TS6059 referencing another project's tests/slice1.test.ts), and
+ * with no @types/node installed locally it also raised TS2688. Both are
+ * environment errors the coding agent cannot fix by editing business code,
+ * which made slice-1 fail every retry.
+ *
+ * Generated repos must own their TypeScript; without one return undefined and
+ * let callers skip typecheck (deps.ts already degrades to skip on undefined).
+ */
+function findTscJs(repoPath: string): string | undefined {
+  const candidate = path.join(repoPath, "node_modules", "typescript", "lib", "tsc.js");
+  return fs.existsSync(candidate) ? candidate : undefined;
 }
 
 /**
- * Typecheck command for a generated repo using the workspace TypeScript
- * (generated repos have no node_modules of their own). Returns undefined when
- * the repo has no tsconfig or no tsc is reachable — callers should skip.
+ * Typecheck command for a generated repo. Returns undefined when the repo has
+ * no tsconfig or no local tsc — callers should skip rather than fall back to a
+ * workspace tsc (see findTscJs).
  */
 export function resolveTypecheckCommand(repoPath: string): string | undefined {
   if (!fs.existsSync(path.join(repoPath, "tsconfig.json"))) {
@@ -463,9 +465,15 @@ export function ensureDevRepoScaffold(repoPath: string): void {
           rootDir: "src",
           esModuleInterop: true,
           skipLibCheck: true,
-          types: ["node"],
+          // No `types` whitelist: let tsc load all installed @types/* (node,
+          // vitest globals, etc.). A ["node"] whitelist previously blocked
+          // other ambient types and, when @types/node wasn't installed
+          // locally, raised TS2688 on every slice.
         },
-        include: ["src", "tests"],
+        // Tests are type-checked by vitest/esbuild, not tsc. Including them
+        // here combined with rootDir:"src" previously raised TS6059 for every
+        // tests/*.test.ts. Keep tsc scoped to the shipped source.
+        include: ["src"],
       },
       null,
       2,
