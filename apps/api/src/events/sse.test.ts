@@ -12,16 +12,13 @@ async function readFirstSseData(body: ReadableStream<Uint8Array>): Promise<strin
       break;
     }
     buffer += decoder.decode(value);
-    if (buffer.includes("\n\n")) {
-      break;
+    const match = buffer.match(/^data: (.+)$/m);
+    if (match?.[1]) {
+      return match[1];
     }
   }
 
-  const match = buffer.match(/^data: (.+)$/m);
-  if (!match?.[1]) {
-    throw new Error(`No SSE data frame found in buffer: ${buffer}`);
-  }
-  return match[1];
+  throw new Error(`No SSE data frame found in buffer: ${buffer}`);
 }
 
 describe("SSE stream — M1", () => {

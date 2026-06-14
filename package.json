@@ -11,6 +11,7 @@
     "migrate": "turbo run migrate --filter=@oc/shared",
     "api": "pnpm --filter @oc/api dev",
     "tui2": "pnpm --filter @oc/tui start",
+    "webui": "pnpm --filter @oc/webui dev",
     "onecompany": "pnpm --filter @onecompany/opencode onecompany",
     "opencode-plugin:build": "pnpm --filter @onecompany/opencode build",
     "opencode-plugin:install": "pnpm --filter @onecompany/opencode build && node packages/opencode-plugin/dist/cli.js install",

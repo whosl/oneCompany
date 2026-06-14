@@ -14,6 +14,11 @@ export function createEventRoutes(db: Db) {
     return streamSSE(c, async (stream) => {
       const seenSeqs = new Set<number>();
 
+      // Flush the response headers immediately. Without an opening frame,
+      // development proxies may keep an idle SSE response buffered until the
+      // first business event and clients incorrectly report the stream offline.
+      await stream.write(": connected\n\n");
+
       const writeEnvelope = async (envelope: EventEnvelope): Promise<void> => {
         // seq=0 marks ephemeral (broadcast-only) envelopes: always pass them
         // through, never dedupe by seq — they are not part of the event log.

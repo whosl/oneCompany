@@ -37,6 +37,16 @@ pnpm api
 pnpm tui2
 ```
 
+也可以启动与 TUI2 同步的 WebUI：
+
+```bash
+pnpm webui
+```
+
+打开 `http://localhost:3010`。开发服务器默认把 `/api` 代理到
+`http://127.0.0.1:3001`；连接其他 API 时可在 `apps/webui/.env.local`
+中设置 `VITE_API_URL`。
+
 也可以直接打开指定项目：
 
 ```bash
