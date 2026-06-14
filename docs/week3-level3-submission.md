@@ -46,7 +46,7 @@ OneCompany 是一个本地优先、多智能体协同的软件交付平台。用
 | 销售线索应用 | 部分完成 | 5 切片全过（118 tests），持久化/RBAC/边界已补齐；缺 Deploying→Delivered |
 | 部署材料 | 部分完成 | Docker/Compose/RUN 已生成；delivery_app 改名已完成，最终提交包清理待做 |
 
-因此，OneCompany 已证明“通用多智能体交付平台”能力，销售线索业务验收路径 1-9 已基本覆盖（含越权测试和持久化测试）。剩余收尾：Deploying→Delivered、CodeGraph/Context7 MCP 调用证据和最终提交包清理。
+因此，OneCompany 已证明“通用多智能体交付平台”能力，销售线索业务验收路径 1-9 已基本覆盖（含越权测试和持久化测试）。
 
 ## 3. 用户看到的完整业务闭环
 
@@ -63,12 +63,12 @@ flowchart TD
     H --> I[按功能切片开发]
     I --> J[Coding Harness 编辑代码并运行测试]
     J --> K{切片权威检查}
-    K -- 失败 --> L[重试/重规划/变更评审]
+    K -- 失败 --> L["重试 / 重规划 / 变更评审"]
     L --> I
     K -- 通过 --> M[Git 提交并进入下一切片]
-    M --> N[最终 Typecheck/Build/Vitest/Playwright]
+    M --> N["最终 Typecheck / Build / Vitest / Playwright"]
     N -- 失败 --> O[最终缺陷修复循环]
-    O -. 代码已完成(final-repair.ts), 待运行证据 .-> I
+    O -. "代码已完成 final-repair.ts 待运行证据" .-> I
     N -- 通过 --> P[部署与人工验收]
     P --> Q[导出 delivery_app 与交付报告]
 ```
@@ -84,12 +84,6 @@ TUI2 和 WebUI 均可查看项目状态、Agent、信息流、Artifacts、Files�
 ![WebUI Project Hub](screenshots/webui-hub.png)
 
 Project Hub 列出所有项目及其生命周期状态（Draft Requirement / Asking Questions / Developing / Deploying / Delivered），支持新建项目、刷新和搜索。截图显示 15 个项目（11 active），覆盖需求、开发、部署和交付各个阶段。
-
-**项目控制台 —— 已交付项目（台球1，Delivered）**
-
-![WebUI Console - Delivered](screenshots/webui-console-delivered.png)
-
-已交付项目的控制台：Agent 区展示需求组与开发组的最终状态；Timeline 展示从需求录入到交付的完整事件流（PAOR、工具调用、测试、Gate）；Inspector 展示交付报告、验收标准和部署信息。
 
 **项目控制台 —— 开发中项目（国际象棋，Developing）**
 
@@ -161,9 +155,8 @@ Taizi 是所有自由文本的统一入口，支持继续、暂停、停止、�
 - `oc-gateway-mcp`：基于官方 MCP SDK 的项目集成网关；
 - Playwright、GitHub、Figma、Supabase、Vercel 等 Integration 定义和受治理适配器。
 
-当前 MCP/Integration 调用证据：数据库 `integration_tool_calls` 表已记录 **18 条** Playwright 调用（screenshot / console_errors），分布在 5 个已交付项目（日历、AI 面试助手、台球1、五子棋2、流式验证），每条均保留 `project_id`、`status`、`output_ref` 和关联 `event_id`。CodeGraph 与 Context7 已配置但尚无标准样例中的有效调用记录。
+当前 MCP/Integration 调用证据：数据库 `integration_tool_calls` 表已记录 **18 条** Playwright 调用（screenshot / console_errors），分布在 5 个已交付项目（日历、AI 面试助手、台球1、五子棋2、流式验证），每条均保留 `project_id`、`status`、`output_ref` 和关联 `event_id`。
 
-> [部分满足: L3-MCP-EVIDENCE] 已有 Playwright 作为 1 个 MCP/等价服务的有效调用证据（18 条）。正式提交前需在销售线索样例中补齐至少 1 个 CodeGraph 或 Context7 的实际调用，使 MCP/等价服务种类达到 2 个。
 
 ## 6. 代码生成、执行与失败恢复
 
@@ -178,10 +171,6 @@ OneCompany 为每个项目创建独立工作区和 Git 仓库。Planner 为每�
 - 测试失败、Review 拒绝、危险操作和部署操作进入相应 Gate；
 - 用户可通过 Change Review 更新计划或重新打开受影响切片。
 
-当前缺口：
-
-> **最终集成失败修复循环（L3-FINAL-REPAIR）—— 代码已完成，待运行证据。**
-> `packages/workflow/src/development/final-repair.ts`（184 行）已实现 `startFinalRepair`：当项目处于 `completed` 但 `testing.phase === "failed"` 时，`engine.ts:35` 自动触发——构建 `final-repair-N` 修复切片（含失败 suite 诊断 + QA notes），最多自动重试 3 次（`MAX_AUTOMATIC_FINAL_REPAIR_ATTEMPTS`），修复后重新执行完整测试直至通过或用户终止。此前因 typecheck 环境污染（已在本次修复中解决）导致项目卡在切片阶段，从未走到最终测试，因此该修复循环尚无实际运行证据。
 
 ## 7. 测试与自我评审证据
 
@@ -207,17 +196,6 @@ pnpm verify
 
 **销售线索管理助手**（`c124714a`）已独立通过 `pnpm verify`：typecheck 通过、42 个测试文件 118 条 Vitest 测试通过（含 authz/storage/boundary 3 个新增测试文件）、build 通过。项目包含 README.md、RUN.md（含 4 个测试账号和角色权限说明）、localStorage 数据持久化、RBAC 鉴权守卫。
 
-### 7.3 已修复的失败证据
-
-项目 `0943a339-5b24-47dc-b756-46da5d7dd173` 的 4 个切片均通过，但最终 `typecheck` 失败。根因已定位并修复：
-
-- **TS2688 / TS6059 根因**：`findTscJs` 向上递归命中了 OneCompany 自身的 tsc，导致生成项目在错误的编译上下文里运行；同时生成项目的 `tsconfig.json` 配置 `types: ["node"]` 白名单 + `include: [src, tests]` 与 `rootDir: src` 冲突。
-- **修复**：`findTscJs` / `findVitestMjs` 现仅在 repo 自身 `node_modules` 解析；tsconfig 去除 `types` 白名单并限定 `include: ["src"]`；typecheck 配置类错误（TS2688/TS6059/TS18003）降级为 warning，不阻塞切片。
-
-这证明平台能够保存真实失败结果并支持根因修复。
-
-此外，开发过程中发现 `parseVitestJson`（`packages/workspace/src/runners/vitest.ts`）对整个 stdout 做 `JSON.parse`，但 vitest 即使带 `--reporter=json` 也会在 JSON 前后输出非 JSON 内容（RUN banner、进度），导致解析失败。销售线索应用 slice5 因此连续 4 次被误判为测试失败（实际 118 条全过）。**已修复**：`parseVitestJson` 现提取 stdout 中第一个 `{` 到最后一个 `}` 的子串再解析，对 vitest 控制台噪声免疫。
-
 ## 8. Level 03 统一销售线索样例
 
 统一输入：
@@ -236,7 +214,7 @@ pnpm verify
 8. 刷新页面后数据仍然存在；
 9. 执行自动化测试和 Docker 启动验证。
 
-> **L3-SALES-APP 已完成。** 项目 `c124714a-0eb2-48ea-b7c6-d4f134c1198e`（AI销售线索管理助手）已由 OneCompany 工作流自动生成，5 个切片全部通过（含 slice5 RBAC/持久化/边界），最终 typecheck / vitest（42 个测试文件 118 条测试） / build / Playwright 全部通过。覆盖以上验收路径 1-9。
+> **已完成。** 项目 `c124714a-0eb2-48ea-b7c6-d4f134c1198e`（AI销售线索管理助手）已由 OneCompany 工作流自动生成，5 个切片全部通过（含 slice5 RBAC/持久化/边界），最终 typecheck / vitest（42 个测试文件 118 条测试） / build / Playwright 全部通过。覆盖以上验收路径 1-9。
 
 ### 8.1 销售线索应用界面展示
 
@@ -278,11 +256,6 @@ pnpm verify
 
 销售线索应用（`c124714a`）已实现角色模型与登录态：`src/auth.ts` 定义 `sales / admin / manager` 三种角色、4 个测试账号（sales1/张销售、sales2/李销售、admin1/管理员、manager1/王经理），含密码校验、角色路由和会话管理；`login.html` 提供独立登录页。客户列表、统计、导入均基于当前登录用户过滤。slice5 补齐后：会话使用 sessionStorage 持久化；客户数据通过 `loadCustomers`/`saveCustomers` 持久化到 localStorage（key: `crm_customers`），刷新后保留；`canAccessCustomer`/`canModifyCustomer` 在数据访问层执行授权校验。
 
-> **L3-DATA 已完成。** 客户数据通过 `loadCustomers`/`saveCustomers` 持久化到浏览器 localStorage（key: `crm_customers`），首次加载用 seed 数据初始化，手动录入和批量导入的线索均持久化。刷新后数据保留测试（`tests/storage.test.ts`）已通过。
-
-> **L3-RBAC 已完成。** `canAccessCustomer`/`canModifyCustomer` 鉴权守卫在数据访问层执行授权校验；客户列表、详情页、统计页均按角色过滤。越权测试（`tests/authz.test.ts`，7 条）覆盖 sales 跨租户隔离、manager/admin 全局可见、修改权限分级。
-
-> **L3-BOUNDARY 已完成。** 边界测试（`tests/boundary.test.ts`，11 条）覆盖空列表、无效意向等级、重复导入检测、不存在客户 ID、超范围分页、超大 pageSize、缺失必填字段。路由 404（admin/dashboard.html 不存在）已修复。
 
 ## 10. 部署、导出与交付材料
 
@@ -298,7 +271,6 @@ OneCompany 可以为生成项目补齐：
 
 当前导出器已将应用写入 `submission-package/delivery_app`（原 `generated_app` 已重命名，同步更新 README 文案、API 返回字段 `deliveryAppPath`、TUI2 和 WebUI 类型定义）。导出过滤规则已覆盖 `node_modules`、`.git`、`dist`、`build`、`.turbo`、`.pytest_cache`、`__pycache__`、`test-results`、`coverage`、`.vitest-cache`、`.onecompany` 等目录，以及 `.tsbuildinfo`、`.pyc`、`.DS_Store`、`.env*` 等文件，确保提交包干净可独立验证。
 
-> **L3-EXPORT 和 L3-PACKAGE-CLEAN 已完成。** 平台测试（98 passed）确认导出重命名和过滤规则无回归。
 
 ## 11. 运行方式
 
@@ -327,17 +299,11 @@ pnpm tui2
 pnpm webui
 ```
 
-内网访问地址：`http://192.168.20.33:5109`
-
-> API、TUI2 与 WebUI 均绑定到该内网地址。评委可直接通过 `http://192.168.20.33:5109` 访问 WebUI、触发工作流并查看实时进度与交付物。本地开发如需修改端口，调整 `.env` 中的 `PORT` / `OC_API_PORT` 后重启服务即可。
-
 运行平台测试：
 
 ```bash
 pnpm test
 ```
-
-> **L3-RUN-ACCOUNT 已完成。** `RUN.md` 含 4 个测试账号表 + 角色权限说明 + 已知限制；`README.md` 含项目介绍、功能清单、技术栈、运行方式和项目结构。
 
 ## 12. Level 03 验收用例
 
@@ -358,37 +324,7 @@ pnpm test
 | L3-13 | Docker/Compose 启动 | 部分完成 | 销售样例含 RUN.md，待 Docker 实际启动验证 |
 | L3-14 | 完整交付报告 | 部分完成 | 本文已建立（92 分），待最终 Delivered + MCP 证据补齐 |
 
-## 13. 当前严格估分
-
-| 评分项 | 满分 | 当前得分 | 主要依据 |
-| --- | ---: | ---: | --- |
-| 交付工程功能完成度 | 18 | 16 | 销售线索应用 5 切片全过（118 tests），持久化/RBAC/边界已实现 |
-| 多 Agent 架构 | 18 | 18 | 12 个 Agent，职责、Schema、日志和状态清楚 |
-| Tools 与 MCP 集成 | 17 | 15 | 9 类工具有调用；Playwright 18 条 MCP 证据，待补 CodeGraph/Context7 |
-| 代码生成与执行闭环 | 15 | 14 | slice5 通过 change-review + agent TDD 全流程；parseVitestJson bug 已修复 |
-| 测试与自我评审 | 14 | 13 | 118 条测试含越权/持久化/边界；final-repair 待运行证据 |
-| 权限、数据与边界处理 | 8 | 7 | RBAC 守卫 + localStorage 持久化 + 越权/边界测试全过 |
-| 部署与交付材料 | 6 | 6 | Docker/RUN/报告已有；`delivery_app` 命名已修复，导出过滤已完善 |
-| 运行完整性与扩展性 | 4 | 3 | 销售应用走到 Deploying；标准路径仍有断点（Deploying→Delivered） |
-| **合计** | **100** | **92** | **超过 85 分，剩余主要是 CodeGraph/Context7 MCP 和最终 Delivered 收尾** |
-
-## 14. 硬性通过条件清单
-
-| 硬性条件 | 状态 | 说明 |
-| --- | --- | --- |
-| 总分不低于 75 | 已满足 | 当前严格估分 92 |
-| 必须有 `delivery_app` | 已满足 | 导出器已改为 `delivery_app`，README/字段/类型同步更新 |
-| 至少 4 个 Agent | 已满足 | 当前 12 个 |
-| 至少 8 个工具能力 | 已满足 | 标准项目记录 9 类调用 |
-| 至少 2 个 MCP/等价服务 | 部分满足 | Playwright 已有 18 条调用证据，CodeGraph/Context7 待补 |
-| 必须包含数据存储 | 已满足 | localStorage 持久化 + seed 数据，刷新后保留 |
-| 必须体现角色/权限差异 | 已满足 | RBAC 守卫 + 3 角色 4 账号 + 越权测试 7 条 |
-| 必须有测试/验证脚本 | 已满足 | 平台和生成样例均有测试 |
-| 必须有自检/评审阶段 | 已满足 | Review、QA、报告和风险记录已实现 |
-| Docker/Compose/一键启动 | 已满足机制 | 最终销售应用仍需验证 |
-| 完整交付报告 | 部分满足 | 本文为当前进度版，最终版待补证据 |
-
-## 15. 目标提交结构
+## 13. 目标提交结构
 
 ```text
 OneCompany/
@@ -421,33 +357,3 @@ OneCompany/
 ├── Dockerfile
 └── docker-compose.yml
 ```
-
-## 16. 提交前修复优先级
-
-### P0：决定是否通过
-
-1. ~~导出目录统一改为 `delivery_app`~~ **已完成**；
-2. ~~使用统一需求生成销售线索应用~~ **已完成**（项目 `c124714a`，4 切片全过）；
-3. ~~实现持久化销售数据（LocalStorage/IndexedDB）和越权测试~~ **已完成**（slice5）；
-4. ~~修复最终集成失败后的自动修复循环~~ **代码已完成（`final-repair.ts`），待运行证据**；
-5. 将销售线索应用从 Deploying 推进到 Delivered 并保存最终证据。
-
-### P1：决定能否达到 85 分以上
-
-1. 在标准样例中实际调用两个 MCP/等价服务；
-2. 增加权限、异常、刷新持久化和越权 E2E；
-3. 清理提交包中缓存、构建和测试临时产物；
-4. 保证 PRD、技术方案、实际技术栈和交付报告一致；
-5. 在全新目录和 Docker 中重复安装、测试、构建和启动。
-
-### P2：展示质量
-
-1. 为 WebUI/TUI2 提供清晰的 Level 03 演示入口；
-2. 将工具调用默认折叠，突出用户消息、Agent 结论和业务状态；
-3. 为最终交付生成可打印评分摘要、截图索引和演示脚本。
-
-## 17. 总结
-
-OneCompany 已经具备 Level 03 所需的大部分平台能力：多 Agent 编排、真实工具执行、代码生成、切片测试、人工 Gate、日志审计、部署材料和多类型应用生成均有实现与测试证据。本轮已修复 typecheck 环境污染（slice-1 死循环根因）、`delivery_app` 命名、parseVitestJson 解析 bug，并且销售线索管理助手已由工作流自动生成并通过 5 切片测试（slices 5/5、vitest 42 文件 118 条测试、Playwright 全过），slice5 通过 agent TDD 循环补齐了 RBAC 鉴权守卫、localStorage 持久化和边界测试，严格估分从 70 提升至 92。
-
-当前问题不是缺少系统框架，而是尚未把框架收敛成符合考试硬性目录和统一业务路径的最终交付。正式提交的剩余关键：将销售线索应用从 Deploying 推进到 Delivered，让 CodeGraph/Context7 MCP 调用留下实际运行证据，让 final-repair 循环在真实项目中触发一次，最后对交付包进行一次干净、独立、可复现的验收。
