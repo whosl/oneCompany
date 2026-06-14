@@ -26,6 +26,9 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["tech-plan", "architecture-design"],
+    defaultInputSummary: "需求阶段产出的 PRD 与验收标准",
+    outputHandoff: "技术方案（技术栈/架构/数据模型/TDD 策略）；经 tech_plan_confirm Gate 后交给 Planner 拆切片",
   },
   {
     id: "planner",
@@ -40,6 +43,9 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["slice-planning", "test-design"],
+    defaultInputSummary: "已确认的技术方案",
+    outputHandoff: "有序功能切片队列（每切片含目标/验收/测试命令），交给 Coding Agent 逐个实现",
   },
   {
     id: "coding",
@@ -54,6 +60,9 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "medium",
     permissions: ["read", "write"],
     executor: "scripted",
+    capabilities: ["tdd-implementation", "web-ui-development"],
+    defaultInputSummary: "单个功能切片的目标 + 验收检查 + 测试命令",
+    outputHandoff: "切片代码改动；交给 Review 审查，并由平台权威测试独立判定是否通过",
   },
   {
     id: "review",
@@ -68,6 +77,9 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["code-review"],
+    defaultInputSummary: "刚提交的切片 diff + 验收检查",
+    outputHandoff: "审查结论（approved/findings）；findings 回流给 Coding Agent 作为下一次修复的依据",
   },
   {
     id: "qa",
@@ -83,6 +95,9 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     permissions: ["read", "network"],
     executor: "scripted",
     integrationAccess: "auto",
+    capabilities: ["qa-verification", "preview-check"],
+    defaultInputSummary: "全切片完成后的应用 + 预览 URL",
+    outputHandoff: "QA 结论（通过/失败 + 原因）；失败回到开发循环，通过交给 DevOps 进入交付",
   },
   {
     id: "devops-delivery",
@@ -97,6 +112,9 @@ export const DEVELOPMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["delivery-packaging", "deployment-docs"],
+    defaultInputSummary: "通过测试的应用 + 部署 URL",
+    outputHandoff: "交付包（运行说明/Docker/交付报告）；等待用户最终验收",
   },
 ];
 

@@ -25,6 +25,9 @@ export const REQUIREMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["requirement-normalization"],
+    defaultInputSummary: "用户的一句话原始业务需求",
+    outputHandoff: "规范化需求摘要 + 目标用户/目标，交给需求分析 Agent 做结构化提取",
   },
   {
     id: "requirement-analyst",
@@ -39,6 +42,9 @@ export const REQUIREMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["requirement-analysis", "structured-extraction"],
+    defaultInputSummary: "Intake 规范化后的需求状态",
+    outputHandoff: "结构化需求模型（功能/页面/数据/角色/集成），交给完整度评分 Agent 判定是否达标",
   },
   {
     id: "completeness-scorer",
@@ -53,6 +59,9 @@ export const REQUIREMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["completeness-scoring", "gap-analysis"],
+    defaultInputSummary: "Analyst 产出的结构化需求状态",
+    outputHandoff: "0-100 完整度分数 + 缺口列表；达标则交给 PRD Agent，否则交给问题规划 Agent 追问",
   },
   {
     id: "question-planner",
@@ -67,6 +76,9 @@ export const REQUIREMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["clarification-planning"],
+    defaultInputSummary: "未达标的需求状态 + Scorer 识别的缺口",
+    outputHandoff: "一轮聚焦业务的澄清问题（含建议答案），等待用户作答后回到 Scorer 重新评分",
   },
   {
     id: "prd-acceptance",
@@ -81,6 +93,9 @@ export const REQUIREMENT_AGENT_DEFINITIONS: AgentDefinition[] = [
     riskLevel: "low",
     permissions: ["read"],
     executor: "scripted",
+    capabilities: ["prd-generation", "acceptance-criteria"],
+    defaultInputSummary: "达标的需求状态（分数 ≥ 阈值且无关键缺口）",
+    outputHandoff: "PRD + 验收标准；经需求确认 Gate 后作为开发组的唯一业务基线，交给 Architect",
   },
 ];
 

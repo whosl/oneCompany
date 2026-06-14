@@ -21,6 +21,10 @@ export const TAIZI_AGENT_DEFINITION: AgentDefinition = {
   riskLevel: "low",
   permissions: ["read"],
   executor: "scripted",
+  capabilities: ["intent-routing", "status-research", "natural-language-dispatch"],
+  defaultInputSummary: "用户的自由文本消息 + 项目上下文快照（状态/打开的 Gate/活跃会话）",
+  outputHandoff:
+    "调度决策（13 类意图）→ 分发到对应 agent 或工作流动作；或只读调研后的自然语言回答",
 };
 
 export function registerTaiziAgent(db: Db): void {
