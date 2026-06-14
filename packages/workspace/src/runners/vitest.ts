@@ -20,9 +20,20 @@ export function parseVitestJson(stdout: string): {
     return { passed: false, details: "empty vitest output" };
   }
 
+  // vitest --reporter=json still emits non-JSON content (RUN banner, progress
+  // ticks, ANSI codes) before/after the JSON blob. Extracting the substring
+  // from the first '{' to the matching last '}' makes the parse robust against
+  // that noise — previously the whole stdout was JSON.parsed, which failed with
+  // "invalid vitest json output" whenever any extra text was present.
   let report: VitestJsonReport;
   try {
-    report = JSON.parse(trimmed) as VitestJsonReport;
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
+    const jsonText =
+      firstBrace >= 0 && lastBrace > firstBrace
+        ? trimmed.slice(firstBrace, lastBrace + 1)
+        : trimmed;
+    report = JSON.parse(jsonText) as VitestJsonReport;
   } catch {
     return { passed: false, details: "invalid vitest json output" };
   }
