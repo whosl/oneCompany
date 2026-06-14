@@ -12,7 +12,6 @@ import {
 } from "@oc/shared";
 import { persistRunnerResult } from "../testing/results.js";
 import {
-  CODING_QUESTION_GATE,
   DEVELOPMENT_AGENT_IDS,
   OPENCODE_NO_FILE_CHANGES_SUMMARY,
 } from "@oc/agent-core";
@@ -699,11 +698,6 @@ export async function resumeDevelopmentAfterGateLegacy(
       return resumeSliceFailureGate(deps, payload, input.decision);
     case CHANGE_REVIEW_GATE:
       return resumeChangeReviewGate(deps, payload, input.decision);
-    case CODING_QUESTION_GATE:
-      // coding_question is a blocking gate resolved inside runSlice. Reaching
-      // here means runSlice already returned after the answer was injected —
-      // the slice loop resumed on its own. Just return the current status.
-      return getDevelopmentStatus(deps, payload.state.projectId);
     default:
       throw new Error(`Unsupported development gate type: ${gateType ?? "none"}`);
   }

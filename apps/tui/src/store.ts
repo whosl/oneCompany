@@ -1320,6 +1320,12 @@ function computeComposer(state: ConsoleState): ComposerState {
       const preview = snapshot.dev?.previewUrl ?? snapshot.testing?.previewUrl;
       if (preview) composer.input = preview;
     }
+    if (gate.gateType === "coding_question") {
+      // Default cursor to "skip" (index 1) so an empty Enter never submits a
+      // blank answer — the user must type text or explicitly move to "answer".
+      composer.gateCursor = composer.gateOptions.indexOf("skip");
+      if (composer.gateCursor < 0) composer.gateCursor = 0;
+    }
     return composer;
   }
 

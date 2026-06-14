@@ -29,8 +29,7 @@ export type DevelopmentWorkflowPhase =
 export type DevelopmentGateType =
   | "tech_plan_confirm"
   | "slice_failure"
-  | "change_review"
-  | "coding_question";
+  | "change_review";
 
 export type DeploymentSessionMeta = {
   phase: "idle" | "awaiting_gate" | "completed";

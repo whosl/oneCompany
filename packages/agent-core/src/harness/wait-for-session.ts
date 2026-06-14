@@ -12,8 +12,7 @@ export type WaitForSessionOptions = {
   sdkCallTimeoutMs?: number;
   /**
    * Reads the trailing assistant message text for this session. Used to detect
-   * a structured `{"coding_question":"..."}` signal when the agent idles
-   * without producing file changes (a strong "asking rather than doing" cue).
+   * a structured `{"coding_question":"..."}` signal when the agent idles.
    * Undefined disables question detection entirely.
    */
   readLastAssistantText?: () => Promise<string>;
@@ -50,10 +49,17 @@ export function parseCodingQuestionSignal(text: string): string | undefined {
  * Completion requires session.idle (via the event bridge) — never "no running
  * tools" alone, which fires falsely while the model is still between turns.
  *
- * When the agent idles WITHOUT file changes, inspects the trailing assistant
- * text for a `{"coding_question":"..."}` signal. If found, returns
+ * On each idle tick, inspects the trailing assistant text for a
+ * `{"coding_question":"..."}` signal. If found, returns
  * `{ kind: "awaiting_answer" }` so the caller can raise a gate, inject the
  * human's answer, and call this again to wait for the resumed turn.
+ *
+ * Question detection runs even when the session already has file changes:
+ * `bridge.changedFiles` is session-cumulative, so gating on "no files yet"
+ * would swallow any question the agent asks AFTER editing some files (e.g. a
+ * second clarification mid-slice). Instead we dedupe by the assistant text
+ * signature — re-checking only when the trailing reply changed (i.e. a new
+ * turn produced fresh text after an injected answer).
  */
 export async function waitForSessionCompletion(
   client: OpencodeClient,
@@ -71,10 +77,13 @@ export async function waitForSessionCompletion(
   const sdkCallTimeoutMs = options.sdkCallTimeoutMs ?? DEFAULT_SDK_CALL_TIMEOUT_MS;
   let idleStreak = 0;
   let lastHeartbeatAt = startedAt;
-  // Track whether a question was already surfaced for this idle spell so we
-  // don't re-poll the message API every tick once we've decided it's NOT a
-  // question (the assistant text won't change without a new turn).
-  let lastQuestionCheckAt = 0;
+  // Signature of the assistant text we last checked for a question signal.
+  // Prevents re-polling the message API every tick for the SAME idle spell,
+  // while still re-checking after a new turn (the text changes once the agent
+  // responds to an injected answer). Uses content length + a tail slice so we
+  // don't hold the full text in memory.
+  let lastCheckedSignature = "";
+  const signatureOf = (text: string): string => `${text.length}:${text.slice(-64)}`;
 
   const maybeHeartbeat = () => {
     if (!options.onHeartbeat) {
@@ -99,21 +108,22 @@ export async function waitForSessionCompletion(
       idleStreak = 0;
     }
 
-    // Agent went idle without edits — check for a structured question signal
-    // BEFORE deciding the session completed. A question means the agent is
-    // waiting for a human answer, not done working.
-    if (
-      !hasFiles &&
-      idleStreak >= 1 &&
-      options.readLastAssistantText &&
-      Date.now() - lastQuestionCheckAt > 1_000
-    ) {
-      lastQuestionCheckAt = Date.now();
+    // When the agent idles, inspect its trailing reply for a structured
+    // question signal BEFORE deciding the turn completed. Dedupe by text
+    // signature so we re-check after a new turn (an injected answer elicits
+    // fresh text) but not on every poll of the same idle spell. Runs even when
+    // files already changed this session — changedFiles is cumulative and a
+    // second question after edits must not be swallowed as completion.
+    if (idleStreak >= 1 && options.readLastAssistantText) {
       try {
         const text = await options.readLastAssistantText();
-        const question = parseCodingQuestionSignal(text);
-        if (question) {
-          return { kind: "awaiting_answer", questionText: question };
+        const sig = signatureOf(text);
+        if (sig !== lastCheckedSignature) {
+          lastCheckedSignature = sig;
+          const question = parseCodingQuestionSignal(text);
+          if (question) {
+            return { kind: "awaiting_answer", questionText: question };
+          }
         }
       } catch {
         // Message read failed (transient SDK hiccup) — fall through to normal

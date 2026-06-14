@@ -206,7 +206,9 @@ describe("waitForSessionCompletion", () => {
     vi.useRealTimers();
   });
 
-  it("returns completed when idle has files even if readLastAssistantText is set", async () => {
+  it("detects a question even when files already changed this session", async () => {
+    // Regression: changedFiles is session-cumulative, so a question asked AFTER
+    // the agent edited some files must NOT be swallowed as completion.
     vi.useFakeTimers();
     const bridge: EventBridgeHandle = {
       changedFiles: new Set(["src/app.ts"]),
@@ -216,7 +218,6 @@ describe("waitForSessionCompletion", () => {
       stop: () => undefined,
     };
     const client = { session: { messages: vi.fn() } };
-    const readLastAssistantText = vi.fn(async () => '{"coding_question":"x"}');
 
     const done = waitForSessionCompletion(
       client as never,
@@ -224,13 +225,44 @@ describe("waitForSessionCompletion", () => {
       "ses-1",
       "/tmp/repo",
       60_000,
-      { readLastAssistantText },
+      {
+        readLastAssistantText: async () =>
+          '{"coding_question":"验收入口放哪里？"}',
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(done).resolves.toEqual({
+      kind: "awaiting_answer",
+      questionText: "验收入口放哪里？",
+    });
+    vi.useRealTimers();
+  });
+
+  it("returns completed when the trailing reply has no question signal", async () => {
+    vi.useFakeTimers();
+    const bridge: EventBridgeHandle = {
+      changedFiles: new Set(["src/app.ts"]),
+      isIdle: () => true,
+      hasSeenSessionIdle: () => true,
+      hasAssistantReply: () => true,
+      stop: () => undefined,
+    };
+    const client = { session: { messages: vi.fn() } };
+
+    const done = waitForSessionCompletion(
+      client as never,
+      bridge,
+      "ses-1",
+      "/tmp/repo",
+      60_000,
+      {
+        readLastAssistantText: async () => "done implementing slice-1",
+      },
     );
 
     await vi.advanceTimersByTimeAsync(2_000);
     await expect(done).resolves.toEqual({ kind: "completed" });
-    // File-bearing idle should short-circuit before consulting the question reader.
-    expect(readLastAssistantText).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 });

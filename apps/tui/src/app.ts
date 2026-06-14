@@ -1086,13 +1086,15 @@ export class App {
           composer.gateCursor = (composer.gateCursor + 1) % Math.max(1, options.length);
         } else if (key.type === "enter") {
           const answer = composer.input.trim();
-          // If the user typed an answer, submit it via the "answer" option.
-          // Otherwise fall back to the highlighted option (e.g. cursor on "skip").
+          const highlighted = options[composer.gateCursor];
+          // If the user typed an answer, submit it. Otherwise fall back to the
+          // highlighted option — but refuse to submit "answer" with empty text
+          // (would inject a blank reply). Default cursor sits on "skip".
           if (answer && composer.gateId) {
             this.submitCodingAnswer(composer.gateId, answer);
             composer.input = "";
-          } else if (composer.gateId && options[composer.gateCursor]) {
-            this.chooseGateOption(state, options[composer.gateCursor]!);
+          } else if (composer.gateId && highlighted && highlighted !== "answer") {
+            this.chooseGateOption(state, highlighted);
           }
         } else if (key.type === "backspace") {
           composer.input = [...composer.input].slice(0, -1).join("");
