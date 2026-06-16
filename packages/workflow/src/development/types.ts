@@ -47,6 +47,14 @@ export type FinalRepairMeta = {
   pendingRetest: boolean;
 };
 
+export type SliceFailureDigest = {
+  sliceId: string;
+  category: string;
+  details: string;
+  count: number;
+  updatedAt: string;
+};
+
 export type DevelopmentSessionMeta = {
   phase: DevelopmentWorkflowPhase;
   profile: DevFixtureProfile;
@@ -56,6 +64,8 @@ export type DevelopmentSessionMeta = {
   pendingChangeRequestId?: string;
   pendingChangeRequestKind?: "skip_slice" | "requirement_change";
   sliceRetryBudgetExtension?: number;
+  sliceFailureCounts?: Record<string, Record<string, number>>;
+  sliceFailureDigest?: SliceFailureDigest;
   finalRepair?: FinalRepairMeta;
 };
 
@@ -117,9 +127,9 @@ export type DevelopmentRunResult = {
 };
 
 export type SliceIterationResult =
-  | { kind: "passed"; state: DevState }
-  | { kind: "retry"; state: DevState }
-  | { kind: "gate"; state: DevState; gateId: string };
+  | { kind: "passed"; state: DevState; meta: DevelopmentSessionMeta }
+  | { kind: "retry"; state: DevState; meta: DevelopmentSessionMeta }
+  | { kind: "gate"; state: DevState; meta: DevelopmentSessionMeta; gateId: string };
 
 export const TECH_PLAN_CONFIRM_GATE = "tech_plan_confirm";
 export const SLICE_FAILURE_GATE = "slice_failure";
@@ -136,6 +146,7 @@ export function buildSliceSpec(
   slice: FunctionSliceTask,
   state: DevState,
   repoPath?: string,
+  retryContext?: string[],
 ): SliceSpec {
   const testCommand = repoPath
     ? normalizeSliceTestCommand(repoPath, slice.testCommand, slice.id)
@@ -147,6 +158,7 @@ export function buildSliceSpec(
     acceptanceChecks: slice.acceptanceChecks ?? [],
     testCommand,
     expectedFiles: slice.expectedFiles,
+    retryContext,
     modelTier: "strong",
   };
 }

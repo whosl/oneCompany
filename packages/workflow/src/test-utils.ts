@@ -233,6 +233,7 @@ export function seedPrdReadyProject(db: Db, name = "M6 Dev Project"): { projectI
 export type DevelopmentDepsOptions = {
   authoritativeAttemptsBeforePass?: number;
   alwaysFail?: boolean;
+  failureDetails?: string;
   onFinalRepairCompleted?: DevelopmentWorkflowDeps["onFinalRepairCompleted"];
 };
 
@@ -251,7 +252,7 @@ export function createDevelopmentDeps(
     authorize: async () => ({ allow: true }),
     runAuthoritativeCheck: async (_slice: FunctionSliceTask) => {
       if (options.alwaysFail) {
-        return { passed: false, details: "fixture always fail" };
+        return { passed: false, details: options.failureDetails ?? "fixture always fail" };
       }
       attempt += 1;
       return {

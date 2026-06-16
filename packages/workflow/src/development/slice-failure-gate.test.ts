@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { changeRequests } from "@oc/shared";
 import { startDevelopment, resumeDevelopmentAfterGate, getDevelopmentStatus } from "./engine.js";
+import { loadDevSession } from "./state.js";
 import { setupDevelopmentTest, waitForSliceLoopIdle } from "../test-utils.js";
 
 async function reachSliceFailureGate(
@@ -46,7 +47,28 @@ describe("slice failure gate", () => {
       expect(retried.projectStatus).toBe("Developing");
       expect(retried.gateType).toBe("slice_failure");
       expect(retried.state.taskQueue[0]?.status).toBe("failed");
-      expect(retried.state.currentSliceAttempts).toBe(2);
+      expect(retried.state.currentSliceAttempts).toBe(1);
+
+      const session = loadDevSession(db, projectId);
+      expect(session.meta.sliceFailureCounts?.["slice-1"]?.["authoritative-test"]).toBe(3);
+      expect(session.meta.sliceFailureDigest?.sliceId).toBe("slice-1");
+      expect(session.meta.sliceFailureDigest?.details).toContain("stopping blind retry");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("caps stored failure digest details", async () => {
+    const longFailure = `fixture ${"x".repeat(1500)}`;
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({
+      alwaysFail: true,
+      failureDetails: longFailure,
+    });
+    try {
+      await reachSliceFailureGate(db, projectId, deps);
+      const session = loadDevSession(db, projectId);
+      expect(session.meta.sliceFailureDigest?.details.length).toBeLessThanOrEqual(1001);
+      expect(session.meta.sliceFailureDigest?.details).not.toContain("x".repeat(1000));
     } finally {
       cleanup();
     }
@@ -62,6 +84,9 @@ describe("slice failure gate", () => {
       });
       expect(replanned.projectStatus).toBe("Tech Plan Review");
       expect(replanned.gateType).toBe("tech_plan_confirm");
+      const session = loadDevSession(db, projectId);
+      expect(session.meta.sliceFailureCounts?.["slice-1"]).toBeUndefined();
+      expect(session.meta.sliceFailureDigest).toBeUndefined();
     } finally {
       cleanup();
     }

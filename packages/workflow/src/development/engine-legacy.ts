@@ -52,6 +52,7 @@ import {
 import { raiseTechPlanGate, runArchitect } from "./tech-plan.js";
 import type {
   DevelopmentRunResult,
+  DevelopmentSessionMeta,
   DevelopmentSessionPayload,
   DevelopmentWorkflowDeps,
   SliceIterationResult,
@@ -136,6 +137,68 @@ function buildRepeatedFailureDiagnostic(sliceId: string, category: string, detai
   ].join(" ");
 }
 
+const SLICE_FAILURE_DIGEST_DETAIL_LIMIT = 1000;
+
+function truncateFailureDetails(details: string): string {
+  return details.length > SLICE_FAILURE_DIGEST_DETAIL_LIMIT
+    ? `${details.slice(0, SLICE_FAILURE_DIGEST_DETAIL_LIMIT)}…`
+    : details;
+}
+
+function buildSliceRetryContext(payload: DevelopmentSessionPayload, sliceId: string): string[] | undefined {
+  const digest = payload.meta.sliceFailureDigest;
+  if (!digest || digest.sliceId !== sliceId) {
+    return undefined;
+  }
+  return [
+    `Previous ${digest.category} failure repeated ${digest.count} time(s) for this slice.`,
+    `Latest failure evidence: ${digest.details.slice(0, 800)}`,
+    "This retry runs in a fresh opencode session, so use this summary as prior working memory.",
+  ];
+}
+
+function recordSliceFailure(
+  meta: DevelopmentSessionMeta,
+  sliceId: string,
+  category: string,
+  details: string,
+): { meta: DevelopmentSessionMeta; matchingFailures: number } {
+  const categoryCounts = { ...(meta.sliceFailureCounts?.[sliceId] ?? {}) };
+  const matchingFailures = (categoryCounts[category] ?? 0) + 1;
+  categoryCounts[category] = matchingFailures;
+  return {
+    matchingFailures,
+    meta: {
+      ...meta,
+      sliceFailureCounts: {
+        ...(meta.sliceFailureCounts ?? {}),
+        [sliceId]: categoryCounts,
+      },
+      sliceFailureDigest: {
+        sliceId,
+        category,
+        details: truncateFailureDetails(details),
+        count: matchingFailures,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  };
+}
+
+export function clearSliceFailureMemory(
+  meta: DevelopmentSessionMeta,
+  sliceId: string,
+): DevelopmentSessionMeta {
+  const nextCounts = { ...(meta.sliceFailureCounts ?? {}) };
+  delete nextCounts[sliceId];
+  return {
+    ...meta,
+    sliceFailureCounts: Object.keys(nextCounts).length > 0 ? nextCounts : undefined,
+    sliceFailureDigest:
+      meta.sliceFailureDigest?.sliceId === sliceId ? undefined : meta.sliceFailureDigest,
+  };
+}
+
 export async function runSliceIteration(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
@@ -148,15 +211,20 @@ export async function runSliceIteration(
   ensureDevRepoScaffold(deps.repoPath);
 
   let state = markSliceInProgress(payload.state, slice);
+  let meta = payload.meta;
   const maxAttempts = effectiveMaxSliceAttempts(
     state,
     payload.meta.sliceRetryBudgetExtension ?? 0,
   );
-  const failureCategoryCounts = new Map<string, number>();
 
   while (state.currentSliceAttempts < maxAttempts) {
     const attempt = state.currentSliceAttempts + 1;
-    const sliceSpec = buildSliceSpec(slice, state, deps.repoPath);
+    const sliceSpec = buildSliceSpec(
+      slice,
+      state,
+      deps.repoPath,
+      buildSliceRetryContext({ ...payload, meta }, slice.id),
+    );
 
     const sliceResult = await deps.harness.runSlice(sliceSpec, buildHarnessContext(deps, state));
 
@@ -277,7 +345,7 @@ export async function runSliceIteration(
         ...payload,
         state,
         meta: {
-          ...payload.meta,
+          ...clearSliceFailureMemory(meta, slice.id),
           phase: "slicing",
           currentSliceId: slice.id,
           gateId: undefined,
@@ -330,12 +398,13 @@ export async function runSliceIteration(
         });
       }
 
-      return { kind: "passed", state };
+      return { kind: "passed", state, meta: clearSliceFailureMemory(meta, slice.id) };
     }
 
     const category = classifySliceFailure(check.details);
-    const matchingFailures = (failureCategoryCounts.get(category) ?? 0) + 1;
-    failureCategoryCounts.set(category, matchingFailures);
+    const recorded = recordSliceFailure(meta, slice.id, category, check.details);
+    meta = recorded.meta;
+    const matchingFailures = recorded.matchingFailures;
 
     state = incrementSliceAttempts(state);
     if (matchingFailures >= 2) {
@@ -344,6 +413,12 @@ export async function runSliceIteration(
       state = {
         ...state,
         risks: [...state.risks, `Diagnosis gate: ${diagnostic}`],
+      };
+      meta = {
+        ...meta,
+        sliceFailureDigest: meta.sliceFailureDigest
+          ? { ...meta.sliceFailureDigest, details: diagnostic }
+          : meta.sliceFailureDigest,
       };
       break;
     }
@@ -358,7 +433,7 @@ export async function runSliceIteration(
     ...payload,
     state,
     meta: {
-      ...payload.meta,
+      ...meta,
       phase: "awaiting_gate",
       gateId: gate.id,
       gateType: SLICE_FAILURE_GATE,
@@ -366,7 +441,7 @@ export async function runSliceIteration(
     },
   };
   saveDevSession(deps.db, state.projectId, nextPayload);
-  return { kind: "gate", state, gateId: gate.id };
+  return { kind: "gate", state, meta: nextPayload.meta, gateId: gate.id };
 }
 
 export { isSliceLoopActive } from "./slice-loop-registry.js";
@@ -563,7 +638,7 @@ async function runSliceLoopUntilHaltInner(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
 ): Promise<DevelopmentRunResult> {
-  let current = {
+  let current: DevelopmentSessionPayload = {
     ...payload,
     meta: { ...payload.meta, phase: "slicing" as const },
   };
@@ -583,7 +658,7 @@ async function runSliceLoopUntilHaltInner(
     };
 
     const iteration = await runSliceIteration(deps, current);
-    current = { ...current, state: iteration.state };
+    current = { ...current, state: iteration.state, meta: iteration.meta };
 
     if (iteration.kind === "gate") {
       return toResult(deps, {
@@ -753,9 +828,15 @@ async function resumeSliceFailureGate(
       return beginSliceLoopInBackground(deps, next);
     }
     case "replan": {
+      const sliceId =
+        payload.meta.currentSliceId ?? payload.state.currentTask?.id ?? getCurrentSlice(payload.state)?.id;
+      const clearedPayload: DevelopmentSessionPayload = {
+        ...payload,
+        meta: sliceId ? clearSliceFailureMemory(payload.meta, sliceId) : payload.meta,
+      };
       const prd = loadLatestPrd(deps.db, payload.state.projectId);
       const acceptance = loadLatestAcceptance(deps.db, payload.state.projectId);
-      let next = await runArchitect(deps, payload, {
+      let next = await runArchitect(deps, clearedPayload, {
         prd: prd.content,
         acceptance: acceptance.content,
       });
@@ -767,7 +848,10 @@ async function resumeSliceFailureGate(
         payload.meta.currentSliceId ??
         payload.state.currentTask?.id ??
         getCurrentSlice(payload.state)?.id;
-      let next = await runPlanner(deps, payload);
+      let next = await runPlanner(deps, {
+        ...payload,
+        meta: sliceId ? clearSliceFailureMemory(payload.meta, sliceId) : payload.meta,
+      });
       if (sliceId && next.state.taskQueue.some((task) => task.id === sliceId)) {
         next = { ...next, state: resetSliceForRetry(next.state, sliceId) };
       } else {

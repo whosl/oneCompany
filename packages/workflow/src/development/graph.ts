@@ -7,7 +7,11 @@ import {
   handleChangeReviewDecision,
   raiseChangeReviewGate,
 } from "./change-review.js";
-import { resumeDevelopmentAfterGateLegacy, runSliceIteration } from "./engine-legacy.js";
+import {
+  clearSliceFailureMemory,
+  resumeDevelopmentAfterGateLegacy,
+  runSliceIteration,
+} from "./engine-legacy.js";
 import { runPlanner } from "./planner.js";
 import { allSlicesPassed, getCurrentSlice, hasRunnableSlices } from "./slice-policy.js";
 import {
@@ -144,7 +148,7 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
     };
 
     const iteration = await runSliceIteration(deps, current);
-    current = { ...current, state: iteration.state };
+    current = { ...current, state: iteration.state, meta: iteration.meta };
 
     if (iteration.kind === "gate") {
       const gated: DevelopmentSessionPayload = {
@@ -216,12 +220,23 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
         return { payload: next };
       }
       case "replan": {
+        const sliceId =
+          payload.meta.currentSliceId ??
+          payload.state.currentTask?.id ??
+          getCurrentSlice(payload.state)?.id;
         const prd = loadLatestPrd(deps.db, payload.state.projectId);
         const acceptance = loadLatestAcceptance(deps.db, payload.state.projectId);
-        let next = await runArchitect(deps, payload, {
-          prd: prd.content,
-          acceptance: acceptance.content,
-        });
+        let next = await runArchitect(
+          deps,
+          {
+            ...payload,
+            meta: sliceId ? clearSliceFailureMemory(payload.meta, sliceId) : payload.meta,
+          },
+          {
+            prd: prd.content,
+            acceptance: acceptance.content,
+          },
+        );
         next = raiseTechPlanGate(deps, next);
         return { payload: next };
       }
@@ -230,7 +245,10 @@ export function buildDevelopmentGraph(deps: DevelopmentWorkflowDeps) {
           payload.meta.currentSliceId ??
           payload.state.currentTask?.id ??
           getCurrentSlice(payload.state)?.id;
-        let next = await runPlanner(deps, payload);
+        let next = await runPlanner(deps, {
+          ...payload,
+          meta: sliceId ? clearSliceFailureMemory(payload.meta, sliceId) : payload.meta,
+        });
         if (sliceId && next.state.taskQueue.some((task) => task.id === sliceId)) {
           next = { ...next, state: resetSliceForRetry(next.state, sliceId) };
         } else {
