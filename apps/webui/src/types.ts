@@ -91,14 +91,16 @@ export type TimelineEntry = {
   id: string;
   seq: number;
   at: string;
-  kind: "user" | "taizi" | "status" | "agent" | "reason" | "tool" | "tool_ok" | "tool_err" | "gate" | "gate_ok" | "artifact" | "error";
+  kind: "user" | "taizi" | "status" | "agent" | "reason" | "process" | "tool" | "tool_ok" | "tool_err" | "gate" | "gate_ok" | "artifact" | "error" | "launch" | "question_answered" | "todo" | "diff" | "test" | "deployment" | "delivery" | "environment" | "change" | "redaction";
   tag: string;
   agent?: string;
   text: string;
   tool?: string;
   summary?: string;
   output?: string;
-  localState?: "sending" | "failed";
+  localState?: "sending" | "sent" | "failed";
+  answers?: Array<{ question: string; answer: string }>;
+  todos?: Array<{ content: string; status: string; priority: string }>;
 };
 
 export type FileResult = {
