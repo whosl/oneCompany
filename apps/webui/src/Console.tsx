@@ -31,6 +31,7 @@ import {
   Send,
   ShieldAlert,
   Sun,
+  ListChecks,
   Wifi,
   WifiOff,
   X,
@@ -47,6 +48,9 @@ type Theme = "dark" | "light";
 type MobilePanel = "agents" | "stream" | "inspector";
 type Notice = { type: "success" | "error" | "info"; text: string };
 type PendingMessage = { id: string; text: string; at: string; afterSeq: number; status: "sending" | "failed" };
+type LocalEntryState = "sending" | "sent" | "failed";
+type LocalLaunch = { id: string; action: "development" | "testing"; text: string; at: string; afterSeq: number; status: LocalEntryState };
+type AnsweredQuestionRound = { id: string; at: string; afterSeq: number; answers: Array<{ question: string; answer: string }>; status: LocalEntryState };
 
 const statusTone = (status: string) => {
   if (status === "Delivered") return "success";
@@ -63,6 +67,7 @@ const duration = (from?: number) => {
 };
 
 const unique = <T,>(items: T[]) => [...new Set(items)];
+const timeNow = () => new Date().toTimeString().slice(0, 8);
 
 export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   const [snapshot, setSnapshot] = useState<ConsoleSnapshot | null>(null);
@@ -77,12 +82,15 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   const [viewerLoading, setViewerLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  const [localLaunches, setLocalLaunches] = useState<LocalLaunch[]>([]);
+  const [answeredQuestionRounds, setAnsweredQuestionRounds] = useState<AnsweredQuestionRound[]>([]);
   const [draftAnswers, setDraftAnswers] = useState<string[]>([]);
   const [gateFeedback, setGateFeedback] = useState("");
   const [pendingGateDecision, setPendingGateDecision] = useState<string>();
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("oc-webui-theme") === "light" ? "light" : "dark"));
   const [yolo, setYolo] = useState(() => localStorage.getItem("oc-webui-yolo") === "true");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [todoOpen, setTodoOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("stream");
   const dismissedGates = useRef(new Set<string>());
   const answeredQuestionsKey = useRef<string>();
@@ -173,15 +181,37 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   const timeline = useMemo(() => {
     if (!snapshot) return [];
     const serverEntries = deriveTimeline(snapshot);
+    const launchEntries = localLaunches.map<TimelineEntry>((entry) => ({
+      id: entry.id,
+      seq: entry.afterSeq + 0.1,
+      at: entry.at,
+      kind: "launch",
+      tag: "START",
+      text: entry.text,
+      localState: entry.status,
+    }));
+    const answeredEntries = answeredQuestionRounds.map<TimelineEntry>((round) => ({
+      id: round.id,
+      seq: round.afterSeq + 0.2,
+      at: round.at,
+      kind: "question_answered",
+      tag: "Q&A",
+      text: "本轮需求澄清已提交",
+      localState: round.status,
+      answers: round.answers,
+    }));
     const localEntries = pendingMessages
       .filter((pending) => !serverEntries.some((entry) => entry.kind === "user" && entry.text === pending.text && (entry.seq > pending.afterSeq || entry.id === "seed-requirement")))
       .map<TimelineEntry>((pending) => ({ id: pending.id, seq: Number.MAX_SAFE_INTEGER, at: pending.at, kind: "user", tag: "USER", text: pending.text, localState: pending.status }));
-    return [...serverEntries, ...localEntries];
-  }, [snapshot, pendingMessages]);
+    return [...serverEntries, ...launchEntries, ...answeredEntries, ...localEntries].sort((a, b) => a.seq - b.seq);
+  }, [snapshot, pendingMessages, localLaunches, answeredQuestionRounds]);
   const activeGate = snapshot?.openGates[0];
   const questions = snapshot?.requirement?.pendingQuestions ?? [];
   const previewUrl = snapshot?.testing?.previewUrl ?? snapshot?.dev?.previewUrl;
+  const latestTodo = [...timeline].reverse().find((entry) => entry.kind === "todo" && entry.todos?.length);
   const selected = agents.find((agent) => agent.id === selectedAgent) ?? agents.find((agent) => ["running", "tool", "blocked"].includes(agent.status)) ?? agents[0];
+  const developmentStarted = localLaunches.some((entry) => entry.action === "development" && entry.status !== "failed");
+  const testingStarted = localLaunches.some((entry) => entry.action === "testing" && entry.status !== "failed");
 
   useEffect(() => {
     if (!yolo || activeGate?.gateType !== "dangerous_operation" || busy.includes(`gate:${activeGate.id}`)) return;
@@ -225,10 +255,29 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
       setNotice({ type: "error", text: "请回答全部问题，未完成的题目已标出。" });
       return;
     }
+    const roundId = `answered-questions-${Date.now()}`;
+    const roundAnswers = questions.map((question, index) => ({ question: question.question, answer: draftAnswers[index]?.trim() ?? "" }));
+    setAnsweredQuestionRounds((items) => [...items, { id: roundId, at: timeNow(), afterSeq: snapshot?.lastSeq ?? 0, answers: roundAnswers, status: "sending" }]);
     answeredQuestionsKey.current = questions.map((item) => item.question).join("|");
     setSnapshot((current) => current?.requirement ? { ...current, requirement: { ...current.requirement, pendingQuestions: [] } } : current);
-    await run("answers", () => api.submitAnswers(projectId, draftAnswers), "回答已提交，Agent 正在重新评估需求");
+    const sent = await run("answers", () => api.submitAnswers(projectId, draftAnswers), "回答已提交，Agent 正在重新评估需求");
+    setAnsweredQuestionRounds((items) => items.map((item) => item.id === roundId ? { ...item, status: sent ? "sent" : "failed" } : item));
+    if (!sent) {
+      answeredQuestionsKey.current = undefined;
+      await refresh();
+    }
   };
+
+  const startLaunch = async (action: "development" | "testing", task: () => Promise<unknown>, text: string, success: string) => {
+    if (!snapshot || busy.includes(action)) return;
+    const launchId = `launch-${action}-${Date.now()}`;
+    setLocalLaunches((items) => [...items, { id: launchId, action, text, at: timeNow(), afterSeq: snapshot.lastSeq, status: "sending" }]);
+    const sent = await run(action, task, success);
+    setLocalLaunches((items) => items.map((item) => item.id === launchId ? { ...item, status: sent ? "sent" : "failed" } : item));
+  };
+
+  const startDevelopment = () => void startLaunch("development", () => api.startDevelopment(projectId), "开发阶段已启动", "开发阶段已启动");
+  const startTesting = () => void startLaunch("testing", () => api.startTesting(projectId), "测试与部署流水线已启动", "测试与部署流水线已启动");
 
   const sendMessage = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -294,8 +343,8 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
     if (typing) return;
     if (event.key.toLowerCase() === "m") setTheme((value) => value === "dark" ? "light" : "dark");
     if (event.key.toLowerCase() === "y") setYolo((value) => !value);
-    if (event.key.toLowerCase() === "d" && snapshot?.project.status === "PRD Ready") void run("development", () => api.startDevelopment(projectId), "开发阶段已启动");
-    if (event.key.toLowerCase() === "t" && snapshot?.project.status === "Testing") void run("testing", () => api.startTesting(projectId), "测试与部署流水线已启动");
+    if (event.key.toLowerCase() === "d" && snapshot?.project.status === "PRD Ready") startDevelopment();
+    if (event.key.toLowerCase() === "t" && snapshot?.project.status === "Testing") startTesting();
   };
 
   if (loading || !snapshot) {
@@ -339,12 +388,13 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
       <div className="console-grid" data-mobile-panel={mobilePanel}>
         <AgentColumn agents={agents} selected={selected} onSelect={(id) => setSelectedAgent(id)} />
         <section className="stream-column">
+          {latestTodo?.todos && <FloatingTodoCard entry={latestTodo} open={todoOpen} onToggle={() => setTodoOpen((value) => !value)} />}
           <div className="stream-scroll" ref={streamRef}>
             <Stream entries={timeline} />
             {activeGate && <GateCard gate={activeGate} projectId={projectId} previewUrl={previewUrl} yolo={yolo} previewBusy={busy.includes("preview")} pendingDecision={pendingGateDecision} feedback={gateFeedback} onFeedback={setGateFeedback} onChoose={(decision) => chooseGate(activeGate, decision)} onStartPreview={startPreview} onSubmitFeedback={() => pendingGateDecision && gateFeedback.trim() && void resolveGate(activeGate, pendingGateDecision, gateFeedback.trim())} onCancelFeedback={() => setPendingGateDecision(undefined)} onOpenFile={openFile} />}
             {questions.length > 0 && <QuestionRound questions={questions} answers={draftAnswers} onChange={(index, value) => setDraftAnswers((items) => items.map((item, itemIndex) => itemIndex === index ? value : item))} onSubmit={() => void submitQuestions()} onSkip={() => { answeredQuestionsKey.current = questions.map((item) => item.question).join("|"); void run("skip", () => api.skipClarification(projectId), "已采用默认假设，开始生成 PRD"); }} busy={busy.includes("answers") || busy.includes("skip")} />}
-            {snapshot.project.status === "PRD Ready" && !activeGate && <LaunchPanel icon={<Rocket size={22} />} title="启动开发" description="PRD 已就绪。启动后 Architect 会先产出技术方案，再进入切片开发。" busy={busy.includes("development")} onClick={() => void run("development", () => api.startDevelopment(projectId), "开发阶段已启动")} />}
-            {snapshot.project.status === "Testing" && (snapshot.testing?.suiteTotal ?? 0) === 0 && !activeGate && <LaunchPanel icon={<FlaskConical size={22} />} title="运行测试 + 部署" description="开发已完成，启动独立验证、预览和部署确认。" busy={busy.includes("testing")} onClick={() => void run("testing", () => api.startTesting(projectId), "测试与部署流水线已启动")} />}
+            {snapshot.project.status === "PRD Ready" && !activeGate && !developmentStarted && <LaunchPanel icon={<Rocket size={22} />} title="启动开发" description="PRD 已就绪。启动后 Architect 会先产出技术方案，再进入切片开发。" busy={busy.includes("development")} onClick={startDevelopment} />}
+            {snapshot.project.status === "Testing" && (snapshot.testing?.suiteTotal ?? 0) === 0 && !activeGate && !testingStarted && <LaunchPanel icon={<FlaskConical size={22} />} title="运行测试 + 部署" description="开发已完成，启动独立验证、预览和部署确认。" busy={busy.includes("testing")} onClick={startTesting} />}
           </div>
           <Composer snapshot={snapshot} value={message} busy={busy} onChange={setMessage} onSubmit={sendMessage} />
         </section>
@@ -382,36 +432,96 @@ function AgentColumn({ agents, selected, onSelect }: { agents: AgentView[]; sele
 }
 
 function Stream({ entries }: { entries: TimelineEntry[] }) {
-  const visible = entries.slice(-300);
+  const visible = entries.filter((entry) => entry.kind !== "todo").slice(-300);
   if (visible.length === 0) return <div className="waiting-line">waiting for events…</div>;
-  const groups: Array<{ kind: "entry"; entry: TimelineEntry } | { kind: "tools"; id: string; entries: TimelineEntry[] }> = [];
+  const groups: Array<{ kind: "entry"; entry: TimelineEntry } | { kind: "tools"; id: string; entries: TimelineEntry[]; agent?: string }> = [];
   for (const entry of visible) {
     const isTool = ["tool", "tool_ok", "tool_err"].includes(entry.kind);
     const previous = groups.at(-1);
     if (isTool && previous?.kind === "tools") {
       previous.entries.push(entry);
     } else if (isTool) {
-      groups.push({ kind: "tools", id: `tools-${entry.id}`, entries: [entry] });
+      groups.push({ kind: "tools", id: `tools-${entry.id}`, entries: [entry], agent: entry.agent });
     } else {
       groups.push({ kind: "entry", entry });
     }
   }
-  return <div className="timeline">{groups.map((group) => group.kind === "tools" ? <ToolGroup key={group.id} entries={group.entries} /> : <TimelineRow key={group.entry.id} entry={group.entry} />)}</div>;
+  const units: Array<{ kind: "agent"; id: string; agent: string; groups: typeof groups } | { kind: "plain"; group: (typeof groups)[number] }> = [];
+  for (const group of groups) {
+    const agent = group.kind === "tools" ? group.agent : group.entry.agent;
+    if (!agent) {
+      units.push({ kind: "plain", group });
+      continue;
+    }
+    const previous = units.at(-1);
+    if (previous?.kind === "agent" && previous.agent === agent) {
+      previous.groups.push(group);
+    } else {
+      units.push({ kind: "agent", id: `agent-group-${group.kind === "tools" ? group.id : group.entry.id}`, agent, groups: [group] });
+    }
+  }
+  const renderGroup = (group: (typeof groups)[number]) => group.kind === "tools" ? <ToolGroup key={group.id} entries={group.entries} grouped /> : <TimelineRow key={group.entry.id} entry={group.entry} grouped />;
+  return <div className="timeline">{units.map((unit) => unit.kind === "plain" ? renderGroup(unit.group) : <section key={unit.id} className="agent-stream-group"><header><AgentBadge name={unit.agent} /></header>{unit.groups.map(renderGroup)}</section>)}</div>;
 }
 
-function TimelineRow({ entry }: { entry: TimelineEntry }) {
+function FloatingTodoCard({ entry, open, onToggle }: { entry: TimelineEntry; open: boolean; onToggle: () => void }) {
+  const todos = entry.todos ?? [];
+  const current = todos.find((todo) => todo.status === "in_progress") ?? todos.find((todo) => todo.status === "pending") ?? todos.at(-1);
+  const done = todos.filter((todo) => todo.status === "completed").length;
+  return <section className={`floating-todo ${open ? "open" : "collapsed"}`}>
+    <button className="floating-todo-head" onClick={onToggle} aria-expanded={open}>
+      <ListChecks size={15} />
+      <span>TODO</span>
+      <strong>{done}/{todos.length}</strong>
+      <ChevronDown size={13} />
+    </button>
+    {!open && current && <div className={`floating-current ${current.status} ${current.priority}`}><span>{current.status.replace(/_/g, " ")}</span><p>{current.content}</p></div>}
+    <div className="floating-todo-body" aria-hidden={!open}>
+      {todos.map((todo, index) => <div key={`${todo.content}-${index}`} className={`todo-row ${todo.status} ${todo.priority}`}><span className="todo-index">{index + 1}</span><span className="todo-status">{todo.status.replace(/_/g, " ")}</span><span className="todo-content">{todo.content}</span><span className="todo-priority">{todo.priority}</span></div>)}
+    </div>
+  </section>;
+}
+
+function TimelineRow({ entry, grouped = false }: { entry: TimelineEntry; grouped?: boolean }) {
+  if (["user", "taizi", "reason"].includes(entry.kind)) return <MessageBlock entry={entry} grouped={grouped} />;
+  if (["question_answered", "todo", "diff", "test", "environment", "error"].includes(entry.kind)) return <StructuredCard entry={entry} />;
+  return <ProcessLine entry={entry} grouped={grouped} />;
+}
+
+function MessageBlock({ entry, grouped = false }: { entry: TimelineEntry; grouped?: boolean }) {
   if (entry.kind === "user") return <article className={`user-message ${entry.localState ?? ""}`}><header><span>┌</span><strong>用户</strong><time>{entry.localState === "sending" ? "发送中…" : entry.localState === "failed" ? "发送失败" : entry.at}</time></header><Markdown>{entry.text}</Markdown><footer>└────────────────</footer></article>;
   if (entry.kind === "taizi") return <article className="taizi-message"><strong>◆ 太子</strong><Markdown>{entry.text}</Markdown>{entry.summary && <small>({entry.summary})</small>}</article>;
-  if (entry.kind === "reason") return <article className={`reason-entry ${entry.tag === "REFLT" ? "conclusion" : ""}`}><header><span className="tag">{entry.tag}</span><strong>{entry.agent}</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
-  return <div className={`event-line ${entry.kind}`}><span>{entry.kind === "error" ? "×" : entry.kind === "gate" ? "!" : entry.kind === "gate_ok" ? "✓" : entry.kind === "artifact" ? "▤" : "◆"}</span><Markdown className="event-copy">{entry.text}</Markdown><time>{entry.at}</time></div>;
+  return <article className={`message-block reason-entry ${entry.tag === "REFLT" ? "conclusion" : ""}`}><header><span className="tag">{entry.tag}</span>{!grouped && <AgentBadge name={entry.agent} />}<time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
 }
 
-function ToolGroup({ entries }: { entries: TimelineEntry[] }) {
+function StructuredCard({ entry }: { entry: TimelineEntry }) {
+  if (entry.kind === "question_answered") return <article className={`answered-question-history structured-card ${entry.localState ?? ""}`}><header><span className="tag">{entry.tag}</span><strong>需求澄清</strong><time>{entry.localState === "sending" ? "提交中…" : entry.localState === "failed" ? "提交失败" : entry.at}</time></header><div className="answered-question-list">{(entry.answers ?? []).map((item, index) => <section key={`${item.question}-${index}`}><h4><span>{index + 1}</span>{item.question}</h4><Markdown>{item.answer}</Markdown></section>)}</div></article>;
+  if (entry.kind === "todo") return <article className="todo-entry structured-card"><header><span className="tag">{entry.tag}</span><strong>{entry.tool ?? "todowrite"}</strong><time>{entry.at}</time></header>{entry.todos?.length ? <div className="todo-list">{entry.todos.map((todo, index) => <div key={`${todo.content}-${index}`} className={`todo-row ${todo.status} ${todo.priority}`}><span className="todo-index">{index + 1}</span><span className="todo-status">{todo.status.replace(/_/g, " ")}</span><span className="todo-content">{todo.content}</span><span className="todo-priority">{todo.priority}</span></div>)}</div> : entry.text ? <Markdown>{entry.text}</Markdown> : entry.summary ? <Markdown>{entry.summary}</Markdown> : <p className="dim">更新任务清单…</p>}</article>;
+  if (entry.kind === "test") return <article className={`structured-card test-card ${entry.summary === "failed" ? "failed" : "passed"}`}><header><span className="tag">{entry.tag}</span><strong>测试结果</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
+  if (entry.kind === "diff") return <article className="structured-card diff-card"><header><span className="tag">{entry.tag}</span><strong>代码变更</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
+  if (entry.kind === "environment") return <article className="structured-card env-card"><header><span className="tag">{entry.tag}</span><strong>环境缺失</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
+  return <article className="structured-card error-card"><header><span className="tag">{entry.tag}</span><strong>{entry.agent ?? "运行失败"}</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
+}
+
+function ProcessLine({ entry, grouped = false }: { entry: TimelineEntry; grouped?: boolean }) {
+  const icon = entry.kind === "gate" ? "!" : entry.kind === "gate_ok" || entry.kind === "launch" ? "✓" : entry.kind === "artifact" ? "▤" : entry.kind === "deployment" ? "↗" : entry.kind === "delivery" ? "▣" : entry.kind === "change" ? "◇" : entry.kind === "redaction" ? "◈" : "◆";
+  const time = entry.kind === "launch" && entry.localState === "sending" ? "启动中…" : entry.kind === "launch" && entry.localState === "failed" ? "启动失败" : entry.at;
+  return <div className={`process-line event-line ${entry.kind} ${entry.localState ?? ""}`}><span>{icon}</span><span className="process-tag">{entry.tag}</span>{entry.agent && !grouped && <AgentBadge name={entry.agent} compact />}<Markdown className="event-copy">{entry.text}</Markdown><time>{time}</time></div>;
+}
+
+function AgentBadge({ name, compact = false }: { name?: string; compact?: boolean }) {
+  if (!name) return <span className={`agent-badge unknown ${compact ? "compact" : ""}`}>AGENT</span>;
+  const initials = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  return <span className={`agent-badge ${compact ? "compact" : ""}`} title={name}><b>{initials}</b><em>{name}</em></span>;
+}
+
+function ToolGroup({ entries, grouped = false }: { entries: TimelineEntry[]; grouped?: boolean }) {
   const failures = entries.filter((entry) => entry.kind === "tool_err").length;
   const running = entries.filter((entry) => entry.kind === "tool").length;
   const names = unique(entries.map((entry) => entry.tool).filter((name): name is string => Boolean(name)));
+  const agents = unique(entries.map((entry) => entry.agent).filter((name): name is string => Boolean(name)));
   return <details className={`tool-group ${failures ? "has-errors" : ""}`}>
-    <summary><Activity size={12} /><span>{running ? `正在执行 ${running} 项工具任务` : `已收起 ${entries.length} 项工具调用`}</span>{names.length > 0 && <em>{names.slice(0, 2).join("、")}{names.length > 2 ? ` +${names.length - 2}` : ""}</em>}{failures > 0 && <b>{failures} 失败</b>}<ChevronDown size={12} /></summary>
+    <summary><Activity size={12} /><span>{running ? `正在执行 ${running} 项工具任务` : `已收起 ${entries.length} 项工具调用`}</span>{agents[0] && !grouped && <AgentBadge name={agents[0]} compact />}{names.length > 0 && <em>{names.slice(0, 2).join("、")}{names.length > 2 ? ` +${names.length - 2}` : ""}</em>}{failures > 0 && <b>{failures} 失败</b>}<ChevronDown size={12} /></summary>
     <div className="tool-group-items">{entries.map((entry) => <details key={entry.id} className={`tool-item ${entry.kind}`}><summary><span>{entry.kind === "tool" ? "◌" : entry.kind === "tool_ok" ? "✓" : "×"}</span><strong>{entry.tool ?? "tool"}</strong>{entry.summary && <em>{entry.summary}</em>}<time>{entry.at}</time><ChevronRight size={11} /></summary>{entry.text && <Markdown className="tool-output">{entry.text}</Markdown>}</details>)}</div>
   </details>;
 }
