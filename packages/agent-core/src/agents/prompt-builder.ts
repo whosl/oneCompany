@@ -132,6 +132,10 @@ export function buildTddPrompt(slice: SliceSpec): string {
     slice.expectedFiles && slice.expectedFiles.length > 0
       ? slice.expectedFiles.map((file, index) => `${index + 1}. ${file}`).join("\n")
       : "";
+  const retryContext =
+    slice.retryContext && slice.retryContext.length > 0
+      ? slice.retryContext.map((line, index) => `${index + 1}. ${line}`).join("\n")
+      : "";
 
   return [
     `Implement slice "${slice.sliceId}" using strict TDD.`,
@@ -139,6 +143,9 @@ export function buildTddPrompt(slice: SliceSpec): string {
     checks ? `Acceptance checks:\n${checks}` : "",
     deliverables
       ? `Target deliverable files (planning hints — create at these paths when feasible; align with tech plan):\n${deliverables}`
+      : "",
+    retryContext
+      ? `Retry repair context from previous attempt(s):\n${retryContext}\nStart from this evidence first; do not rediscover the whole project before inspecting the failed files and commands.`
       : "",
     `Scoped test command (OneCompany runs this authoritatively after you finish): ${slice.testCommand}`,
     "Authoritative pass criteria: scoped vitest command exits success AND a real Web UI is present (not the generated-app placeholder).",

@@ -6,6 +6,8 @@ export interface SliceSpec {
   testCommand: string;
   /** Planner hints — coding agent should create these when feasible. */
   expectedFiles?: string[];
+  /** Prior attempt evidence for fresh-session retries. */
+  retryContext?: string[];
   modelTier: "cheap" | "standard" | "strong";
 }
 
