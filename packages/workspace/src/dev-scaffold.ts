@@ -282,6 +282,12 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, host);
 
+// Auto-exit: prevents the dev scaffold server from blocking the coding agent
+// when it runs this script to verify the app starts. The agent should use
+// background + curl + kill, but this safety net ensures no indefinite hang.
+const _exitMs = Number(process.env.DEV_SERVER_TIMEOUT_MS) || 15000;
+setTimeout(() => { try { server.close(); } catch {} process.exit(0); }, _exitMs);
+
 function normalizeBasePath(value) {
   if (!value || value === "/") return "/";
   const withLeading = value.startsWith("/") ? value : "/" + value;
