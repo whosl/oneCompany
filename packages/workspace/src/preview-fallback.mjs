@@ -5,9 +5,17 @@ import path from "node:path";
 const host = process.env.PREVIEW_HOST || process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || process.env.PREVIEW_PORT || 3000);
 const root = process.env.PREVIEW_ROOT || process.cwd();
+const basePath = normalizeBasePath(process.env.PREVIEW_BASE_PATH || "/");
 
 const server = http.createServer((req, res) => {
-  const rel = req.url === "/" ? "index.html" : String(req.url || "/").replace(/^\//, "");
+  const rawPath = String(req.url || "/").split("?")[0];
+  const urlPath = stripBasePath(rawPath, basePath);
+  if (urlPath === null) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Not found");
+    return;
+  }
+  const rel = urlPath === "/" ? "index.html" : urlPath.replace(/^\//, "");
 
   // Prevent path traversal AND symlink escapes:
   // 1. resolve the requested relative path and reject ".."/absolute escapes lexically,
@@ -39,3 +47,16 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, host);
+
+function normalizeBasePath(value) {
+  if (!value || value === "/") return "/";
+  const withLeading = value.startsWith("/") ? value : "/" + value;
+  return withLeading.replace(/\/$/, "");
+}
+
+function stripBasePath(urlPath, basePath) {
+  if (basePath === "/") return urlPath;
+  if (urlPath === basePath) return "/";
+  if (urlPath.startsWith(basePath + "/")) return urlPath.slice(basePath.length) || "/";
+  return null;
+}

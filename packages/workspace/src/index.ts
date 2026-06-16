@@ -10,7 +10,7 @@ export {
   writeFile,
 } from "./workspace.js";
 export { runLocalCommand } from "./local-exec.js";
-export { commitSlice, initRepo, type CommitSliceInput } from "./git.js";
+export { assertGeneratedRepoHygiene, commitSlice, initRepo, type CommitSliceInput } from "./git.js";
 export {
   ensureDevRepoScaffold,
   ensureE2eScaffold,
@@ -75,6 +75,7 @@ export {
   stopPreview,
   getPreviewHandle,
   getPreviewHealth,
+  buildPreviewPublicPath,
   clearPreviewRegistry,
   resolvePreviewCommand,
   type PreviewHandle,

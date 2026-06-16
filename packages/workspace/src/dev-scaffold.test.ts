@@ -41,6 +41,7 @@ describe("dev repo scaffold", () => {
     };
     expect(pkg.devDependencies.typescript).toBeTruthy();
     expect(pkg.devDependencies.vitest).toBeTruthy();
+    expect(pkg.devDependencies["@playwright/test"]).toBe("1.55.1");
     expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
     expect(pkg.scripts.build).toBe("tsc");
   });
@@ -56,9 +57,11 @@ describe("dev repo scaffold", () => {
     expect(fs.existsSync(path.join(repoPath, "src"))).toBe(true);
     expect(fs.existsSync(path.join(repoPath, "scripts", "dev-server.mjs"))).toBe(true);
     const pkg = JSON.parse(fs.readFileSync(path.join(repoPath, "package.json"), "utf8")) as {
+      devDependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
     expect(pkg.scripts.dev).toBe("node scripts/dev-server.mjs");
+    expect(pkg.devDependencies["@playwright/test"]).toBe("1.55.1");
 
     const before = fs.readFileSync(path.join(repoPath, "package.json"), "utf8");
     ensureDevRepoScaffold(repoPath);

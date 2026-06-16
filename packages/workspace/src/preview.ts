@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 export type PreviewHandle = {
   url: string;
+  publicPath?: string;
   port: number;
   stop: () => Promise<void>;
 };
@@ -19,9 +20,14 @@ export class PreviewStartError extends Error {
 
 const previewRegistry = new Map<string, PreviewHandle>();
 
+export function buildPreviewPublicPath(projectId: string): string {
+  return `/preview/${encodeURIComponent(projectId)}/`;
+}
+
 export type StartPreviewInput = {
   projectId: string;
   repoPath?: string;
+  publicBasePath?: string;
   port?: number;
   host?: string;
   readyTimeoutMs?: number;
@@ -34,6 +40,8 @@ type PreviewCommand = {
 
 type PackageJson = {
   scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 };
 
 function findFreePort(host: string, preferredPort?: number): Promise<number> {
@@ -68,9 +76,15 @@ function readPackageJson(repoPath: string): PackageJson | null {
 export function resolvePreviewCommand(repoPath: string): PreviewCommand | null {
   const pkg = readPackageJson(repoPath);
   const scripts = pkg?.scripts ?? {};
+  const hasVite = Boolean(pkg?.dependencies?.vite || pkg?.devDependencies?.vite);
 
   if (scripts.dev) {
-    return { command: "pnpm dev", shell: true };
+    return {
+      command: hasVite
+        ? "pnpm exec vite --base ${PREVIEW_BASE_PATH:-/}"
+        : "pnpm dev",
+      shell: true,
+    };
   }
   if (scripts.preview) {
     return { command: "pnpm preview", shell: true };
@@ -149,14 +163,18 @@ async function spawnPreviewProcess(input: {
   repoPath: string;
   host: string;
   port: number;
+  publicBasePath?: string;
 }): Promise<{ child: ChildProcess; url: string }> {
   const resolved = resolvePreviewCommand(input.repoPath) ?? fallbackPreviewCommand();
+  const publicBasePath = input.publicBasePath ?? "/";
   const env = {
     ...process.env,
     PORT: String(input.port),
     PREVIEW_PORT: String(input.port),
     PREVIEW_HOST: input.host,
     PREVIEW_ROOT: input.repoPath,
+    PREVIEW_BASE_PATH: publicBasePath,
+    VITE_PREVIEW_BASE_PATH: publicBasePath,
     HOST: input.host,
   };
 
@@ -170,7 +188,7 @@ async function spawnPreviewProcess(input: {
 
   child.unref();
 
-  const url = `http://${input.host}:${input.port}`;
+  const url = `http://127.0.0.1:${input.port}`;
   return { child, url };
 }
 
@@ -180,14 +198,17 @@ export async function startPreview(input: StartPreviewInput): Promise<PreviewHan
     return existing;
   }
 
-  const host = input.host ?? "127.0.0.1";
+  const host = input.host ?? process.env.OC_PREVIEW_HOST ?? "0.0.0.0";
   const repoPath = input.repoPath ? path.resolve(input.repoPath) : process.cwd();
   fs.mkdirSync(repoPath, { recursive: true });
 
-  const port = await findFreePort(host, input.port);
-  const { child, url } = await spawnPreviewProcess({ repoPath, host, port });
+  const preferredPort = input.port ?? (process.env.OC_PREVIEW_PORT ? Number(process.env.OC_PREVIEW_PORT) : undefined);
+  const port = await findFreePort(host, preferredPort);
+  const publicBasePath = input.publicBasePath;
+  const { child, url } = await spawnPreviewProcess({ repoPath, host, port, publicBasePath });
+  const healthUrl = new URL(publicBasePath ?? "/", url).toString();
 
-  const health = await waitForPreviewReady(url, input.readyTimeoutMs ?? 30_000);
+  const health = await waitForPreviewReady(healthUrl, input.readyTimeoutMs ?? 30_000);
   if (!health.reachable) {
     await killProcessTree(child);
     throw new PreviewStartError(`Preview server did not become reachable at ${url}`);
@@ -195,6 +216,7 @@ export async function startPreview(input: StartPreviewInput): Promise<PreviewHan
 
   const handle: PreviewHandle = {
     url,
+    publicPath: publicBasePath,
     port,
     stop: async () => {
       await killProcessTree(child);

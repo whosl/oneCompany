@@ -241,6 +241,7 @@ import path from "node:path";
 const host = process.env.PREVIEW_HOST || process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || process.env.PREVIEW_PORT || 3000);
 const root = process.env.PREVIEW_ROOT || process.cwd();
+const basePath = normalizeBasePath(process.env.PREVIEW_BASE_PATH || "/");
 
 // Module scripts require a JavaScript MIME type; missing Content-Type breaks ESM in browsers.
 const MIME = {
@@ -258,7 +259,13 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
-  const urlPath = String(req.url || "/").split("?")[0];
+  const rawPath = String(req.url || "/").split("?")[0];
+  const urlPath = stripBasePath(rawPath, basePath);
+  if (urlPath === null) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Not found");
+    return;
+  }
   const rel = urlPath === "/" ? "index.html" : urlPath.replace(/^\\//, "");
   const filePath = path.join(root, rel);
 
@@ -274,6 +281,19 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, host);
+
+function normalizeBasePath(value) {
+  if (!value || value === "/") return "/";
+  const withLeading = value.startsWith("/") ? value : "/" + value;
+  return withLeading.replace(/\\/$/, "");
+}
+
+function stripBasePath(urlPath, basePath) {
+  if (basePath === "/") return urlPath;
+  if (urlPath === basePath) return "/";
+  if (urlPath.startsWith(basePath + "/")) return urlPath.slice(basePath.length) || "/";
+  return null;
+}
 `;
 
 const INDEX_HTML = `<!doctype html>
@@ -370,6 +390,7 @@ export function ensureE2eScaffold(repoPath: string): void {
 export const GENERATED_APP_DEV_DEPS = {
   typescript: "^5.7.3",
   vitest: "^3.0.4",
+  "@playwright/test": "1.55.1",
   "@types/node": "^22.10.7",
 } as const;
 
@@ -442,6 +463,7 @@ export function ensureDevRepoScaffold(repoPath: string): void {
         devDependencies: {
           typescript: "^5.7.3",
           vitest: "^3.0.4",
+          "@playwright/test": "1.55.1",
           "@types/node": "^22.10.7",
         },
       },

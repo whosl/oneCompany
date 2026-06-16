@@ -50,6 +50,25 @@ describe("preview lifecycle", () => {
     expect(await getPreviewHealth(handle.url)).toEqual({ reachable: false });
   });
 
+  it("serves fallback previews under a project-scoped public base path", async () => {
+    const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "oc-preview-base-"));
+    tempDirs.push(repoPath);
+    const projectId = "preview-base";
+
+    const handle = await startPreview({
+      projectId,
+      repoPath,
+      publicBasePath: `/preview/${projectId}/`,
+    });
+
+    expect(handle.publicPath).toBe(`/preview/${projectId}/`);
+    const response = await fetch(`${handle.url}/preview/${projectId}/`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("generated-app");
+
+    await stopPreview(projectId);
+  });
+
   it("starts a dev script process for scaffolded repos", async () => {
     const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "oc-preview-dev-"));
     tempDirs.push(repoPath);
