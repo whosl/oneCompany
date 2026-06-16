@@ -263,9 +263,14 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   const startPreview = () => void run("preview", () => api.startPreview(projectId), "预览已启动");
   const stopPreview = () => void run("preview", () => api.stopPreview(projectId), "预览已停止");
   const exportProject = () => void run("export", async () => {
-    const result = await api.exportSubmission(projectId);
-    setNotice({ type: "success", text: `导出完成：${result.packagePath}` });
-  }, "导出完成");
+    await api.exportSubmission(projectId);
+    const link = document.createElement("a");
+    link.href = api.downloadPackageUrl(projectId);
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, "导出包已开始下载");
 
   const handleShortcut = (event: KeyboardEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
@@ -350,7 +355,7 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
 
       {notice && <div className={`notice ${notice.type}`}>{notice.type === "error" ? <X size={15} /> : <Check size={15} />}{notice.text}</div>}
       {viewerLoading && <div className="notice info"><RefreshCw size={14} className="spin" />读取文件…</div>}
-      {viewer && <FileViewer file={viewer} onClose={() => setViewer(null)} />}
+      {viewer && <FileViewer file={viewer} projectId={projectId} onClose={() => setViewer(null)} />}
       {paletteOpen && <CommandPalette snapshot={snapshot} onClose={() => setPaletteOpen(false)} actions={{ refresh: () => void refresh(), togglePause, toggleTheme: () => setTheme((value) => value === "dark" ? "light" : "dark"), toggleYolo: () => setYolo((value) => !value), exportProject, startPreview, stopPreview }} />}
     </main>
   );
@@ -479,7 +484,7 @@ function Inspector(props: { snapshot: ConsoleSnapshot; files: string[]; tab: "ar
   });
   return <aside className="inspector-column panel-column">
     <div className="section-rule">PROJECT</div>
-    <dl className="project-meta"><dt>name</dt><dd>{snapshot.project.name}</dd><dt>id</dt><dd title={snapshot.project.id}>{snapshot.project.id}</dd><dt>status</dt><dd>{snapshot.project.status}</dd><dt>phase</dt><dd>{snapshot.phase.label}</dd><dt>created</dt><dd>{snapshot.project.createdAt.slice(0, 16).replace("T", " ")}</dd>{score !== undefined && <><dt>complete</dt><dd>{score}%{snapshot.requirement?.completenessLocked ? " (locked)" : ""}</dd></>}{snapshot.dev && snapshot.dev.sliceTotal > 0 && <><dt>slices</dt><dd>{snapshot.dev.sliceIndex}/{snapshot.dev.sliceTotal}{snapshot.dev.currentSliceId ? ` · ${snapshot.dev.currentSliceId}` : ""}</dd></>}{snapshot.testing && snapshot.testing.suiteTotal > 0 && <><dt>tests</dt><dd>{snapshot.testing.suitePassed}/{snapshot.testing.suiteTotal} passed</dd></>}{props.previewUrl && <><dt>preview</dt><dd><a href={props.previewUrl} target="_blank" rel="noreferrer">{props.previewUrl}</a></dd></>}</dl>
+    <dl className="project-meta"><dt>name</dt><dd>{snapshot.project.name}</dd><dt>id</dt><dd title={snapshot.project.id}>{snapshot.project.id}</dd><dt>status</dt><dd>{snapshot.project.status}</dd><dt>phase</dt><dd>{snapshot.phase.label}</dd><dt>created</dt><dd>{snapshot.project.createdAt.slice(0, 16).replace("T", " ")}</dd>{score !== undefined && <><dt>complete</dt><dd>{score}%{snapshot.requirement?.completenessLocked ? " (locked)" : ""}</dd></>}{snapshot.dev && snapshot.dev.sliceTotal > 0 && <><dt>slices</dt><dd>{snapshot.dev.sliceIndex}/{snapshot.dev.sliceTotal}{snapshot.dev.currentSliceId ? ` · ${snapshot.dev.currentSliceId}` : ""}</dd></>}{snapshot.testing && snapshot.testing.suiteTotal > 0 && <><dt>tests</dt><dd>{snapshot.testing.suitePassed}/{snapshot.testing.suiteTotal} passed</dd></>}{props.previewUrl && <><dt>preview</dt><dd><a href={props.previewUrl} target="_blank" rel="noreferrer">预览</a></dd></>}</dl>
     <div className="project-actions"><button disabled={props.busy.includes("preview")} onClick={props.previewUrl ? props.onStopPreview : props.onStartPreview}>{props.previewUrl ? <CircleStop size={14} /> : <Play size={14} />}{props.previewUrl ? "取消部署" : "部署"}</button><button disabled={props.busy.includes("export")} onClick={props.onExport}><Download size={14} />导出包</button></div>
     {(snapshot.integrations?.length ?? 0) > 0 && <><div className="section-rule">INTEGRATIONS</div><div className="integrations">{snapshot.integrations!.slice(0, 5).map((item) => <div key={item.integrationId}><span>• {item.displayName}</span><em className={item.status}>{item.status}</em></div>)}</div></>}
     <div className="section-rule">PANEL</div>
@@ -488,9 +493,11 @@ function Inspector(props: { snapshot: ConsoleSnapshot; files: string[]; tab: "ar
   </aside>;
 }
 
-function FileViewer({ file, onClose }: { file: FileResult; onClose: () => void }) {
+function FileViewer({ file, projectId, onClose }: { file: FileResult; projectId: string; onClose: () => void }) {
   const isMarkdown = /\.(md|markdown)$/i.test(file.path);
-  return <div className="overlay" role="dialog" aria-modal="true"><section className="file-viewer"><header><div>{isMarkdown ? <FileText size={16} /> : <FileCode2 size={16} />}<strong>{file.path}</strong></div><button className="icon-button" onClick={onClose}><X size={17} /></button></header>{file.binary ? <div className="binary-file">二进制文件无法在 WebUI 中预览。<small>{file.absolutePath}</small></div> : isMarkdown ? <div className="file-markdown-scroll"><Markdown>{file.content}</Markdown></div> : <pre>{file.content}</pre>}</section></div>;
+  const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(file.path);
+  const fileName = file.path.split("/").at(-1) ?? file.path;
+  return <div className="overlay" role="dialog" aria-modal="true"><section className="file-viewer"><header><div>{isImage ? <FileText size={16} /> : isMarkdown ? <FileText size={16} /> : <FileCode2 size={16} />}<strong>{file.path}</strong></div><button className="icon-button" onClick={onClose}><X size={17} /></button></header>{isImage ? <div className="file-image-scroll"><img className="file-image" src={api.fileRawUrl(projectId, file.path)} alt={fileName} title={file.absolutePath ?? file.path} />{file.absolutePath && <small className="image-path">{file.absolutePath}</small>}</div> : file.binary ? <div className="binary-file">二进制文件无法在 WebUI 中预览。<small>{file.absolutePath}</small></div> : isMarkdown ? <div className="file-markdown-scroll"><Markdown>{file.content}</Markdown></div> : <pre>{file.content}</pre>}</section></div>;
 }
 
 function CommandPalette({ snapshot, onClose, actions }: { snapshot: ConsoleSnapshot; onClose: () => void; actions: { refresh: () => void; togglePause: () => void; toggleTheme: () => void; toggleYolo: () => void; exportProject: () => void; startPreview: () => void; stopPreview: () => void } }) {

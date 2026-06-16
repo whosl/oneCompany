@@ -76,6 +76,7 @@ export function deriveAgents(snapshot: ConsoleSnapshot): AgentView[] {
     }
     if (type === "agent.started") agent.activeSince = new Date(event.timestamp).getTime();
     if (type === "agent.plan" || type === "agent.act" || type === "agent.observe" || type === "agent.reflect" || type === "agent.progress") {
+      if (type === "agent.progress" && isOpencodeHeartbeat(event.payload.summary)) continue;
       agent.lastText = String(event.payload.summary ?? "");
     }
     if (type === "agent.reflect") agent.steps += 1;
@@ -101,6 +102,7 @@ export function deriveAgents(snapshot: ConsoleSnapshot): AgentView[] {
 
 const at = (timestamp: string) => timestamp.slice(11, 19);
 const line = (value: unknown, fallback = "") => String(value ?? fallback).replace(/\s+/g, " ").trim();
+const isOpencodeHeartbeat = (value: unknown) => /^Opencode 仍在运行（已 \d+s）…$/.test(line(value));
 const block = (value: unknown, fallback = "") => String(value ?? fallback)
   .replace(/\r\n/g, "\n")
   .replace(/[ \t]+\n/g, "\n")

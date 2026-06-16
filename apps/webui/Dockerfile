@@ -2,13 +2,16 @@
 # syntax=docker/dockerfile:1
 
 # ─── Builder: pnpm build the React app ──────────────────────────────────────
-FROM ubuntu:22.04 AS builder
+FROM docker.m.daocloud.io/library/ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PNPM_HOME=/root/.local/share/pnpm
 ENV PATH="${PNPM_HOME}:${PATH}"
+ENV npm_config_registry=https://registry.npmmirror.com
 
-RUN apt-get update \
+# CN mirrors (network-restricted build env): apt → aliyun, npm → npmmirror.
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list \
+  && apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates curl git python3 make g++ \
   && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
@@ -28,7 +31,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @oc/webui build
 
 # ─── Runtime: nginx serves the static dist ──────────────────────────────────
-FROM nginx:alpine AS runtime
+FROM docker.m.daocloud.io/library/nginx:alpine AS runtime
 
 # Remove default nginx static assets and config.
 RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/default.conf

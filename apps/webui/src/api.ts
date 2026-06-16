@@ -37,6 +37,7 @@ export const api = {
   snapshot: (id: string) => request<ConsoleSnapshot>(`/projects/${id}/console/snapshot`),
   listFiles: async (id: string) => (await request<{ files: string[] }>(`/projects/${id}/files?scope=repo`)).files ?? [],
   readFile: (id: string, path: string) => request<FileResult>(`/projects/${id}/files?path=${encodeURIComponent(path)}`),
+  fileRawUrl: (id: string, path: string) => `${API_BASE}/projects/${id}/files/raw?path=${encodeURIComponent(path)}`,
   startRequirement: (id: string, requirement: string) => post(`/projects/${id}/requirement/start`, { requirement }),
   submitAnswers: (id: string, answers: string[]) => post(`/projects/${id}/requirement/answers`, { answers }),
   skipClarification: (id: string) => post(`/projects/${id}/requirement/skip`),
@@ -49,8 +50,9 @@ export const api = {
   setDeploymentUrl: (id: string, url: string) => post(`/projects/${id}/deployment/url`, { url }),
   startPreview: (id: string) => post<{ url: string; health: { reachable: boolean } }>(`/projects/${id}/preview/start`),
   stopPreview: (id: string) => post(`/projects/${id}/preview/stop`),
-  previewStatus: (id: string) => request<{ url?: string; health: { reachable: boolean } }>(`/projects/${id}/preview/status`),
+  previewStatus: (id: string) => request<{ previewUrl?: string; health: { reachable: boolean } }>(`/projects/${id}/preview/status`),
   exportSubmission: (id: string) => post<{ packagePath: string; deliveryAppPath: string }>(`/projects/${id}/delivery/export`),
+  downloadPackageUrl: (id: string) => `${API_BASE}/projects/${id}/delivery/download`,
 };
 
 export function openEventStream(

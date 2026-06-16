@@ -343,6 +343,9 @@ kbd { border: 1px solid var(--line-strong); color: var(--cyan); padding: 1px 4px
 .file-markdown-scroll .markdown-body code, .file-markdown-scroll .markdown-body pre { font-family: var(--mono); }
 .binary-file { display: grid; place-content: center; gap: 8px; color: var(--muted); }
 .binary-file small { color: var(--cyan); }
+.file-image-scroll { min-height: 0; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px; }
+.file-image { max-width: 100%; max-height: 70vh; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: repeating-conic-gradient(var(--panel) 0 25%, rgba(0,0,0,.18) 0 50%) 50% / 24px 24px; }
+.image-path { color: var(--muted); font-family: var(--mono); font-size: 12px; word-break: break-all; text-align: center; max-width: 100%; }
 .palette-overlay { place-items: end center; padding-bottom: 54px; }
 .command-palette { width: min(620px, calc(100vw - 30px)); border: 1px solid var(--cyan); background: var(--panel-raised); box-shadow: 0 20px 80px rgba(0,0,0,.5); }
 .command-palette header { height: 42px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); color: var(--cyan); padding: 0 12px; }
