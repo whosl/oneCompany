@@ -2,13 +2,19 @@
 # syntax=docker/dockerfile:1
 
 # ─── Builder: install deps, build, bake playwright/mcp/opencode/codegraph ───
-FROM ubuntu:22.04 AS builder
+FROM docker.m.daocloud.io/library/ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PNPM_HOME=/root/.local/share/pnpm
 ENV PATH="${PNPM_HOME}:/usr/local/bin:${PATH}"
 
-RUN apt-get update \
+# CN mirrors (network-restricted build env): apt → aliyun, npm → npmmirror.
+# Playwright CDN (cdn.playwright.dev) is reachable from here, so the Chromium
+# binary uses Playwright's default download host.
+ENV npm_config_registry=https://registry.npmmirror.com
+
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list \
+  && apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -40,8 +46,13 @@ ENV OC_INTEGRATION_MCP_MANIFEST=/opt/onecompany/config/integration-mcp-manifest.
 ENV OC_GATEWAY_MCP_CONFIG=/opt/onecompany/config/oc-gateway-mcp.json
 
 RUN pnpm install --frozen-lockfile
+# Playwright Chromium mirror: serve the Chrome-for-Testing zips from a local
+# HTTP server on the build host's bridge gateway. cdn.playwright.dev redirects
+# to Google Storage, which is unreachable mid-build in this network; the host
+# pre-fetches the zips and serves them here. Override via --build-arg.
+ARG PW_DOWNLOAD_HOST=http://128.128.0.1:18080
 RUN chmod +x scripts/docker-install-playwright.sh scripts/docker-install-mcp-servers.sh scripts/docker-install-opencode.sh \
-  && scripts/docker-install-playwright.sh /opt/onecompany \
+  && PLAYWRIGHT_DOWNLOAD_HOST="${PW_DOWNLOAD_HOST}" scripts/docker-install-playwright.sh /opt/onecompany \
   && scripts/docker-install-mcp-servers.sh /opt/onecompany \
   && scripts/docker-install-opencode.sh
 
@@ -59,14 +70,16 @@ RUN mkdir -p /opt/onecompany/data \
   && pnpm migrate
 
 # ─── Runtime: slim production image ─────────────────────────────────────────
-FROM ubuntu:22.04 AS runtime
+FROM docker.m.daocloud.io/library/ubuntu:22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PNPM_HOME=/root/.local/share/pnpm
 ENV PATH="${PNPM_HOME}:/usr/local/bin:/usr/lib/node_modules/.bin:${PATH}"
 ENV NODE_ENV=production
+ENV npm_config_registry=https://registry.npmmirror.com
 
-RUN apt-get update \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://mirrors.aliyun.com/ubuntu|g' /etc/apt/sources.list \
+  && apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \

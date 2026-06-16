@@ -1,0 +1,63 @@
+{
+  "agents": {
+    "sisyphus": {
+      "model": "zhipuai-coding-plan/glm-5.2"
+    },
+    "atlas": {
+      "model": "zhipuai-coding-plan/glm-5.2"
+    },
+    "prometheus": {
+      "model": "krill/gpt-5.5"
+    },
+    "metis": {
+      "model": "zhipuai-coding-plan/glm-5.2"
+    },
+    "momus": {
+      "model": "krill/gpt-5.5"
+    },
+    "oracle": {
+      "model": "krill/gpt-5.5"
+    },
+    "hephaestus": {
+      "model": "krill/gpt-5.5"
+    },
+    "librarian": {
+      "model": "krill/gpt-5.3-codex-spark"
+    },
+    "explore": {
+      "model": "krill/gpt-5.3-codex-spark"
+    },
+    "multimodal-looker": {
+      "model": "krill/gpt-5.5"
+    },
+    "sisyphus-junior": {
+      "model": "krill/gpt-5.3-codex-spark"
+    }
+  },
+  "categories": {
+    "ultrabrain": {
+      "model": "krill/gpt-5.5"
+    },
+    "deep": {
+      "model": "krill/gpt-5.5"
+    },
+    "visual-engineering": {
+      "model": "krill/gpt-5.5"
+    },
+    "artistry": {
+      "model": "krill/gpt-5.5"
+    },
+    "unspecified-high": {
+      "model": "krill/gpt-5.5"
+    },
+    "unspecified-low": {
+      "model": "zhipuai-coding-plan/glm-5.2"
+    },
+    "quick": {
+      "model": "krill/gpt-5.3-codex-spark"
+    },
+    "writing": {
+      "model": "zhipuai-coding-plan/glm-5.2"
+    }
+  }
+}

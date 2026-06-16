@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "file:///Users/wenzhuolin/dev/OneCompany/packages/opencode-plugin/dist/server.js"
+    "oh-my-opencode"
   ]
 }

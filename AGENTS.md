@@ -1,35 +1,68 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Shape
 
-OneCompany is a pnpm/Turbo TypeScript monorepo. Runtime applications live under `apps/`: `api` provides the Hono API and SSE endpoints, `tui` is the primary TUI2 client, and `webui` is the React/Vite console. Shared implementation is split across `packages/agent-core`, `workflow`, `workspace`, `integrations`, `shared`, and `oc-gateway-mcp`. Keep tests beside their source as `*.test.ts`; broader scenarios belong in `apps/api/src/integration/`. Operational scripts live in `scripts/`, integration presets in `config/`, offline capabilities in `skill-packs/`, and contributor-facing material in `docs/`.
+- OneCompany is a pnpm/Turbo monorepo. Workspace packages are only `apps/*` and `packages/*` (see `pnpm-workspace.yaml`).
+- Runtime apps: `apps/api` (Hono API + SSE), `apps/tui` (TUI2 client), `apps/webui` (React/Vite console).
+- Shared/runtime packages: `agent-core`, `workflow`, `workspace`, `integrations`, `shared`, `oc-gateway-mcp`, `opencode-plugin`.
+- Keep tests with implementation as `*.test.ts`; broader cross-flow scenarios are under `apps/api/src/integration/`.
 
-## Build, Test, and Development Commands
+## Setup and Common Commands
 
-- `pnpm install`: install all workspace dependencies.
-- `pnpm migrate`: initialize or update the local SQLite schema.
-- `pnpm api`: run the API at `http://localhost:3001`.
-- `pnpm tui2`: launch the terminal client; add `--project <id>` to open a project.
-- `pnpm webui`: run the WebUI at `http://localhost:3010`.
-- `pnpm build`: build all packages through Turbo.
-- `pnpm typecheck`: run strict TypeScript checks across the monorepo.
-- `pnpm test`: run Vitest suites across test-enabled packages.
-- `pnpm lint` / `pnpm format`: run ESLint or apply Prettier formatting.
+- Bootstrap: `cp .env.example .env` then `pnpm install`.
+- Initialize schema before first run: `pnpm migrate` (delegates to `@oc/shared`).
+- Start all local dev processes: `pnpm dev` (runs package `dev` tasks with Turbo).
+- API/TUI/WebUI separately: `pnpm api` (`:3001`), `pnpm tui2`, `pnpm webui` (`:3010`).
+- Useful one-liners:
+  - `pnpm build` (full workspace)
+  - `pnpm test`
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `pnpm format` (Prettier)
+- Focused checks use filters, e.g. `pnpm --filter @oc/api test -- src/events/sse.test.ts`.
 
-Use filters for focused work, for example `pnpm --filter @oc/api test -- src/events/sse.test.ts`.
+## Source-of-Truth Config (easy-to-miss)
 
-## Coding Style & Naming Conventions
+- `api` loads root `.env` explicitly (`apps/api/src/index.ts`); env values in subprocesses are not automatically inherited unless exported.
+- DB path behavior is env-driven in `packages/shared/src/db/paths.ts`:
+  - `OC_TEST_DB_PATH` (test harness)
+  - `OC_DB_PATH` (runtime)
+  - otherwise `<cwd>/data/app.sqlite`.
+- `packages/workspace` defaults generated project root to `OC_GENERATED_PROJECTS_ROOT` or `./generated-projects`; this directory is gitignored.
+- `apps/webui/vite.config.ts` proxies `/api` to `127.0.0.1:3001`; nginx in `apps/webui/nginx.conf` uses `/api/` and `/preview/` pass-through.
+- OpenCode plugin wiring is in `.opencode/opencode.json` and `.opencode/tui.json`, both with machine-specific absolute paths.
 
-Use TypeScript ESM, two-space indentation, semicolons, and double quotes, matching existing files. Prefer small domain modules with explicit exported types. Use `camelCase` for values/functions, `PascalCase` for React components and types, and kebab-case directories. Strict TypeScript and `noUncheckedIndexedAccess` are enabled. Prefix intentionally unused variables with `_`; ESLint rejects other unused bindings.
+## Verification Order and Expensive Flows
 
-## Testing Guidelines
+- `pnpm migrate` should precede API/TUI startup in fresh repos.
+- In CI, expensive real-engine integration checks run as: `pnpm migrate`, `pnpm -w build`, then `pnpm --filter @oc/api vitest run src/integration/golden-path.test.ts` with `OC_OPENCODE_INTEGRATION=1`.
+- `apps/api/src/integration/golden-path.test.ts` is skipped unless `OC_OPENCODE_INTEGRATION` is set.
 
-Vitest runs in Node with 30-second test and hook timeouts. Name tests `feature.test.ts` and keep fixtures deterministic. Add integration coverage when changing persisted events, gates, workflow transitions, SSE, or cross-package contracts. Before submitting, run `pnpm typecheck`, the affected package tests, and `pnpm build`. UI changes should also be checked in the browser at desktop and mobile widths.
+## Docker and Deployment
 
-## Commit & Pull Request Guidelines
+- Production mode is `docker compose up --build` using `Dockerfile` + `docker-compose.yml` (ports: API `3001`, WebUI `3010`).
+- Hot-reload/dev override is `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`.
+- API container entrypoint runs schema migration before starting (`scripts/docker-entrypoint.sh`), so code changes touching migrations often still require container rebuild.
+- Use `docker compose exec onecompany-api pnpm tui2 --api http://127.0.0.1:3001` for container-side TUI access.
 
-Follow Conventional Commits seen in history: `feat(webui): ...`, `fix(mcp-governance): ...`, `test(project-mcp): ...`, or `docs: ...`. Keep commits focused and imperative. Pull requests should explain behavior changes, list verification commands, link relevant issues, and include screenshots for visible UI changes. Call out schema, environment, security, or migration impacts explicitly.
+## Engine and Integration Gotchas
 
-## Security & Configuration Tips
+- `OC_USE_STUB_ENGINE=1` is a test-mode shortcut; avoid for production acceptance (also noted in `apps/tui` help).
+- Workflow LLM vars (`OC_LLM_API_KEY`, `OC_LLM_BASE_URL`, `OC_WORKFLOW_MODEL_*`) and coding vars differ from coding vars (`OC_OPENCODE_MODEL_*`), which should be `provider/model` values.
+- Integration adapter mode is controlled by `OC_INTEGRATION_ADAPTER_MODE` (default `real` in docker paths); manifest and gateway behavior come from `config/integration-mcp-manifest.json` and `config/oc-gateway-mcp.json`.
 
-Copy `.env.example` to `.env`; never commit credentials, `.mcp.json`, databases, generated projects, or build output. Do not use `OC_USE_STUB_ENGINE=1` for production acceptance. Preserve MCP allowlists, namespace checks, secret redaction, and human gates around risky operations.
+## Testing Constraints
+
+- Vitest config sets 30s test/hook timeouts; API integration tests also run with an intentional long poll.
+- `apps/api/vitest.config.ts` excludes `**/generated-projects/**` from API test collection.
+- Run narrower tests first when iterating on failures, then run package/workspace verification.
+
+## Style and CI Conventions
+
+- ESM TS with `strict`, `noUncheckedIndexedAccess`, two-space indent, semicolons, and double quotes.
+- ESLint enforces TypeScript unused-variable prefixes (`_` for intentionally unused).
+- OpenCode plugin lifecycle that matters to CI/runtime:
+  - `pnpm opencode-plugin:build`
+  - `pnpm opencode-plugin:install`
+- Suggested commit style: Conventional Commits (`feat(...)`, `fix(...)`, `test(...)`, `docs(...)`), focused and imperative.
+- Never commit secrets or generated artifacts: `.env`, `.env.docker`, `data/*`, `generated-projects/*`, `.mcp.json`, build caches/outputs.
