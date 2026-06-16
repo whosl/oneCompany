@@ -17,12 +17,13 @@ async function reachSliceFailureGate(
 }
 
 describe("slice failure gate", () => {
-  it("raises gate after budget exhausted", async () => {
+  it("raises gate after repeated same-category failures", async () => {
     const { db, deps, projectId, cleanup } = setupDevelopmentTest({ alwaysFail: true });
     try {
       const result = await reachSliceFailureGate(db, projectId, deps);
       expect(result.gateType).toBe("slice_failure");
-      expect(result.state.currentSliceAttempts).toBe(4);
+      expect(result.state.currentSliceAttempts).toBe(2);
+      expect(result.state.risks.some((risk) => risk.includes("Diagnosis gate"))).toBe(true);
     } finally {
       cleanup();
     }
@@ -45,7 +46,7 @@ describe("slice failure gate", () => {
       expect(retried.projectStatus).toBe("Developing");
       expect(retried.gateType).toBe("slice_failure");
       expect(retried.state.taskQueue[0]?.status).toBe("failed");
-      expect(retried.state.currentSliceAttempts).toBeGreaterThan(gated.state.currentSliceAttempts);
+      expect(retried.state.currentSliceAttempts).toBe(2);
     } finally {
       cleanup();
     }

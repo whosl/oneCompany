@@ -71,6 +71,7 @@ export async function runTestingPhase(
 
   let payload = deps.loadSession(input.projectId);
   const preview = await deps.startPreview(input.projectId);
+  const publicPreviewUrl = preview.publicPath ?? preview.url;
   const enabledIntegrations = await resolveEnabledIntegrations(deps, input.projectId);
 
   const baseline = await collectIntegrationArtifacts(
@@ -83,11 +84,11 @@ export async function runTestingPhase(
 
   payload = {
     ...payload,
-    state: { ...payload.state, previewUrl: preview.url },
+    state: { ...payload.state, previewUrl: publicPreviewUrl },
     testing: {
       phase: "running",
       requestDeploy: input.requestDeploy ?? false,
-      previewUrl: preview.url,
+      previewUrl: publicPreviewUrl,
       lastRunAt: new Date().toISOString(),
       suiteResults: [],
       integrationArtifacts: baseline.artifacts,
@@ -150,7 +151,7 @@ export async function runTestingPhase(
       testing: {
         phase: "failed",
         requestDeploy: input.requestDeploy ?? false,
-        previewUrl: preview.url,
+        previewUrl: publicPreviewUrl,
         lastRunAt: new Date().toISOString(),
         suiteResults,
         qaNotes,
@@ -181,7 +182,7 @@ export async function runTestingPhase(
     testing: {
       phase: "passed",
       requestDeploy: input.requestDeploy ?? false,
-      previewUrl: preview.url,
+      previewUrl: publicPreviewUrl,
       lastRunAt: new Date().toISOString(),
       suiteResults,
       qaNotes,

@@ -111,6 +111,31 @@ function harnessOutcomeAllowsAuthoritativeCheck(sliceResult: {
   );
 }
 
+function classifySliceFailure(details: string): string {
+  const lower = details.toLowerCase();
+  if (lower.includes("typecheck") || lower.includes("tsc")) {
+    return "typecheck";
+  }
+  if (lower.includes("build")) {
+    return "build";
+  }
+  if (lower.includes("playwright")) {
+    return "playwright";
+  }
+  if (lower.includes("web layer") || lower.includes("placeholder") || lower.includes("expected")) {
+    return "web-layer";
+  }
+  return "authoritative-test";
+}
+
+function buildRepeatedFailureDiagnostic(sliceId: string, category: string, details: string): string {
+  return [
+    `Slice ${sliceId} hit repeated ${category} failures; stopping blind retry after 2 matching failures.`,
+    `Latest evidence: ${details.slice(0, 220)}`,
+    "Use the slice_failure gate to retry with a diagnosis, replan, skip, or fail.",
+  ].join(" ");
+}
+
 export async function runSliceIteration(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
@@ -127,6 +152,7 @@ export async function runSliceIteration(
     state,
     payload.meta.sliceRetryBudgetExtension ?? 0,
   );
+  const failureCategoryCounts = new Map<string, number>();
 
   while (state.currentSliceAttempts < maxAttempts) {
     const attempt = state.currentSliceAttempts + 1;
@@ -307,7 +333,20 @@ export async function runSliceIteration(
       return { kind: "passed", state };
     }
 
+    const category = classifySliceFailure(check.details);
+    const matchingFailures = (failureCategoryCounts.get(category) ?? 0) + 1;
+    failureCategoryCounts.set(category, matchingFailures);
+
     state = incrementSliceAttempts(state);
+    if (matchingFailures >= 2) {
+      const diagnostic = buildRepeatedFailureDiagnostic(slice.id, category, check.details);
+      emitPipelineNote(deps, state.projectId, "agent.observe", diagnostic);
+      state = {
+        ...state,
+        risks: [...state.risks, `Diagnosis gate: ${diagnostic}`],
+      };
+      break;
+    }
     if (shouldRaiseSliceFailureGate(state.currentSliceAttempts, maxAttempts, false)) {
       break;
     }
