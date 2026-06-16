@@ -16,3 +16,4 @@ generated-projects/*
 apps/web/test-results/
 demo-runs/
 .mcp.json
+.omo/
