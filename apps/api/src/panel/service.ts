@@ -13,7 +13,7 @@ import {
   loadDevSession,
   loadTestResults,
 } from "@oc/workflow";
-import { getPreviewHealth } from "@oc/workspace";
+import { getPreviewHandle, getPreviewHealth } from "@oc/workspace";
 import type { ProjectService } from "../projects/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
 
@@ -69,8 +69,9 @@ export function createPanelService(
         (row) => row.suite === "final:playwright" && row.status === "passed",
       );
 
-      const health = previewUrl
-        ? await getPreviewHealth(previewUrl)
+      const internalPreviewUrl = getPreviewHandle(projectId)?.url;
+      const health = internalPreviewUrl
+        ? await getPreviewHealth(internalPreviewUrl)
         : { reachable: false as const };
 
       return {

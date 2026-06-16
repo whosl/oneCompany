@@ -458,7 +458,7 @@ describe.skipIf(!process.env.OC_OPENCODE_INTEGRATION)("golden path — M9.5", ()
         url: string;
         health: { reachable: boolean };
       };
-      expect(previewBody.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(previewBody.url).toBe(`/preview/${encodeURIComponent(projectId)}/`);
       expect(previewBody.health.reachable).toBe(true);
 
       const previewStatus = await app.request(`/projects/${projectId}/preview/status`);

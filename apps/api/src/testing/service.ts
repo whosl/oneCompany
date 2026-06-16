@@ -19,6 +19,7 @@ import {
 } from "@oc/workflow";
 import {
   getPreviewHealth,
+  buildPreviewPublicPath,
   runSuite,
   startPreview,
   stopPreview,
@@ -84,7 +85,11 @@ export function createTestingService(
       saveSession: (pid, payload) => saveDevSession(db, pid, payload),
       startPreview: async (pid) => {
         const session = loadDevSession(db, pid);
-        return startPreview({ projectId: pid, repoPath: session.state.repoPath });
+        return startPreview({
+          projectId: pid,
+          repoPath: session.state.repoPath,
+          publicBasePath: buildPreviewPublicPath(pid),
+        });
       },
       stopPreview: async (pid) => stopPreview(pid),
       runSuite: async (suite: FinalSuiteId, previewUrl?: string) => {
@@ -186,17 +191,18 @@ export function createTestingService(
     async startPreview(projectId: string): Promise<{ url: string; health: { reachable: boolean } }> {
       const deps = buildDeps(projectId);
       const handle = await deps.startPreview(projectId);
+      const previewUrl = handle.publicPath ?? handle.url;
       const payload = deps.loadSession(projectId);
       deps.saveSession(projectId, {
         ...payload,
-        state: { ...payload.state, previewUrl: handle.url },
+        state: { ...payload.state, previewUrl },
         testing: {
           ...(payload.testing ?? { phase: "idle", suiteResults: [] }),
-          previewUrl: handle.url,
+          previewUrl,
         },
       });
       const health = await getPreviewHealth(handle.url);
-      return { url: handle.url, health: { reachable: health.reachable } };
+      return { url: previewUrl, health: { reachable: health.reachable } };
     },
 
     async stopPreview(projectId: string): Promise<void> {

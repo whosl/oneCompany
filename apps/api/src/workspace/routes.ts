@@ -28,6 +28,33 @@ export function createWorkspaceRoutes(workspace: WorkspaceService) {
     }
   });
 
+  router.get("/:id/files/raw", (c) => {
+    const relativePath = c.req.query("path");
+    if (!relativePath) {
+      return c.json({ error: "path is required" }, 400);
+    }
+    try {
+      const { buffer, mimeType } = workspace.readProjectFileBytes(
+        c.req.param("id"),
+        relativePath,
+      );
+      return new Response(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          "Content-Type": mimeType,
+          "Cache-Control": "no-cache",
+          "Content-Length": String(buffer.length),
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "failed to access file";
+      if (message.includes("not found")) {
+        return c.json({ error: message }, 404);
+      }
+      return c.json({ error: message }, 400);
+    }
+  });
+
   router.post("/:id/commands", async (c) => {
     if (!devCommandsEnabled()) {
       return c.json({ error: "command execution is disabled in production" }, 403);

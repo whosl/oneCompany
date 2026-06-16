@@ -59,8 +59,12 @@ describe("testing API — M7", () => {
       });
       expect(response.status).toBe(200);
       const body = (await response.json()) as { url: string; health: { reachable: boolean } };
-      expect(body.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(body.url).toBe(`/preview/${encodeURIComponent(projectId)}/`);
       expect(body.health.reachable).toBe(true);
+
+      const proxied = await app.request(body.url);
+      expect(proxied.status).toBe(200);
+      expect(await proxied.text()).toContain("generated-app");
     } finally {
       cleanup();
     }
@@ -101,7 +105,7 @@ describe("testing API — M7", () => {
       };
       expect(snapshotBody.dev?.previewUrl).toBeUndefined();
       expect(snapshotBody.testing?.previewUrl).toBeUndefined();
-      expect(started.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(started.url).toBe(`/preview/${encodeURIComponent(projectId)}/`);
     } finally {
       cleanup();
     }

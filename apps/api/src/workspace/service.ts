@@ -31,7 +31,16 @@ export type WorkspaceServiceOptions = {
   onEvent?: (envelope: EventEnvelope) => void;
 };
 
-const BINARY_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp)$/i;
+const BINARY_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
+
+function imageMimeType(filename: string): string {
+  if (/\.png$/i.test(filename)) return "image/png";
+  if (/\.jpe?g$/i.test(filename)) return "image/jpeg";
+  if (/\.gif$/i.test(filename)) return "image/gif";
+  if (/\.webp$/i.test(filename)) return "image/webp";
+  if (/\.svg$/i.test(filename)) return "image/svg+xml";
+  return "application/octet-stream";
+}
 
 function findNewestPlaywrightScreenshot(integrationsDir: string): string | undefined {
   if (!fs.existsSync(integrationsDir)) return undefined;
@@ -215,6 +224,34 @@ export function createWorkspaceService(
         scope: "repo",
         content: readFile(workspace.repo, relativePath),
       };
+    },
+
+    readProjectFileBytes(
+      projectId: string,
+      relativePath: string,
+    ): { buffer: Buffer; mimeType: string } {
+      const project = projects.getProject(projectId);
+      if (!project) {
+        throw new Error(`Project not found: ${projectId}`);
+      }
+      const workspace = resolvePaths(project);
+
+      let diskPath: string;
+      if (relativePath.startsWith("artifacts/")) {
+        const artifactPath = relativePath.replace(/^artifacts\//, "");
+        const resolved = resolveArtifactDiskPath(workspace.artifacts, artifactPath);
+        if (!resolved) {
+          throw new Error(`Artifact not found: ${relativePath}`);
+        }
+        diskPath = resolved;
+      } else {
+        diskPath = resolveScopedPath(workspace.repo, relativePath);
+      }
+
+      if (!fs.existsSync(diskPath)) {
+        throw new Error(`File not found: ${relativePath}`);
+      }
+      return { buffer: fs.readFileSync(diskPath), mimeType: imageMimeType(relativePath) };
     },
 
     listProjectDiffs(projectId: string): Array<{ diffId: string; summary: string; createdAt: string }> {

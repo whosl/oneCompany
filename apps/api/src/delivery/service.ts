@@ -108,6 +108,11 @@ export function createDeliveryService(
         artifactsPath: paths.artifacts,
       });
     },
+
+    getProjectName(projectId: string): string {
+      const project = projects.getProject(projectId);
+      return project?.name ?? projectId;
+    },
   };
 }
 
