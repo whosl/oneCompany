@@ -1093,7 +1093,10 @@ function kv(label: string, value: string, width: number): string {
 
 function integrationStatusLabel(status: string): string {
   if (status === "connected") return pc.green("connected");
+  if (status === "enabled") return pc.green("enabled");
+  if (status === "unavailable") return pc.red("unavailable");
   if (status === "offline") return pc.yellow("offline");
+  if (status === "offline_fallback") return pc.yellow("offline_fallback");
   if (status === "disabled") return pc.dim("disabled");
   return pc.dim(status);
 }
@@ -1208,20 +1211,26 @@ function buildInspectorColumn(
     lines.push(line);
   }
 
-  const integrations = snapshot?.integrations ?? [];
-  if (integrations.length > 0) {
+  const projectTools = snapshot?.projectTools ?? snapshot?.integrations?.map((item) => ({
+    id: item.integrationId,
+    displayName: item.displayName,
+    kind: "integration" as const,
+    status: item.status,
+  })) ?? [];
+  if (projectTools.length > 0) {
     push(" ".repeat(width));
-    push(sectionRule("INTEGRATIONS", width));
-    for (const item of integrations.slice(0, 5)) {
+    push(sectionRule("PROJECT TOOLS", width));
+    for (const item of projectTools.slice(0, 8)) {
+      const prefix = item.kind === "project_mcp" ? "mcp" : "int";
       push(
         padW(
-          `${pc.dim("•")} ${clipW(item.displayName, width - 16)} ${integrationStatusLabel(item.status)}`,
+          `${pc.dim("•")} ${clipW(item.displayName, width - 22)} ${pc.dim(prefix)} ${integrationStatusLabel(item.status)}`,
           width,
         ),
       );
     }
-    if (integrations.length > 5) {
-      push(padW(pc.dim(`  +${integrations.length - 5} more`), width));
+    if (projectTools.length > 8) {
+      push(padW(pc.dim(`  +${projectTools.length - 8} more`), width));
     }
   }
 

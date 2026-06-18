@@ -60,6 +60,13 @@ export type ConsoleIntegrationSnapshot = {
   status: string;
 };
 
+export type ConsoleProjectToolSnapshot = {
+  id: string;
+  displayName: string;
+  kind: "integration" | "project_mcp";
+  status: string;
+};
+
 export type PreviewStatus = {
   previewUrl?: string;
   deploymentUrl?: string;
@@ -75,6 +82,7 @@ export type ConsoleSnapshot = {
   phase: { label: string; activeGroup: string; progressLabel?: string };
   requirement?: ConsoleRequirementSnapshot;
   integrations?: ConsoleIntegrationSnapshot[];
+  projectTools?: ConsoleProjectToolSnapshot[];
   dev?: {
     currentSliceId?: string;
     sliceIndex: number;

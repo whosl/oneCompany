@@ -5,18 +5,27 @@ export type SseHandle = {
   isConnected: () => boolean;
 };
 
-/** SSE consumer with automatic reconnect; resumes from the last seen seq. */
+/** Max reconnect attempts before giving up. Prevents infinite reconnect
+ * loops when the API is persistently down (e.g. crashed and not restarted). */
+const MAX_RECONNECT_ATTEMPTS = 20;
+
+/** SSE consumer with automatic reconnect; resumes from the last seen seq.
+ * Gives up after MAX_RECONNECT_ATTEMPTS consecutive failures and calls
+ * `onGiveUp` so the UI can surface a permanent-disconnect notice instead of
+ * silently spinning forever. */
 export function startEventStream(
   apiBase: string,
   projectId: string,
   afterSeq: number,
   onEvent: (envelope: EventEnvelope) => void,
   onStateChange?: (connected: boolean) => void,
+  onGiveUp?: () => void,
 ): SseHandle {
   const controller = new AbortController();
   let cursor = afterSeq;
   let connected = false;
   let stopped = false;
+  let attempts = 0;
 
   const setConnected = (value: boolean): void => {
     if (connected !== value) {
@@ -34,6 +43,9 @@ export function startEventStream(
         );
         if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
         setConnected(true);
+        // A successful connection resets the failure counter: only consecutive
+        // failures count toward the cap, not total lifetime reconnects.
+        attempts = 0;
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -72,6 +84,11 @@ export function startEventStream(
       }
       setConnected(false);
       if (stopped) return;
+      attempts += 1;
+      if (attempts > MAX_RECONNECT_ATTEMPTS) {
+        onGiveUp?.();
+        return;
+      }
       await new Promise((resolve) => setTimeout(resolve, 1_500));
     }
   };
