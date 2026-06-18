@@ -80,6 +80,37 @@ describe("buildTddPrompt", () => {
     expect(prompt).not.toContain("Previously delivered slices");
     expect(prompt).not.toContain("Existing repo files");
   });
+
+  it("describes expected files as advisory starting points", () => {
+    const prompt = buildTddPrompt({
+      projectId: "project-4",
+      sliceId: "slice-4",
+      goal: "wire lobby page",
+      acceptanceChecks: ["lobby page renders"],
+      testCommand: "pnpm vitest run tests/slice4.test.ts --reporter=json",
+      expectedFiles: ["src/App.tsx", "src/App.test.tsx"],
+      modelTier: "strong",
+    });
+
+    expect(prompt).toContain("Likely relevant files");
+    expect(prompt).toContain("these paths are suggestions, not requirements");
+    expect(prompt).not.toContain("Target deliverable files");
+  });
+
+  it("uses flexible TDD language instead of strict test-first", () => {
+    const prompt = buildTddPrompt({
+      projectId: "project-5",
+      sliceId: "slice-5",
+      goal: "persist player profile",
+      acceptanceChecks: ["profile data persists"],
+      testCommand: "pnpm vitest run tests/slice5.test.ts --reporter=json",
+      modelTier: "strong",
+    });
+
+    expect(prompt).toContain("Ensure tests cover");
+    expect(prompt).toContain("explore the design first then add tests");
+    expect(prompt).not.toContain("Write failing tests first");
+  });
 });
 
 describe("buildReviewPrompt", () => {
@@ -108,5 +139,19 @@ describe("buildReviewPrompt", () => {
       "Fabricated dependency problems are forbidden",
     );
     expect(prompt).toContain("No speculation");
+  });
+
+  it("includes global coherence checks", () => {
+    const prompt = buildReviewPrompt({
+      projectId: "project-2",
+      sliceId: "slice-2",
+      goal: "add game table state",
+      acceptanceChecks: ["state updates are visible"],
+      modelTier: "strong",
+    });
+
+    expect(prompt).toContain("global architectural coherence");
+    expect(prompt).toContain("duplicate functionality");
+    expect(prompt).toContain("Use grep/glob to check for duplicates and conflicts");
   });
 });

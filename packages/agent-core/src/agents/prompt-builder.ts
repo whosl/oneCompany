@@ -157,7 +157,7 @@ export function buildTddPrompt(slice: SliceSpec): string {
     `Goal: ${slice.goal}`,
     checks ? `Acceptance checks:\n${checks}` : "",
     deliverables
-      ? `Target deliverable files (planning hints — create at these paths when feasible; align with tech plan):\n${deliverables}`
+      ? `Likely relevant files (advisory starting points — explore the codebase to find the best locations; these paths are suggestions, not requirements):\n${deliverables}`
       : "",
     techContext
       ? `Tech context from the latest technical plan (follow these architecture decisions and conventions):\n${techContext}`
@@ -177,12 +177,12 @@ export function buildTddPrompt(slice: SliceSpec): string {
     WEB_DELIVERY_POLICY,
     WEB_DEVELOPMENT_GUIDANCE,
     "The repo already contains package.json, tsconfig.json, vitest.config.ts, index.html scaffold, and src/.",
-    "Create and edit files at paths indicated in Target deliverable files and the tech plan (src/, public/, index.html, etc.) using tools. Do not reply with text-only plans.",
+    "Explore the codebase to find the right locations for your changes. The file paths above are suggestions; the actual paths may differ based on existing code structure.",
     "You MUST deliver browser UI: create or update index.html and/or frontend assets with data-testid markers (app-shell, app-page, app-title).",
     'Replace the scaffold placeholder title "generated-app" with the real product name when this slice introduces UI.',
     "Add or wire a dev script if missing; Preview uses `pnpm dev` when available.",
     "Do not run npm/pnpm install; vitest is already available from the workspace toolchain.",
-    "Write failing tests first, implement code, run the scoped test command via shell tools, then stop.",
+    "Ensure tests cover the slice behavior before finishing. You may write tests first (TDD) or explore the design first then add tests — choose the approach that produces the best code for this slice. The scoped test command must pass before you stop.",
     "Do not claim success without producing file changes and running the scoped test command.",
   ]
     .filter(Boolean)
@@ -210,6 +210,12 @@ export function buildReviewPrompt(review: ReviewSpec): string {
     "Inspect the repository using read / grep / glob tools ONLY.",
     "Do NOT edit, write, or create any files. Do NOT run shell commands.",
     "Review the implementation for correctness, consistency with the acceptance checks, and obvious defects.",
+    "Also evaluate global architectural coherence across the entire repository (not just this slice):",
+    "- Does this code duplicate functionality that already exists elsewhere in the repo?",
+    "- Does it follow the same patterns and conventions as the rest of the codebase?",
+    "- Are there type mismatches or awkward interfaces at module boundaries?",
+    "- Could these changes break other parts of the system?",
+    "Use grep/glob to check for duplicates and conflicts before reporting.",
     "Reject if the slice should deliver UI but index.html is still the generated-app scaffold placeholder without product pages.",
     "If expectedFiles paths differ from implementation but vitest passes and real UI is present, note in findings but do not reject solely for path mismatch.",
     "GROUNDING RULES (mandatory — violations invalidate your review):",

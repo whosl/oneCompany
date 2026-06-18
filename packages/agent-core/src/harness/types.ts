@@ -4,7 +4,7 @@ export interface SliceSpec {
   goal: string;
   acceptanceChecks: string[];
   testCommand: string;
-  /** Planner hints — coding agent should create these when feasible. */
+  /** Advisory starting points — the agent should explore the codebase and may use different paths. */
   expectedFiles?: string[];
   /** Prior attempt evidence for fresh-session retries. */
   retryContext?: string[];
@@ -79,4 +79,6 @@ export interface CodingHarness {
   runSlice(slice: SliceSpec, ctx: DevContext): Promise<SliceResult>;
   /** Read-only code review of the latest slice commit via the same engine. */
   runReview?(review: ReviewSpec, ctx: DevContext): Promise<ReviewResult>;
+  /** Close the persistent lead session for a project (call when dev loop ends). */
+  closeProjectSession?(projectId: string): Promise<void>;
 }
