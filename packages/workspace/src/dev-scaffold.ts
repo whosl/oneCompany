@@ -285,8 +285,12 @@ server.listen(port, host);
 // Auto-exit: prevents the dev scaffold server from blocking the coding agent
 // when it runs this script to verify the app starts. The agent should use
 // background + curl + kill, but this safety net ensures no indefinite hang.
-const _exitMs = Number(process.env.DEV_SERVER_TIMEOUT_MS) || 15000;
-setTimeout(() => { try { server.close(); } catch {} process.exit(0); }, _exitMs);
+// Platform preview (OC_PREVIEW_MODE=1 or timeout=0) disables this entirely.
+const _rawTimeout = process.env.DEV_SERVER_TIMEOUT_MS ?? process.env.AUTO_EXIT_MS;
+const _exitMs = _rawTimeout !== undefined ? Number(_rawTimeout) : 15000;
+if (_exitMs > 0) {
+  setTimeout(() => { try { server.close(); } catch {} process.exit(0); }, _exitMs);
+}
 
 function normalizeBasePath(value) {
   if (!value || value === "/") return "/";

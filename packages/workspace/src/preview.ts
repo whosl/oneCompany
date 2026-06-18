@@ -81,7 +81,10 @@ export function resolvePreviewCommand(repoPath: string): PreviewCommand | null {
   if (scripts.dev) {
     return {
       command: hasVite
-        ? "pnpm exec vite --base ${PREVIEW_BASE_PATH:-/}"
+        ? // Vite does NOT read PORT env var — must pass --port explicitly so
+          // the server binds to findFreePort's allocation instead of the
+          // port hardcoded in vite.config.ts (e.g. 3000/5173).
+          "pnpm exec vite --port ${PREVIEW_PORT:-3000} --base ${PREVIEW_BASE_PATH:-/}"
         : "pnpm dev",
       shell: true,
     };
@@ -176,6 +179,12 @@ async function spawnPreviewProcess(input: {
     PREVIEW_BASE_PATH: publicBasePath,
     VITE_PREVIEW_BASE_PATH: publicBasePath,
     HOST: input.host,
+    // Platform-managed preview must NOT auto-exit — Playwright/QA needs a
+    // long-lived server. Only the coding agent's manual `pnpm dev` should
+    // benefit from the 15s auto-exit safety net.
+    AUTO_EXIT_MS: "0",
+    DEV_SERVER_TIMEOUT_MS: "0",
+    OC_PREVIEW_MODE: "1",
   };
 
   const child = spawn(resolved.command, {
