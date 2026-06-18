@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const FINAL_SUITE_IDS = [
+  "final:deps",
   "final:typecheck",
   "final:build",
   "final:vitest",

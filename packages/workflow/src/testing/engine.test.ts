@@ -10,7 +10,7 @@ describe("testing phase engine", () => {
       const result = await runTestingPhase(deps, { projectId });
       expect(result.projectStatus).toBe("Awaiting Acceptance");
       expect(result.phase).toBe("passed");
-      expect(result.suiteResults).toHaveLength(4);
+      expect(result.suiteResults).toHaveLength(5);
       expect(result.previewUrl).toBeTruthy();
       expect(result.state.previewUrl).toBe(result.previewUrl);
     } finally {
@@ -50,7 +50,7 @@ describe("testing phase engine", () => {
     try {
       await runTestingPhase(deps, { projectId });
       const status = getTestingStatus(deps, projectId);
-      expect(status.suiteResults.length).toBe(4);
+      expect(status.suiteResults.length).toBe(5);
     } finally {
       cleanup();
     }

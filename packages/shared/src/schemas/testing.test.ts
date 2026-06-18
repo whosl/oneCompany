@@ -21,6 +21,8 @@ describe("testing schemas", () => {
     expect(isFinalSuite("final:vitest")).toBe(true);
     expect(isSliceSuite("slice:slice-1")).toBe(true);
     expect(isFinalSuite("slice:slice-1")).toBe(false);
+    expect(FINAL_SUITE_IDS[0]).toBe("final:deps");
+    expect(FINAL_SUITE_IDS).toContain("final:deps");
     expect(FINAL_SUITE_IDS).toContain("final:playwright");
   });
 });

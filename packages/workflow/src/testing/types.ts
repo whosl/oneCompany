@@ -52,6 +52,7 @@ export type TestingRunResult = {
 };
 
 export const FINAL_SUITE_ORDER: FinalSuiteId[] = [
+  "final:deps",
   "final:typecheck",
   "final:build",
   "final:vitest",
