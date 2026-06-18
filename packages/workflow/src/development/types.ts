@@ -142,11 +142,21 @@ export type HarnessContextFactory = (
   state: DevState,
 ) => DevContext;
 
+export type SliceGlobalContext = {
+  /** Key architecture decisions / conventions extracted from the latest tech plan. */
+  techContext?: string;
+  /** Already-delivered slices (id, title, key files) so the agent knows what exists. */
+  predecessors?: Array<{ sliceId: string; title: string; files: string[] }>;
+  /** `git ls-files` snapshot of tracked source files (excluding node_modules/dist). */
+  repoFileTree?: string[];
+};
+
 export function buildSliceSpec(
   slice: FunctionSliceTask,
   state: DevState,
   repoPath?: string,
   retryContext?: string[],
+  globalContext?: SliceGlobalContext,
 ): SliceSpec {
   const testCommand = repoPath
     ? normalizeSliceTestCommand(repoPath, slice.testCommand, slice.id)
@@ -160,6 +170,9 @@ export function buildSliceSpec(
     expectedFiles: slice.expectedFiles,
     retryContext,
     modelTier: "strong",
+    techContext: globalContext?.techContext,
+    predecessors: globalContext?.predecessors,
+    repoFileTree: globalContext?.repoFileTree,
   };
 }
 

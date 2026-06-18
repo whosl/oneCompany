@@ -83,6 +83,7 @@ const AGENT_GUIDANCE: Record<string, string> = {
     "你的任务：验证预览质量；可调用受管控的集成工具，结论需引用工具结果。",
     WEB_DELIVERY_POLICY,
     "Preview URL 必须展示真实产品界面；若页面标题仍为 generated-app 占位页，判定为未通过（passed: false）。",
+    "GROUNDING 规则（强制）：每条 note 必须引用具体的工具结果或 file:line 证据；只能针对项目已定义的验收标准/功能范围评估，不得凭空发明项目并不存在的功能需求或依赖问题；若无法验证某项疑虑则略去，不得臆测。",
   ].join("\n"),
   [DEVELOPMENT_AGENT_IDS.devopsDelivery]: [
     "你的任务：汇总交付产物并撰写交付说明。",
@@ -136,6 +137,20 @@ export function buildTddPrompt(slice: SliceSpec): string {
     slice.retryContext && slice.retryContext.length > 0
       ? slice.retryContext.map((line, index) => `${index + 1}. ${line}`).join("\n")
       : "";
+  const techContext = slice.techContext?.trim() ?? "";
+  const predecessors =
+    slice.predecessors && slice.predecessors.length > 0
+      ? slice.predecessors
+          .map(
+            (p, i) =>
+              `${i + 1}. ${p.sliceId}: ${p.title}${p.files.length > 0 ? `\n   Files: ${p.files.join(", ")}` : ""}`,
+          )
+          .join("\n")
+      : "";
+  const repoFileTree =
+    slice.repoFileTree && slice.repoFileTree.length > 0
+      ? slice.repoFileTree.join("\n")
+      : "";
 
   return [
     `Implement slice "${slice.sliceId}" using strict TDD.`,
@@ -143,6 +158,15 @@ export function buildTddPrompt(slice: SliceSpec): string {
     checks ? `Acceptance checks:\n${checks}` : "",
     deliverables
       ? `Target deliverable files (planning hints — create at these paths when feasible; align with tech plan):\n${deliverables}`
+      : "",
+    techContext
+      ? `Tech context from the latest technical plan (follow these architecture decisions and conventions):\n${techContext}`
+      : "",
+    predecessors
+      ? `Previously delivered slices (these are already committed — build on them, do not recreate):\n${predecessors}`
+      : "",
+    repoFileTree
+      ? `Existing repo files (git ls-files, excluding node_modules/dist):\n${repoFileTree}`
       : "",
     retryContext
       ? `Retry repair context from previous attempt(s):\n${retryContext}\nStart from this evidence first; do not rediscover the whole project before inspecting the failed files and commands.`
@@ -188,6 +212,11 @@ export function buildReviewPrompt(review: ReviewSpec): string {
     "Review the implementation for correctness, consistency with the acceptance checks, and obvious defects.",
     "Reject if the slice should deliver UI but index.html is still the generated-app scaffold placeholder without product pages.",
     "If expectedFiles paths differ from implementation but vitest passes and real UI is present, note in findings but do not reject solely for path mismatch.",
+    "GROUNDING RULES (mandatory — violations invalidate your review):",
+    "1. Scope-bound: evaluate ONLY against the acceptance checks and slice goal listed above. Do NOT invent new requirements, features, or capabilities that are not in the acceptance checks. A feature you imagine the project 'should' have is not a defect if it is not in the acceptance criteria.",
+    "2. Evidence-bound: every finding MUST cite concrete `file:line` evidence that you actually opened and read. Do not describe code, dependencies, or behavior you did not verify by opening the file. If you cannot point to a specific file and line, do not raise the finding.",
+    "3. Dependency claims: NEVER claim a dependency is missing or wrong unless you have (a) read an actual import/require statement referencing that package in a source file AND (b) read package.json and confirmed the package is absent from dependencies/devDependencies. Fabricated dependency problems are forbidden.",
+    "4. No speculation: if you are unsure whether something is a real issue, omit it rather than guessing. Silence is always acceptable; hallucinated findings are not.",
     "When done, reply with EXACTLY ONE JSON object and nothing else:",
     '{"approved": true|false, "findings": ["发现1", "发现2"], "summary": "一句话结论"}',
     "findings 与 summary 必须使用简体中文。无问题时 findings 为空数组。",

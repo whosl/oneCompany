@@ -12,7 +12,7 @@ import {
 } from "@oc/shared";
 import { persistRunnerResult } from "../testing/results.js";
 import { DEVELOPMENT_AGENT_IDS, OPENCODE_NO_FILE_CHANGES_SUMMARY } from "@oc/agent-core";
-import { loadLatestAcceptance, loadLatestPrd } from "./artifacts.js";
+import { loadLatestAcceptance, loadLatestPrd, loadLatestTechPlan } from "./artifacts.js";
 import {
   createSkipChangeRequest,
   handleChangeReviewDecision,
@@ -64,6 +64,7 @@ import {
   TECH_PLAN_CONFIRM_GATE,
   buildSliceSpec,
 } from "./types.js";
+import type { SliceGlobalContext } from "./types.js";
 import { buildHarnessContext } from "./harness-context.js";
 import type { DevFixtureProfile } from "@oc/agent-core";
 
@@ -145,6 +146,62 @@ function truncateFailureDetails(details: string): string {
     : details;
 }
 
+const REPO_FILE_TREE_MAX = 120;
+const REPO_FILE_TREE_EXCLUDE = /^(node_modules\/|dist\/|\.git\/|\.onecompany\/|test-results\/|playwright-report\/|coverage\/)/;
+
+function extractTechContext(content: string): string {
+  // Take the first ~1500 chars of the tech plan — enough to capture stack,
+  // architecture, and conventions without flooding the prompt.
+  const trimmed = content.replace(/\r\n/g, "\n").trim();
+  if (trimmed.length <= 1500) return trimmed;
+  return `${trimmed.slice(0, 1500)}…`;
+}
+
+function buildPredecessors(state: import("@oc/shared").DevState, currentSliceId: string): Array<{ sliceId: string; title: string; files: string[] }> {
+  return state.taskQueue
+    .filter((task) => task.id !== currentSliceId && task.status === "passed")
+    .map((task) => ({
+      sliceId: task.id,
+      title: task.title,
+      files: task.expectedFiles ?? [],
+    }));
+}
+
+function buildRepoFileTree(repoPath: string): string[] {
+  try {
+    const { execSync } = require("node:child_process") as typeof import("node:child_process");
+    const output = execSync("git ls-files", { cwd: repoPath, encoding: "utf-8", timeout: 5_000 });
+    return output
+      .split("\n")
+      .map((f) => f.trim())
+      .filter((f) => f && !REPO_FILE_TREE_EXCLUDE.test(f))
+      .slice(0, REPO_FILE_TREE_MAX);
+  } catch {
+    return [];
+  }
+}
+
+function buildGlobalContext(
+  deps: DevelopmentWorkflowDeps,
+  payload: DevelopmentSessionPayload,
+  sliceId: string,
+): SliceGlobalContext | undefined {
+  let techContext: string | undefined;
+  try {
+    techContext = extractTechContext(loadLatestTechPlan(deps.db, payload.state.projectId).content);
+  } catch {
+    techContext = undefined;
+  }
+
+  const predecessors = buildPredecessors(payload.state, sliceId);
+  const repoFileTree = buildRepoFileTree(deps.repoPath);
+
+  if (!techContext && predecessors.length === 0 && repoFileTree.length === 0) {
+    return undefined;
+  }
+  return { techContext, predecessors, repoFileTree };
+}
+
 function buildSliceRetryContext(payload: DevelopmentSessionPayload, sliceId: string): string[] | undefined {
   const digest = payload.meta.sliceFailureDigest;
   if (!digest || digest.sliceId !== sliceId) {
@@ -224,6 +281,7 @@ export async function runSliceIteration(
       state,
       deps.repoPath,
       buildSliceRetryContext({ ...payload, meta }, slice.id),
+      buildGlobalContext(deps, payload, slice.id),
     );
 
     const sliceResult = await deps.harness.runSlice(sliceSpec, buildHarnessContext(deps, state));

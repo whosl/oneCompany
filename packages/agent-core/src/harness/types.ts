@@ -9,6 +9,12 @@ export interface SliceSpec {
   /** Prior attempt evidence for fresh-session retries. */
   retryContext?: string[];
   modelTier: "cheap" | "standard" | "strong";
+  /** Key architecture decisions / conventions extracted from the latest tech plan. */
+  techContext?: string;
+  /** Already-delivered slices (id, title, key files) so the agent knows what exists. */
+  predecessors?: Array<{ sliceId: string; title: string; files: string[] }>;
+  /** `git ls-files` snapshot of tracked source files (excluding node_modules/dist). */
+  repoFileTree?: string[];
 }
 
 export interface ToolOp {
