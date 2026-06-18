@@ -6,8 +6,12 @@ import { pickOpencodeModel } from "./opencode-model.js";
 import { injectOpencodeAuth } from "./opencode-auth.js";
 import { createEventBridge } from "./event-bridge.js";
 import { handlePermission } from "./permission-bridge.js";
-import { registerHarnessSession, unregisterHarnessSession } from "./session-registry.js";
-import { startProjectServer } from "./opencode-server.js";
+import {
+  getActiveHarnessSession,
+  registerHarnessSession,
+  unregisterHarnessSession,
+} from "./session-registry.js";
+import { shutdownProjectServer, startProjectServer } from "./opencode-server.js";
 import { DEFAULT_SDK_CALL_TIMEOUT_MS, withTimeout } from "./sdk-timeout.js";
 import { waitForSessionCompletion } from "./wait-for-session.js";
 import type {
@@ -124,50 +128,57 @@ export function createOpencodeHarness(): CodingHarness {
       emitPhase(ctx, "plan", `opencode slice ${slice.sliceId}: ${slice.goal}`);
 
       const directory = path.resolve(ctx.repoPath);
-      const server = await startProjectServer(directory, {
-        projectId: ctx.projectId,
-        projectMcp: ctx.projectMcp,
-      });
       const model = parseModelRef(pickOpencodeModel(slice.modelTier as ModelTier));
       let bridge: ReturnType<typeof createEventBridge> | undefined;
-      let activeSessionId: string | undefined;
+      let client: OpencodeClient;
+      let sessionId: string;
+      const existingSession = getActiveHarnessSession(ctx.projectId);
 
       try {
-        const client = createOpencodeClient({ baseUrl: server.url });
-        await injectOpencodeAuth(client, {
-          directory,
-          preferredProviderIDs: [model.providerID],
-        });
+        if (existingSession) {
+          client = existingSession.client;
+          sessionId = existingSession.sessionId;
+        } else {
+          const server = await startProjectServer(directory, {
+            projectId: ctx.projectId,
+            projectMcp: ctx.projectMcp,
+          });
+          client = createOpencodeClient({ baseUrl: server.url });
+          await injectOpencodeAuth(client, {
+            directory,
+            preferredProviderIDs: [model.providerID],
+          });
 
-        const sessionResponse = await client.session.create({
-          body: { title: `slice:${slice.sliceId}` },
-          query: { directory },
-        });
-        const session = sessionResponse.data;
-        if (!session) {
-          const err = sessionResponse.error as
-            | { name?: string; data?: { message?: string } }
-            | undefined;
-          const detail =
-            err?.data?.message ??
-            err?.name ??
-            `HTTP ${sessionResponse.response?.status ?? "unknown"}`;
-          throw new Error(`opencode session.create failed: ${detail}`);
+          const sessionResponse = await client.session.create({
+            body: { title: `slice:${slice.sliceId}` },
+            query: { directory },
+          });
+          const session = sessionResponse.data;
+          if (!session) {
+            const err = sessionResponse.error as
+              | { name?: string; data?: { message?: string } }
+              | undefined;
+            const detail =
+              err?.data?.message ??
+              err?.name ??
+              `HTTP ${sessionResponse.response?.status ?? "unknown"}`;
+            throw new Error(`opencode session.create failed: ${detail}`);
+          }
+
+          sessionId = session.id;
+          registerHarnessSession(ctx.projectId, {
+            client,
+            sessionId,
+            directory,
+          });
         }
 
-        activeSessionId = session.id;
-        registerHarnessSession(ctx.projectId, {
-          client,
-          sessionId: session.id,
-          directory,
-        });
-
         bridge = createEventBridge(client, {
-          sessionId: session.id,
+          sessionId,
           directory,
           emit: (event) => ctx.emit(event),
           onPermission: async (permission) => {
-            await handlePermission(client, session.id, permission, ctx.authorize, {
+            await handlePermission(client, sessionId, permission, ctx.authorize, {
               directory,
               classifyShellRisk: ctx.classifyShellRisk,
               runGovernedCommand: ctx.runGovernedCommand,
@@ -181,19 +192,22 @@ export function createOpencodeHarness(): CodingHarness {
         emitPhase(ctx, "act", `prompting opencode for ${slice.sliceId}`);
 
         const promptText = buildTddPrompt(slice);
+        const finalPrompt = existingSession
+          ? `Previous slice completed. Now implement the next slice.\n\n${promptText}`
+          : promptText;
         ctx.emit({
           type: "agent.prompt",
-          text: promptText,
+          text: finalPrompt,
           sliceId: slice.sliceId,
         });
 
         await withTimeout(
           client.session.promptAsync({
-            path: { id: session.id },
+            path: { id: sessionId },
             query: { directory },
             body: {
               model,
-              parts: [{ type: "text", text: promptText }],
+              parts: [{ type: "text", text: finalPrompt }],
             },
           }),
           DEFAULT_SLICE_TIMEOUT_MS,
@@ -203,14 +217,13 @@ export function createOpencodeHarness(): CodingHarness {
         await waitForSessionCompletion(
           client,
           bridge,
-          session.id,
+          sessionId,
           directory,
           DEFAULT_SLICE_TIMEOUT_MS,
           {
             onHeartbeat: (elapsedMs) => harnessHeartbeat(ctx, "act", elapsedMs),
           },
         );
-        bridge.stop();
 
         const changedFiles = await collectChangedFiles(client, directory, bridge.changedFiles);
         emitPhase(ctx, "observe", `opencode idle; ${changedFiles.length} changed file(s)`);
@@ -231,14 +244,19 @@ export function createOpencodeHarness(): CodingHarness {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         emitPhase(ctx, "observe", `opencode failed: ${message}`);
+        bridge?.stop();
+        const activeSession = getActiveHarnessSession(ctx.projectId);
+        if (activeSession) {
+          unregisterHarnessSession(ctx.projectId, activeSession.sessionId);
+          await shutdownProjectServer(activeSession.directory, { projectId: ctx.projectId });
+        } else {
+          await shutdownProjectServer(directory, { projectId: ctx.projectId });
+        }
         return {
           passed: false,
           summary: message,
           changedFiles: [],
         };
-      } finally {
-        if (activeSessionId) unregisterHarnessSession(ctx.projectId, activeSessionId);
-        bridge?.stop();
       }
     },
 
@@ -256,7 +274,6 @@ export function createOpencodeHarness(): CodingHarness {
       });
       const model = parseModelRef(pickOpencodeModel(review.modelTier as ModelTier));
       let bridge: ReturnType<typeof createEventBridge> | undefined;
-      let activeSessionId: string | undefined;
 
       try {
         const client = createOpencodeClient({ baseUrl: server.url });
@@ -273,13 +290,6 @@ export function createOpencodeHarness(): CodingHarness {
         if (!session) {
           throw new Error("opencode session.create failed for review");
         }
-
-        activeSessionId = session.id;
-        registerHarnessSession(ctx.projectId, {
-          client,
-          sessionId: session.id,
-          directory,
-        });
 
         bridge = createEventBridge(client, {
           sessionId: session.id,
@@ -362,9 +372,15 @@ export function createOpencodeHarness(): CodingHarness {
         emitPhase(ctx, "observe", `审查未完成：${message.slice(0, 200)}`);
         throw error;
       } finally {
-        if (activeSessionId) unregisterHarnessSession(ctx.projectId, activeSessionId);
         bridge?.stop();
       }
+    },
+
+    async closeProjectSession(projectId: string): Promise<void> {
+      const session = getActiveHarnessSession(projectId);
+      if (!session) return;
+      unregisterHarnessSession(projectId, session.sessionId);
+      await shutdownProjectServer(session.directory, { projectId });
     },
   };
 }

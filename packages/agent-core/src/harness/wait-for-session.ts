@@ -6,6 +6,8 @@ export const DEFAULT_HEARTBEAT_INTERVAL_MS = Number(
   process.env.OC_OPENCODE_WAIT_HEARTBEAT_MS ?? 30_000,
 );
 
+const POLL_INTERVAL_MS = 1500;
+
 export type WaitForSessionOptions = {
   onHeartbeat?: (elapsedMs: number) => void;
   heartbeatIntervalMs?: number;
@@ -25,14 +27,18 @@ export async function waitForSessionCompletion(
   timeoutMs: number,
   options: WaitForSessionOptions = {},
 ): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
   const startedAt = Date.now();
+  let deadline = startedAt + timeoutMs;
+  const maxDeadline = startedAt + timeoutMs * 3;
+  const stallTimeoutMs = Number(process.env.OC_OPENCODE_STALL_TIMEOUT_MS ?? 180_000);
   const idleGraceMs = Number(process.env.OC_OPENCODE_IDLE_GRACE_MS ?? 15_000);
   const idleStreakRequired = Number(process.env.OC_OPENCODE_IDLE_STREAK ?? 2);
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
   const sdkCallTimeoutMs = options.sdkCallTimeoutMs ?? DEFAULT_SDK_CALL_TIMEOUT_MS;
   let idleStreak = 0;
   let lastHeartbeatAt = startedAt;
+  let lastProgressAt = startedAt;
+  let lastChangedFileCount = bridge.changedFiles.size;
 
   const maybeHeartbeat = () => {
     if (!options.onHeartbeat) {
@@ -46,10 +52,24 @@ export async function waitForSessionCompletion(
     options.onHeartbeat(now - startedAt);
   };
 
-  while (Date.now() < deadline) {
+  while (true) {
+    const now = Date.now();
     const hasFiles = bridge.changedFiles.size > 0;
+    const hasNewFiles = bridge.changedFiles.size > lastChangedFileCount;
     const idle = bridge.isIdle();
-    const elapsed = Date.now() - startedAt;
+    const elapsed = now - startedAt;
+
+    if (hasNewFiles) {
+      lastChangedFileCount = bridge.changedFiles.size;
+    }
+
+    if (bridge.hasRecentActivity(stallTimeoutMs) || hasNewFiles) {
+      lastProgressAt = now;
+      const extension = timeoutMs * 0.5;
+      if (now + extension > deadline && now < maxDeadline) {
+        deadline = Math.min(now + extension, maxDeadline);
+      }
+    }
 
     if (idle) {
       idleStreak += 1;
@@ -65,8 +85,12 @@ export async function waitForSessionCompletion(
       return;
     }
 
+    if (now >= deadline && now - lastProgressAt >= stallTimeoutMs) {
+      break;
+    }
+
     maybeHeartbeat();
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 
   if (bridge.isIdle()) {

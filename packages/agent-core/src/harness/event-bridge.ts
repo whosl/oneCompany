@@ -30,6 +30,7 @@ export type EventBridgeHandle = {
   /** Latches true once session.idle (or status idle) was observed for this session. */
   hasSeenSessionIdle(): boolean;
   hasAssistantReply(): boolean;
+  hasRecentActivity(windowMs: number): boolean;
   stop(): void;
 };
 
@@ -50,6 +51,7 @@ export function createEventBridge(
   let seenSessionIdle = false;
   let assistantReply = false;
   let pendingPermissions = 0;
+  let lastToolCallAt = 0;
   let aborted = false;
 
   const markSessionActive = () => {
@@ -85,6 +87,9 @@ export function createEventBridge(
           markAssistantReply: () => {
             assistantReply = true;
           },
+          markToolActivity: () => {
+            lastToolCallAt = Date.now();
+          },
           onPermissionPending: (delta) => {
             pendingPermissions += delta;
           },
@@ -105,6 +110,9 @@ export function createEventBridge(
     },
     hasAssistantReply() {
       return assistantReply;
+    },
+    hasRecentActivity(windowMs: number) {
+      return lastToolCallAt > 0 && Date.now() - lastToolCallAt <= windowMs;
     },
     stop() {
       aborted = true;
@@ -182,6 +190,7 @@ function handleOpencodeEvent(
     markSessionActive: () => void;
     markSessionIdle: () => void;
     markAssistantReply: () => void;
+    markToolActivity: () => void;
     onPermissionPending: (delta: number) => void;
   },
 ): void {
@@ -373,12 +382,14 @@ function handleToolPart(
     seenToolCalls: Set<string>;
     runningTools: Set<string>;
     markSessionActive: () => void;
+    markToolActivity: () => void;
   },
 ): void {
   if (part.type !== "tool") {
     return;
   }
 
+  hooks.markToolActivity();
   const toolCallId = part.callID;
   const state = part.state;
 

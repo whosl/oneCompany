@@ -27,4 +27,8 @@ export const StubHarness: CodingHarness = {
     ctx.emit({ type: "agent.reflect", summary: "审查结论：✓ 通过 — stub" });
     return { approved: true, findings: [], summary: "stub review" };
   },
+
+  async closeProjectSession() {
+    return undefined;
+  },
 };
