@@ -109,9 +109,9 @@ export function handleFinalAcceptanceDecision(
     deps.saveSession(input.projectId, next);
 
     const feedback = customText?.trim();
-    if (feedback && deps.startChangeReview) {
+    if (deps.startChangeReview) {
       deps.startChangeReview(input.projectId, {
-        summary: feedback,
+        summary: feedback || "User rejected final acceptance without additional details",
         details: "Rejected at final acceptance — rework requested",
       });
       return toResult(deps, deps.loadSession(input.projectId));

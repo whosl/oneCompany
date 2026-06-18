@@ -36,12 +36,14 @@ function buildRepairTask(
   taskSequence: number,
   failures: NormalizedRunnerResult[],
   qaNotes: string[],
+  userFeedback?: string,
 ): FunctionSliceTask {
   const suites = failures.map((result) => result.suite);
   const diagnostics = failures
     .map((result) => `- ${result.suite}: ${result.details ?? "no details"}`)
     .join("\n");
   const qa = qaNotes.length > 0 ? qaNotes.map((note) => `- ${note}`).join("\n") : "- 无";
+  const feedback = userFeedback?.trim();
 
   return {
     id: `final-repair-${taskSequence}`,
@@ -55,8 +57,12 @@ function buildRepairTask(
       "QA 诊断：",
       qa,
       "",
+      feedback
+        ? `用户验收驳回反馈（请优先解决用户报告的问题）：\n${feedback}`
+        : "",
+      "",
       "修复后必须保持现有功能不回归；平台会重新执行完整 final:typecheck/build/vitest/playwright。",
-    ].join("\n"),
+    ].filter(Boolean).join("\n"),
     acceptanceChecks: [
       ...suites.map((suite) => `${suite} 的根因已修复`),
       "现有 Vitest 测试通过",
@@ -66,6 +72,18 @@ function buildRepairTask(
     testCommand: "pnpm vitest run --reporter=json",
     status: "pending",
   };
+}
+
+/** Extract the most recent final_acceptance rejection note from state risks. */
+function extractUserFeedback(risks: string[]): string | undefined {
+  const prefix = "Human gate note (final_acceptance):";
+  for (let i = risks.length - 1; i >= 0; i -= 1) {
+    const risk = risks[i];
+    if (risk && risk.startsWith(prefix)) {
+      return risk.slice(prefix.length).trim();
+    }
+  }
+  return undefined;
 }
 
 function nextRepairTaskSequence(payload: DevelopmentSessionPayload): number {
@@ -115,8 +133,9 @@ export function startFinalRepair(
   const attempt = (payload.meta.finalRepair?.attempt ?? 0) + 1;
   const taskSequence = nextRepairTaskSequence(payload);
   const qaNotes = input.qaNotes ?? payload.testing.qaNotes ?? [];
+  const userFeedback = extractUserFeedback(payload.state.risks);
   const requestDeploy = input.requestDeploy ?? payload.testing.requestDeploy ?? false;
-  const task = buildRepairTask(taskSequence, failures, qaNotes);
+  const task = buildRepairTask(taskSequence, failures, qaNotes, userFeedback);
   const nextState = {
     ...payload.state,
     taskQueue: [...payload.state.taskQueue, task],

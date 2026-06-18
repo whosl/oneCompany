@@ -113,4 +113,35 @@ describe("change review", () => {
       cleanup();
     }
   });
+
+  it("update_plan from requirement_change creates a repair task with user feedback", async () => {
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest();
+    try {
+      await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
+      await resumeDevelopmentAfterGate(deps, { projectId, decision: "approve" });
+      await waitForSliceLoopIdle(db, projectId);
+      db.update(projects)
+        .set({ status: "Developing" })
+        .where(eq(projects.id, projectId))
+        .run();
+
+      const feedback = "注册时报错 Unexpected non-whitespace character after JSON";
+      startRequirementChangeReview(deps, {
+        projectId,
+        summary: feedback,
+      });
+
+      const reviewPayload = loadDevSession(db, projectId);
+      const updated = handleChangeReviewDecision(deps, reviewPayload, "update_plan");
+      const repair = updated.state.taskQueue.at(-1);
+
+      expect(repair?.id).toBe("change-repair-1");
+      expect(repair?.status).toBe("pending");
+      expect(repair?.description).toContain(feedback);
+      expect(updated.meta.currentSliceId).toBe("change-repair-1");
+      expect(db.select().from(changeRequests).all()[0]?.status).toBe("resolved");
+    } finally {
+      cleanup();
+    }
+  });
 });

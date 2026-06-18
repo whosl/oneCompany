@@ -9,6 +9,7 @@ import {
   type ChangeRequestKind,
   type Db,
   type EventEnvelope,
+  type FunctionSliceTask,
 } from "@oc/shared";
 import { analyzeChangeImpact } from "./change-request-impact.js";
 import { isSliceLoopActive } from "./slice-loop-registry.js";
@@ -266,6 +267,43 @@ function bumpVersion(current: string, prefix: string): string {
   return `${prefix}-${Number(match[1]) + 1}`;
 }
 
+function nextChangeRepairTaskSequence(payload: DevelopmentSessionPayload): number {
+  return payload.state.taskQueue.reduce((maximum, task) => {
+    const match = /^change-repair-(\d+)$/.exec(task.id);
+    return match ? Math.max(maximum, Number(match[1])) : maximum;
+  }, 0) + 1;
+}
+
+function buildRequirementChangeRepairTask(
+  payload: DevelopmentSessionPayload,
+  summary: string,
+): FunctionSliceTask {
+  const sequence = nextChangeRepairTaskSequence(payload);
+  return {
+    id: `change-repair-${sequence}`,
+    title: "修复用户验收驳回反馈",
+    description: [
+      "用户在最终验收阶段驳回了交付结果。请优先复现并修复用户报告的问题，不要只修平台 smoke test。",
+      "",
+      "用户反馈：",
+      summary,
+      "",
+      "修复要求：",
+      "- 直接修改生成应用代码，确保用户反馈的浏览器操作路径可用。",
+      "- 保持现有 slice 与 final 测试不回归。",
+      "- 如问题与 preview base path、API 路由、导航路径有关，必须在真实 preview 路径下验证。",
+    ].join("\n"),
+    acceptanceChecks: [
+      "用户反馈的问题已修复",
+      "现有 Vitest 测试通过",
+      "全仓类型检查通过",
+      "真实 preview 路径下核心交互可用",
+    ],
+    testCommand: "pnpm vitest run --reporter=json",
+    status: "pending",
+  };
+}
+
 export function handleChangeReviewDecision(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
@@ -284,7 +322,8 @@ export function handleChangeReviewDecision(
   resolveChangeRequest(deps.db, changeRequestId, decision, deps.onEvent);
 
   switch (decision) {
-    case "update_plan": {
+	    case "update_plan": {
+      let requirementChangeTask: FunctionSliceTask | undefined;
       if (kind === "requirement_change") {
         const row = deps.db
           .select()
@@ -294,6 +333,7 @@ export function handleChangeReviewDecision(
         const summary = row?.summary ?? "Requirement change approved";
         appendPrdVersionForChange(deps.db, payload.state.projectId, summary);
         appendAcceptanceVersionForSkip(deps.db, payload.state.projectId, "requirement-change");
+        requirementChangeTask = buildRequirementChangeRepairTask(payload, summary);
       } else if (sliceId) {
         appendAcceptanceVersionForSkip(deps.db, payload.state.projectId, sliceId);
       }
@@ -302,6 +342,11 @@ export function handleChangeReviewDecision(
           ? skipSlice(payload.state, sliceId)
           : {
               ...payload.state,
+              taskQueue: requirementChangeTask
+                ? [...payload.state.taskQueue, requirementChangeTask]
+                : payload.state.taskQueue,
+              currentTask: undefined,
+              currentSliceAttempts: 0,
               risks: [
                 ...payload.state.risks,
                 `Requirement change applied via Change Review`,
@@ -316,6 +361,7 @@ export function handleChangeReviewDecision(
           phase: "slicing",
           gateId: undefined,
           gateType: undefined,
+          currentSliceId: requirementChangeTask ? requirementChangeTask.id : payload.meta.currentSliceId,
           pendingChangeRequestId: undefined,
           pendingChangeRequestKind: undefined,
         },
