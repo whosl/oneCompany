@@ -55,15 +55,21 @@ export const api = {
   downloadPackageUrl: (id: string) => `${API_BASE}/projects/${id}/delivery/download`,
 };
 
+/** Max reconnect attempts before giving up, preventing infinite reconnect
+ * loops when the API is persistently unavailable. */
+const MAX_RECONNECT_ATTEMPTS = 20;
+
 export function openEventStream(
   projectId: string,
   afterSeq: number,
   onEvent: (event: EventEnvelope) => void,
   onConnection: (connected: boolean) => void,
+  onGiveUp?: () => void,
 ): () => void {
   let stopped = false;
   let cursor = afterSeq;
   let controller: AbortController | undefined;
+  let attempts = 0;
 
   const consume = async () => {
     while (!stopped) {
@@ -72,6 +78,8 @@ export function openEventStream(
         const response = await fetch(`${API_BASE}/projects/${projectId}/events/stream?afterSeq=${cursor}`, { signal: controller.signal });
         if (!response.ok || !response.body) throw new Error("stream unavailable");
         onConnection(true);
+        // Reset on a successful connection: only consecutive failures count.
+        attempts = 0;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -102,7 +110,13 @@ export function openEventStream(
         // Reconnect below unless the component was unmounted.
       }
       onConnection(false);
-      if (!stopped) await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (stopped) return;
+      attempts += 1;
+      if (attempts > MAX_RECONNECT_ATTEMPTS) {
+        onGiveUp?.();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
   };
 

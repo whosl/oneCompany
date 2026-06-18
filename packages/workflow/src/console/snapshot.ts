@@ -1,4 +1,8 @@
-import { buildIntegrationStatusForProject } from "@oc/integrations";
+import {
+  buildIntegrationStatusForProject,
+  getMcpPreset,
+  listProjectMcpConfigs,
+} from "@oc/integrations";
 import { desc, eq } from "drizzle-orm";
 import {
   listEvents,
@@ -123,6 +127,33 @@ export function buildConsoleSnapshot(
     displayName: item.displayName,
     status: item.status,
   }));
+  const projectToolsById = new Map<string, NonNullable<ConsoleSnapshot["projectTools"]>[number]>();
+  for (const item of integrations) {
+    projectToolsById.set(item.integrationId, {
+      id: item.integrationId,
+      displayName: item.displayName,
+      kind: "integration" as const,
+      status: item.status,
+    });
+  }
+  for (const item of listProjectMcpConfigs(db, projectId)) {
+    const preset = getMcpPreset(item.presetId);
+    const mcpTool = {
+      id: item.presetId,
+      displayName: item.displayName,
+      kind: "project_mcp" as const,
+      status: item.enabled
+        ? preset?.available === false
+          ? "unavailable" as const
+          : "enabled" as const
+        : "disabled" as const,
+    };
+    const existing = projectToolsById.get(item.presetId);
+    if (!existing || existing.status === "not_configured") {
+      projectToolsById.set(item.presetId, mcpTool);
+    }
+  }
+  const projectTools = [...projectToolsById.values()];
 
   return {
     project: {
@@ -139,6 +170,7 @@ export function buildConsoleSnapshot(
     testing,
     risks,
     integrations,
+    projectTools,
     openGates: openGates.map((gate) => ({
       id: gate.id,
       gateType: gate.gateType,
@@ -168,4 +200,3 @@ function getPausedFrom(db: Db, projectId: string): ConsoleSnapshot["pausedFrom"]
   const latestPause = entries.find((entry) => entry.toStatus === "Paused");
   return latestPause ? parseProjectStatus(latestPause.fromStatus) : undefined;
 }
-

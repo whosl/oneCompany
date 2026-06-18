@@ -120,6 +120,8 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   };
 
   useEffect(() => {
+    dismissedGates.current.clear();
+    answeredQuestionsKey.current = undefined;
     setSnapshot(null);
     setLoading(true);
     void refresh(true);
@@ -132,7 +134,7 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
     return openEventStream(
       projectId,
       snapshot.lastSeq,
-      (event) => setSnapshot((current) => (current ? appendEvent(current, event) : current)),
+      (event) => setSnapshot((current) => (current ? filterOptimistic(appendEvent(current, event)) : current)),
       setConnected,
     );
   }, [projectId, firstSnapshotReady]);
@@ -212,6 +214,12 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   const selected = agents.find((agent) => agent.id === selectedAgent) ?? agents.find((agent) => ["running", "tool", "blocked"].includes(agent.status)) ?? agents[0];
   const developmentStarted = localLaunches.some((entry) => entry.action === "development" && entry.status !== "failed");
   const testingStarted = localLaunches.some((entry) => entry.action === "testing" && entry.status !== "failed");
+  const projectTools = snapshot?.projectTools ?? snapshot?.integrations?.map((item) => ({
+    id: item.integrationId,
+    displayName: item.displayName,
+    kind: "integration" as const,
+    status: item.status,
+  })) ?? [];
 
   useEffect(() => {
     if (!yolo || activeGate?.gateType !== "dangerous_operation" || busy.includes(`gate:${activeGate.id}`)) return;
@@ -234,10 +242,14 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
     setSnapshot((current) => current ? { ...current, openGates: current.openGates.filter((item) => item.id !== gate.id) } : current);
     setPendingGateDecision(undefined);
     setGateFeedback("");
-    await run(`gate:${gate.id}`, async () => {
+    const sent = await run(`gate:${gate.id}`, async () => {
       if (gate.gateType === "deployment" && decision === "approve" && previewUrl) await api.setDeploymentUrl(projectId, previewUrl);
       await api.resolveGate(gate.id, decision, feedback || undefined);
     }, automatic ? "YOLO 已自动放行危险操作" : `${OPTION_LABELS[decision] ?? decision}，工作流继续`);
+    if (!sent) {
+      dismissedGates.current.delete(gate.id);
+      await refresh();
+    }
   };
 
   const chooseGate = (gate: GateInfo, decision: string) => {
@@ -398,7 +410,7 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
           </div>
           <Composer snapshot={snapshot} value={message} busy={busy} onChange={setMessage} onSubmit={sendMessage} />
         </section>
-        <Inspector snapshot={snapshot} files={files} tab={inspectorTab} onTab={setInspectorTab} onOpen={openFile} previewUrl={previewUrl} onStartPreview={startPreview} onStopPreview={stopPreview} onExport={exportProject} busy={busy} />
+        <Inspector snapshot={snapshot} projectTools={projectTools} files={files} tab={inspectorTab} onTab={setInspectorTab} onOpen={openFile} previewUrl={previewUrl} onStartPreview={startPreview} onStopPreview={stopPreview} onExport={exportProject} busy={busy} />
       </div>
 
       <footer className="shortcut-bar"><span><kbd>Ctrl P</kbd> 命令</span><span><kbd>Ctrl B</kbd> 项目</span><span><kbd>M</kbd> 主题</span><span><kbd>Y</kbd> YOLO</span><span>WebUI mirrors TUI2 · actions are state-aware</span></footer>
@@ -468,7 +480,8 @@ function FloatingTodoCard({ entry, open, onToggle }: { entry: TimelineEntry; ope
   const todos = entry.todos ?? [];
   const current = todos.find((todo) => todo.status === "in_progress") ?? todos.find((todo) => todo.status === "pending") ?? todos.at(-1);
   const done = todos.filter((todo) => todo.status === "completed").length;
-  return <section className={`floating-todo ${open ? "open" : "collapsed"}`}>
+  const allDone = done === todos.length;
+  return <section className={`floating-todo ${open ? "open" : "collapsed"} ${allDone ? "done" : "running"}`}>
     <button className="floating-todo-head" onClick={onToggle} aria-expanded={open}>
       <ListChecks size={15} />
       <span>TODO</span>
@@ -577,7 +590,7 @@ function Composer({ snapshot, value, busy, onChange, onSubmit }: { snapshot: Con
   return <form className="composer" onSubmit={onSubmit}><label>{label}</label><div><span>❯</span><textarea rows={1} value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={placeholder} /><button disabled={!value.trim() || busy.includes("taizi") || busy.includes("requirement")}><Send size={15} /></button></div></form>;
 }
 
-function Inspector(props: { snapshot: ConsoleSnapshot; files: string[]; tab: "artifacts" | "files"; onTab: (tab: "artifacts" | "files") => void; onOpen: (path: string) => void; previewUrl?: string; onStartPreview: () => void; onStopPreview: () => void; onExport: () => void; busy: string[] }) {
+function Inspector(props: { snapshot: ConsoleSnapshot; projectTools: NonNullable<ConsoleSnapshot["projectTools"]>; files: string[]; tab: "artifacts" | "files"; onTab: (tab: "artifacts" | "files") => void; onOpen: (path: string) => void; previewUrl?: string; onStartPreview: () => void; onStopPreview: () => void; onExport: () => void; busy: string[] }) {
   const { snapshot } = props;
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set());
   const score = snapshot.requirement ? (snapshot.requirement.completenessScore <= 1 ? Math.round(snapshot.requirement.completenessScore * 100) : Math.round(snapshot.requirement.completenessScore)) : undefined;
@@ -596,7 +609,7 @@ function Inspector(props: { snapshot: ConsoleSnapshot; files: string[]; tab: "ar
     <div className="section-rule">PROJECT</div>
     <dl className="project-meta"><dt>name</dt><dd>{snapshot.project.name}</dd><dt>id</dt><dd title={snapshot.project.id}>{snapshot.project.id}</dd><dt>status</dt><dd>{snapshot.project.status}</dd><dt>phase</dt><dd>{snapshot.phase.label}</dd><dt>created</dt><dd>{snapshot.project.createdAt.slice(0, 16).replace("T", " ")}</dd>{score !== undefined && <><dt>complete</dt><dd>{score}%{snapshot.requirement?.completenessLocked ? " (locked)" : ""}</dd></>}{snapshot.dev && snapshot.dev.sliceTotal > 0 && <><dt>slices</dt><dd>{snapshot.dev.sliceIndex}/{snapshot.dev.sliceTotal}{snapshot.dev.currentSliceId ? ` · ${snapshot.dev.currentSliceId}` : ""}</dd></>}{snapshot.testing && snapshot.testing.suiteTotal > 0 && <><dt>tests</dt><dd>{snapshot.testing.suitePassed}/{snapshot.testing.suiteTotal} passed</dd></>}{props.previewUrl && <><dt>preview</dt><dd><a href={props.previewUrl} target="_blank" rel="noreferrer">预览</a></dd></>}</dl>
     <div className="project-actions"><button disabled={props.busy.includes("preview")} onClick={props.previewUrl ? props.onStopPreview : props.onStartPreview}>{props.previewUrl ? <CircleStop size={14} /> : <Play size={14} />}{props.previewUrl ? "取消部署" : "部署"}</button><button disabled={props.busy.includes("export")} onClick={props.onExport}><Download size={14} />导出包</button></div>
-    {(snapshot.integrations?.length ?? 0) > 0 && <><div className="section-rule">INTEGRATIONS</div><div className="integrations">{snapshot.integrations!.slice(0, 5).map((item) => <div key={item.integrationId}><span>• {item.displayName}</span><em className={item.status}>{item.status}</em></div>)}</div></>}
+    {props.projectTools.length > 0 && <><div className="section-rule">PROJECT TOOLS</div><div className="integrations">{props.projectTools.slice(0, 8).map((item) => <div key={`${item.kind}:${item.id}`}><span>• {item.displayName}</span><em className={item.status} title={item.kind === "project_mcp" ? "Agent MCP" : "Platform integration"}>{item.kind === "project_mcp" ? `mcp:${item.status}` : item.status}</em></div>)}</div></>}
     <div className="section-rule">PANEL</div>
     <div className="inspector-tabs"><button className={props.tab === "artifacts" ? "active" : ""} onClick={() => props.onTab("artifacts")}><FileText size={14} />Artifacts</button><button className={props.tab === "files" ? "active" : ""} onClick={() => props.onTab("files")}><FolderTree size={14} />Files</button></div>
     <div className="inspector-list">{props.tab === "artifacts" ? artifacts.map((path) => <button key={path} onClick={() => props.onOpen(path)}><FileText size={14} /><span>{path.split("/").at(-1)}</span></button>) : fileRows.map((row) => row.kind === "dir" ? <button key={row.path} className="file-tree-row directory" style={{ paddingLeft: `${4 + row.depth * 14}px` }} onClick={() => toggleDirectory(row.path)} title={row.path}>{row.expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{row.expanded ? <FolderOpen size={14} /> : <Folder size={14} />}<span>{row.name}</span><small>{row.childCount}</small></button> : <button key={row.path} className="file-tree-row" style={{ paddingLeft: `${22 + row.depth * 14}px` }} onClick={() => props.onOpen(row.path)} title={row.path}><FileCode2 size={13} /><span>{row.name}</span></button>)}</div>

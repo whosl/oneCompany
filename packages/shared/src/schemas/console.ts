@@ -46,6 +46,21 @@ export const ConsoleIntegrationSnapshotSchema = z.object({
   status: IntegrationConnectionStatusSchema,
 });
 
+export const ConsoleProjectToolSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  kind: z.enum(["integration", "project_mcp"]),
+  status: z.enum([
+    "not_configured",
+    "connected",
+    "expired",
+    "offline_fallback",
+    "disabled",
+    "enabled",
+    "unavailable",
+  ]),
+});
+
 export const ConsoleGateSnapshotSchema = z.object({
   id: z.string(),
   gateType: z.string(),
@@ -78,6 +93,7 @@ export const ConsoleSnapshotSchema = z.object({
     .optional(),
   risks: z.array(z.string()),
   integrations: z.array(ConsoleIntegrationSnapshotSchema).optional(),
+  projectTools: z.array(ConsoleProjectToolSchema).optional(),
   openGates: z.array(ConsoleGateSnapshotSchema),
   pausedFrom: ProjectStatusSchema.optional(),
   events: z.array(EventEnvelopeSchema),

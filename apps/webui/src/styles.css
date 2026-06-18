@@ -67,6 +67,7 @@ a { color: var(--cyan); }
 .pulse { animation: pulse 1.25s ease-in-out infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .35; } }
+@keyframes todoBreath { 0%, 100% { box-shadow: 0 0 0 rgba(87,213,221,0), 0 18px 50px rgba(0,0,0,.34); border-color: color-mix(in srgb, var(--magenta), transparent 45%); } 50% { box-shadow: 0 0 26px color-mix(in srgb, var(--cyan), transparent 55%), 0 18px 50px rgba(0,0,0,.34); border-color: var(--cyan); } }
 
 /* Project hub */
 .hub { min-height: 100vh; padding: clamp(24px, 7vh, 72px) clamp(18px, 7vw, 110px); }
@@ -269,6 +270,8 @@ button.mode-chip, button.header-text-button { cursor: pointer; }
 .todo-row.medium .todo-priority { color: var(--yellow); }
 .todo-row.low .todo-priority { color: var(--green); }
 .floating-todo { position: absolute; top: 10px; right: clamp(12px, 2vw, 28px); z-index: 12; width: min(430px, calc(100% - 24px)); max-width: calc(100% - 24px); border: 1px solid color-mix(in srgb, var(--magenta), transparent 35%); background: color-mix(in srgb, var(--panel-raised), transparent 4%); box-shadow: 0 18px 50px rgba(0,0,0,.34); backdrop-filter: blur(10px); }
+.floating-todo.running { animation: todoBreath 2.8s ease-in-out infinite; }
+.floating-todo.done { border-color: color-mix(in srgb, var(--green), transparent 40%); }
 .floating-todo-head { width: 100%; min-height: 34px; display: grid; grid-template-columns: 18px auto 1fr 16px; align-items: center; gap: 7px; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--magenta); padding: 7px 9px; cursor: pointer; text-align: left; }
 .floating-todo-head span { font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .floating-todo-head strong { justify-self: end; color: var(--muted); font-size: 10px; font-weight: 500; }
@@ -397,7 +400,7 @@ button.mode-chip, button.header-text-button { cursor: pointer; }
 .integrations { display: grid; gap: 6px; margin-bottom: 10px; font-size: 10px; }
 .integrations div { display: flex; justify-content: space-between; gap: 10px; }
 .integrations em { color: var(--muted); font-style: normal; }
-.integrations em.connected { color: var(--green); }
+.integrations em.connected, .integrations em.enabled { color: var(--green); }
 .inspector-tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); }
 .inspector-tabs button { min-height: 31px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .inspector-tabs button.active { background: var(--cyan-soft); color: var(--cyan); }
@@ -439,6 +442,51 @@ kbd { border: 1px solid var(--line-strong); color: var(--cyan); padding: 1px 4px
 .command-palette header kbd { margin-left: auto; }
 .command-palette > button { width: 100%; min-height: 39px; display: flex; align-items: center; gap: 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 0 12px; text-align: left; cursor: pointer; }
 .command-palette > button:hover { background: var(--cyan); color: var(--bg); }
+
+/* Todo motion lab */
+.motion-lab { min-height: 100vh; padding: clamp(18px, 5vw, 46px); background: var(--bg); color: var(--text); }
+.motion-lab-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; max-width: 1220px; margin: 0 auto 24px; }
+.motion-lab-header > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: baseline; }
+.motion-lab-header h1 { margin: 0; font-size: clamp(22px, 3vw, 34px); letter-spacing: 0; }
+.motion-lab-header p { grid-column: 2; margin: 0; color: var(--muted); line-height: 1.6; }
+.motion-grid { max-width: 1220px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.motion-option { min-width: 0; display: grid; grid-template-columns: minmax(180px, .9fr) minmax(280px, 1.1fr); gap: 14px; align-items: start; border: 1px solid var(--line); background: var(--panel); padding: 14px; }
+.motion-copy h2 { margin: 2px 0 8px; color: var(--cyan); font-size: 14px; }
+.motion-copy p { margin: 0; color: var(--muted); line-height: 1.6; }
+.preview-todo { position: relative; overflow: hidden; border: 1px solid color-mix(in srgb, var(--magenta), transparent 35%); background: var(--panel-raised); box-shadow: 0 18px 50px rgba(0,0,0,.24); }
+.preview-todo-head { width: 100%; min-height: 38px; display: grid; grid-template-columns: 12px 18px auto 1fr 16px; align-items: center; gap: 7px; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--magenta); padding: 7px 10px; cursor: pointer; text-align: left; }
+.preview-todo-head strong { font-size: 10px; letter-spacing: .08em; }
+.preview-todo-head em { justify-self: end; color: var(--muted); font-style: normal; font-size: 10px; }
+.preview-todo-head svg:last-child { transition: transform .18s ease; }
+.preview-todo.open .preview-todo-head { border-bottom-color: color-mix(in srgb, var(--magenta), transparent 60%); }
+.preview-todo.open .preview-todo-head svg:last-child { transform: rotate(180deg); }
+.run-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.preview-current { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; padding: 0 10px 10px; }
+.preview-current span { border: 1px solid currentColor; padding: 2px 6px; color: var(--yellow); font-size: 9px; text-transform: uppercase; white-space: nowrap; }
+.preview-current p { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-todo-body { max-height: 0; overflow: hidden; opacity: 0; display: grid; gap: 1px; background: var(--line); transition: max-height .24s ease, opacity .16s ease; }
+.preview-todo.open .preview-todo-body { max-height: 330px; overflow: auto; opacity: 1; }
+.preview-todo.open .preview-current { display: none; }
+.preview-todo-row { min-height: 34px; display: grid; grid-template-columns: 24px 92px minmax(0, 1fr) 62px; align-items: center; gap: 8px; background: var(--panel); padding: 6px 8px; }
+.preview-todo-row > span { width: 18px; height: 18px; display: grid; place-content: center; border: 1px solid var(--line-strong); color: var(--faint); font-size: 9px; }
+.preview-todo-row > strong, .preview-todo-row > em { width: max-content; border: 1px solid currentColor; padding: 2px 6px; font-size: 9px; text-transform: uppercase; font-weight: 400; font-style: normal; white-space: nowrap; }
+.preview-todo-row > p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.preview-todo-row.in_progress > strong { color: var(--yellow); }
+.preview-todo-row.completed { opacity: .62; }
+.preview-todo-row.completed > p { text-decoration: line-through; color: var(--muted); }
+.preview-todo-row.high > em { color: var(--red); }
+.preview-todo-row.medium > em { color: var(--yellow); }
+.preview-todo-row.low > em { color: var(--green); }
+.preview-todo.breath { animation: todoBreath 2.8s ease-in-out infinite; }
+.preview-todo.scan::before { content: ""; position: absolute; top: 0; left: -40%; width: 40%; height: 2px; background: linear-gradient(90deg, transparent, var(--cyan), var(--magenta), transparent); animation: todoScan 1.8s linear infinite; }
+.preview-todo.pulse .run-dot { animation: todoPulse 1.15s ease-in-out infinite; box-shadow: 0 0 0 0 color-mix(in srgb, var(--green), transparent 45%); }
+.preview-todo.shimmer .preview-current p { position: relative; background: linear-gradient(90deg, var(--text), var(--cyan), var(--text)); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: todoShimmer 2s linear infinite; }
+.preview-todo.rail::after { content: ""; position: absolute; left: 0; top: 38px; width: 2px; height: 34px; background: var(--cyan); box-shadow: 0 0 14px var(--cyan); animation: todoRail 1.7s ease-in-out infinite; }
+@keyframes todoBreath { 0%, 100% { box-shadow: 0 0 0 rgba(87,213,221,0), 0 18px 50px rgba(0,0,0,.24); border-color: color-mix(in srgb, var(--magenta), transparent 45%); } 50% { box-shadow: 0 0 26px color-mix(in srgb, var(--cyan), transparent 55%), 0 18px 50px rgba(0,0,0,.24); border-color: var(--cyan); } }
+@keyframes todoScan { to { left: 100%; } }
+@keyframes todoPulse { 50% { transform: scale(1.45); box-shadow: 0 0 0 7px transparent; } }
+@keyframes todoShimmer { to { background-position: -220% 0; } }
+@keyframes todoRail { 0%, 100% { transform: translateY(0); opacity: .35; } 50% { transform: translateY(72px); opacity: 1; } }
 
 @media (max-width: 1050px) {
   .console-grid { grid-template-columns: 230px minmax(400px, 1fr) 270px; }

@@ -63,6 +63,12 @@ export type ConsoleSnapshot = {
     displayName: string;
     status: string;
   }>;
+  projectTools?: Array<{
+    id: string;
+    displayName: string;
+    kind: "integration" | "project_mcp";
+    status: string;
+  }>;
   events: EventEnvelope[];
   lastSeq: number;
 };
