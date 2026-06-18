@@ -23,7 +23,17 @@ export function broadcastEvent(envelope: EventEnvelope): void {
     return;
   }
   for (const listener of listeners) {
-    listener(envelope);
+    // Isolate per-listener failures: one slow/broken subscriber must never
+    // propagate an exception back into the producer (e.g. createGate/setStatus
+    // would otherwise fail AFTER the business mutation was already committed).
+    try {
+      listener(envelope);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[onecompany] SSE listener threw for project ${envelope.projectId}: ${detail}`,
+      );
+    }
   }
 }
 

@@ -9,6 +9,9 @@ export function createDb(dbPath?: string) {
   const sqlite = new Database(resolvedPath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  // Wait up to 5s for a write lock instead of immediately throwing SQLITE_BUSY
+  // under concurrent writes (e.g. development emit + SSE replay catch-up).
+  sqlite.pragma("busy_timeout = 5000");
   ensureAdditiveIntegrationSchema(sqlite);
   return drizzle(sqlite, { schema });
 }

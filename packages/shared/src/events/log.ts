@@ -122,14 +122,16 @@ export function emit(db: Db, input: EmitInput): EventEnvelope {
 export function listEvents(
   db: Db,
   projectId: string,
-  options: { afterSeq?: number } = {},
+  options: { afterSeq?: number; limit?: number } = {},
 ): EventEnvelope[] {
   const afterSeq = options.afterSeq ?? 0;
+  const limit = options.limit ?? 2000;
   const rows = db
     .select()
     .from(events)
     .where(and(eq(events.project_id, projectId), gt(events.seq, afterSeq)))
     .orderBy(events.seq)
+    .limit(limit)
     .all();
 
   return rows.map((row) =>

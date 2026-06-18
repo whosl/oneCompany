@@ -11,7 +11,15 @@ export async function runPlanner(
 ): Promise<DevelopmentSessionPayload> {
   const prd = loadLatestPrd(deps.db, payload.state.projectId);
   const acceptance = loadLatestAcceptance(deps.db, payload.state.projectId);
-  const techPlan = loadLatestTechPlan(deps.db, payload.state.projectId);
+  // Tech plan may not exist yet (e.g. replan_slices before the architect has
+  // run, or a corrupted/partially-migrated DB). Fall back to empty so the
+  // planner re-generates from PRD/acceptance instead of crashing with a 500.
+  let techPlan: { version: string; content: string } = { version: "", content: "" };
+  try {
+    techPlan = loadLatestTechPlan(deps.db, payload.state.projectId);
+  } catch {
+    // No prior tech plan — planner generates fresh slices from the PRD.
+  }
 
   const agentTask = {
     state: payload.state,
