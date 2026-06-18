@@ -182,7 +182,7 @@ export function eventToTimeline(event: EventEnvelope): TimelineEntry | undefined
       const isTodo = /todo/i.test(toolName);
       return { ...base, kind: isTodo ? "todo" : "tool", tag: isTodo ? "TODO" : "TOOL", agent, tool: toolName, summary: line(p.summary), text: "" };
     }
-    case "tool_call.output": return { ...base, kind: "tool_ok", tag: "OK", agent, tool: line(p.toolName, "tool"), summary: line(p.summary), text: block(p.output).slice(0, 500) };
+    case "tool_call.output": return { ...base, kind: "tool_ok", tag: "OK", agent, tool: line(p.toolName, "tool"), summary: line(p.summary), text: block(p.output) };
     case "tool_call.failed": return { ...base, kind: "tool_err", tag: "FAIL", agent, tool: line(p.toolName, "tool"), text: block(p.error, "Tool failed") };
     case "human_gate.created": return { ...base, kind: "gate", tag: "GATE", text: `${line(p.gateType, "确认项")} — 等待你的决定` };
     case "human_gate.resolved": return { ...base, kind: "gate_ok", tag: "GATE", text: `gate resolved → ${line(p.decision, "done")}` };
@@ -255,7 +255,7 @@ export function deriveTimeline(snapshot: ConsoleSnapshot): TimelineEntry[] {
         if (existing.kind !== "todo") {
           existing.kind = event.payload.type === "tool_call.output" ? "tool_ok" : "tool_err";
         }
-        existing.text = block(event.payload.output ?? event.payload.error).slice(0, 800);
+        existing.text = block(event.payload.output ?? event.payload.error);
         if (existing.kind === "todo") existing.todos = parseTodoWriteOutput(event.payload.output);
         if (!existing.summary) existing.summary = inferToolSummary(event.payload.output ?? event.payload.error);
         continue;

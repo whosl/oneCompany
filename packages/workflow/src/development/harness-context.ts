@@ -1,7 +1,7 @@
 import type { DevContext } from "@oc/agent-core";
 import { listProjectMcpConfigs, projectMcpConfigsToOpencode } from "@oc/integrations";
 import { emit, ephemeralEnvelope, type AgentEvent, type DevState } from "@oc/shared";
-import { classifyCommandChain, persistOutput } from "@oc/workspace";
+import { classifyCommandChain, persistOutput, readOutputText } from "@oc/workspace";
 import type { DevelopmentWorkflowDeps } from "./types.js";
 
 /**
@@ -87,7 +87,7 @@ export function buildHarnessContext(
         },
         raw,
       );
-      return ref.kind === "inline" ? ref.text : ref.summary;
+      return readOutputText(ref);
     });
 
   return {

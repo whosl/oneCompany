@@ -41,6 +41,9 @@ describe("callIntegrationTool — M12", () => {
       expect(result.mode).toBe("remote");
       const rows = db.select().from(integrationToolCalls).all();
       expect(rows).toHaveLength(1);
+      const outputRef = JSON.parse(rows[0]!.output_ref ?? "{}") as { kind?: string; text?: string };
+      expect(outputRef.kind).toBe("inline");
+      expect(outputRef.text).toContain("design reference only");
       const projectEvents = db
         .select()
         .from(events)

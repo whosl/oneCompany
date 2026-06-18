@@ -165,7 +165,7 @@ async function finalizeCall(
       mode: mode === "pending" ? "remote" : mode,
       status: mode === "pending" ? "pending" : "completed",
       event_id: eventId ?? null,
-      output_ref: artifactPath ?? redacted.text.slice(0, 240),
+      output_ref: artifactPath ?? JSON.stringify({ kind: "inline", text: redacted.text }),
       created_at: now,
     })
     .run();
