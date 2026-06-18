@@ -89,15 +89,31 @@ export async function handleDeploymentGateDecision(
   const { effective, customText } = resolveGateDecision("deployment", input.decision);
 
   if (effective === "reject") {
+    const feedback = customText?.trim();
     const next = {
       ...payload,
       state: {
         ...payload.state,
-        risks: [...payload.state.risks, "Deployment rejected by user"],
+        risks: appendCustomGateNote(
+          [...payload.state.risks, "Deployment rejected by user"],
+          "deployment",
+          feedback,
+        ),
       },
       deployment: { phase: "idle" as const },
+      meta: { ...payload.meta, phase: "slicing" as const },
     };
+    deps.setStatus(input.projectId, "Developing", "deployment_gate_rejected");
     deps.saveSession(input.projectId, next);
+
+    if (deps.startChangeReview) {
+      deps.startChangeReview(input.projectId, {
+        summary: feedback || "User rejected deployment without additional details",
+        details: "Rejected at deployment gate - rework requested before deployment",
+      });
+      return toResult(deps, deps.loadSession(input.projectId));
+    }
+
     return toResult(deps, next);
   }
 

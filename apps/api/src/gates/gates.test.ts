@@ -56,6 +56,35 @@ describe("gates API — M1", () => {
     }
   });
 
+  it("preserves custom rejection text in persisted decision and resolved event", async () => {
+    const { projects, db, cleanup } = setupTestApp();
+    try {
+      const project = projects.createProject("Reject Demo");
+      const gates = createGateService(db, () => undefined);
+      const gate = gates.createGate(project.id, "deployment");
+
+      await gates.resolveGate(gate.id, {
+        decision: "reject",
+        customText: "fix mobile aiming before deploy",
+      });
+
+      const [row] = db.select().from(humanGates).where(eq(humanGates.id, gate.id)).all();
+      expect(row?.decision).toBe("reject:fix mobile aiming before deploy");
+
+      const [resolvedEvent] = db
+        .select()
+        .from(events)
+        .where(eq(events.project_id, project.id))
+        .all()
+        .filter((event) => event.type === "human_gate.resolved");
+      expect(JSON.parse(resolvedEvent!.payload)).toMatchObject({
+        decision: "reject:fix mobile aiming before deploy",
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
   it("waitForGate returns after resolveGate is called", async () => {
     const { db, projects, cleanup } = setupTestApp();
     resetBroadcasts();

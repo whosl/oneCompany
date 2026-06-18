@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createDevSession, saveDevSession } from "@oc/workflow";
-import { deployments, projects } from "@oc/shared";
+import { changeRequests, deployments, projects } from "@oc/shared";
 import { initRepo } from "@oc/workspace";
 import { setupTestApp } from "../test-utils.js";
 
@@ -79,6 +79,58 @@ describe("deployment API", () => {
         .where(eq(projects.id, projectId))
         .all()[0];
       expect(project?.status).toBe("Awaiting Acceptance");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("rejecting deployment with feedback returns to development and opens change review", async () => {
+    const { app, db, cleanup } = setupTestApp();
+    try {
+      const projectId = randomUUID();
+      const repoPath = mkdtempSync(path.join(tmpdir(), "oc-api-deploy-reject-"));
+      initRepo(repoPath);
+      seedDeployingProject(db, projectId, repoPath);
+
+      const start = await app.request(`/projects/${projectId}/deployment/start`, { method: "POST" });
+      expect(start.status).toBe(200);
+
+      const gates = await app.request(`/projects/${projectId}/gates`);
+      const gateBody = (await gates.json()) as {
+        gates: Array<{ id: string; gateType: string; status: string }>;
+      };
+      const deploymentGate = gateBody.gates.find((gate) => gate.gateType === "deployment");
+      expect(deploymentGate).toBeTruthy();
+
+      const resolve = await app.request(`/gates/${deploymentGate!.id}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision: "reject",
+          customText: "移动端瞄准按钮遮挡，需要重新调整布局",
+        }),
+      });
+      expect(resolve.status).toBe(200);
+
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, projectId))
+        .all()[0];
+      expect(project?.status).toBe("Change Review");
+
+      const [changeRequest] = db
+        .select()
+        .from(changeRequests)
+        .where(eq(changeRequests.project_id, projectId))
+        .all();
+      expect(changeRequest?.summary).toBe("移动端瞄准按钮遮挡，需要重新调整布局");
+
+      const openGates = await app.request(`/projects/${projectId}/gates`);
+      const openGateBody = (await openGates.json()) as {
+        gates: Array<{ gateType: string; status: string }>;
+      };
+      expect(openGateBody.gates.some((gate) => gate.gateType === "change_review")).toBe(true);
     } finally {
       cleanup();
     }

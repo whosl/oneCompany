@@ -10,6 +10,10 @@ export type DeploymentWorkflowDeps = {
   loadSession: (projectId: string) => DevelopmentSessionPayload;
   saveSession: (projectId: string, payload: DevelopmentSessionPayload) => void;
   onDeploymentCompleted?: (projectId: string) => Promise<void> | void;
+  startChangeReview?: (
+    projectId: string,
+    input: { summary: string; details?: string },
+  ) => void;
 };
 
 export type DeploymentRunResult = {

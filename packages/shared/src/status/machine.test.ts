@@ -6,6 +6,11 @@ describe("status machine — M1", () => {
     expect(canTransition("Developing", "Testing")).toBe(true);
   });
 
+  it("allows deployment rejection to return to development", () => {
+    expect(canTransition("Deploying", "Developing")).toBe(true);
+    expect(() => assertTransition("Deploying", "Developing")).not.toThrow();
+  });
+
   it("rejects Developing -> Delivered", () => {
     expect(canTransition("Developing", "Delivered")).toBe(false);
     expect(() => assertTransition("Developing", "Delivered")).toThrow(/Illegal status transition/);

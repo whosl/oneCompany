@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { deployments, projects } from "@oc/shared";
 import { initRepo, ensureDevRepoScaffold } from "@oc/workspace";
@@ -13,7 +13,10 @@ import {
 } from "./engine.js";
 import { createTestingDeps, seedTestingProject, setupTestDb } from "../test-utils.js";
 
-function createDeploymentDeps(db: ReturnType<typeof setupTestDb>["db"], repoPath: string) {
+function createDeploymentDeps(
+  db: ReturnType<typeof setupTestDb>["db"],
+  repoPath: string,
+) {
   const base = createTestingDeps(db, repoPath);
   return {
     ...base,
@@ -67,14 +70,15 @@ describe("deployment engine", () => {
     }
   });
 
-  it("reject resets deployment phase so start can reopen the gate", async () => {
+  it("reject returns to development and starts change review with rejection feedback", async () => {
     const { db, cleanup } = setupTestDb();
     const repoPath = mkdtempSync(path.join(tmpdir(), "oc-deploy-reject-"));
     initRepo(repoPath);
     const { projectId } = seedTestingProject(db, repoPath);
     db.update(projects).set({ status: "Deploying" }).where(eq(projects.id, projectId)).run();
 
-    const deps = createDeploymentDeps(db, repoPath);
+    const startChangeReview = vi.fn();
+    const deps = { ...createDeploymentDeps(db, repoPath), startChangeReview };
     try {
       startDeploymentPhase(deps, { projectId });
       submitDeploymentUrl(deps, {
@@ -84,16 +88,16 @@ describe("deployment engine", () => {
       writeMinimalProductWeb(repoPath, "Reject App");
       const rejected = await handleDeploymentGateDecision(deps, {
         projectId,
-        decision: "reject",
+        decision: "reject:fix mobile aiming before deploy",
       });
       expect(rejected.phase).toBe("idle");
       expect(rejected.deploymentUrl).toBeUndefined();
-      expect(deps.getProjectStatus(projectId)).toBe("Deploying");
+      expect(deps.getProjectStatus(projectId)).toBe("Developing");
       expect(db.select().from(deployments).all()).toHaveLength(0);
-
-      const restarted = startDeploymentPhase(deps, { projectId });
-      expect(restarted.phase).toBe("awaiting_gate");
-      expect(restarted.gateId).toBeTruthy();
+      expect(startChangeReview).toHaveBeenCalledWith(projectId, {
+        summary: "fix mobile aiming before deploy",
+        details: "Rejected at deployment gate - rework requested before deployment",
+      });
     } finally {
       cleanup();
     }

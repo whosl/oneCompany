@@ -9,6 +9,7 @@ import {
   getGateDefinition,
   humanGates,
   normalizeDecision,
+  parseDecision,
   parseGatePayload,
   serializeGatePayload,
   type Db,
@@ -119,6 +120,7 @@ export function createGateService(
     }
 
     const decision = normalizeDecision(input);
+    const parsedDecision = parseDecision(decision);
 
     if (gate.status === "resolved") {
       if (gate.decision === decision) {
@@ -168,6 +170,7 @@ export function createGateService(
         gateId,
         decision,
         gateType: gate.gateType,
+        ...(parsedDecision.customText ? { customText: parsedDecision.customText } : {}),
       },
     });
     onEvent(envelope);

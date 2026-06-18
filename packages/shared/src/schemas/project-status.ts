@@ -26,7 +26,7 @@ export const STATUS_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   Developing: ["Developing", "Testing", "Tech Plan Review", "Failed", "Change Review", "Paused"],
   "Change Review": ["Developing", "Tech Plan Review", "Paused", "Failed"],
   Testing: ["Developing", "Deploying", "Awaiting Acceptance", "Paused", "Failed"],
-  Deploying: ["Awaiting Acceptance", "Paused", "Failed"],
+  Deploying: ["Developing", "Awaiting Acceptance", "Paused", "Failed"],
   "Awaiting Acceptance": ["Developing", "Delivered", "Paused", "Failed"],
   Delivered: ["Change Review"],
   Failed: [],

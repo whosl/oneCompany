@@ -4,10 +4,12 @@ import {
   loadDevSession,
   saveDevSession,
   startDeploymentPhase,
+  startRequirementChangeReview,
   submitDeploymentUrl,
   type DeploymentRunResult,
 } from "@oc/workflow";
 import type { Db, EventEnvelope } from "@oc/shared";
+import { createDevelopmentDeps } from "../development/deps.js";
 import type { GateService } from "../gates/service.js";
 import type { ProjectService } from "../projects/service.js";
 import type { WorkspaceService } from "../workspace/service.js";
@@ -48,6 +50,15 @@ export function createDeploymentService(
         saveDevSession(db, pid, payload),
       onDeploymentCompleted: async (pid: string) => {
         await delivery.enterAwaitingAcceptance(pid);
+      },
+      startChangeReview: (
+        pid: string,
+        input: { summary: string; details?: string },
+      ) => {
+        startRequirementChangeReview(
+          createDevelopmentDeps({ db, projects, gates, workspace, onEvent }, pid),
+          { projectId: pid, ...input },
+        );
       },
     };
   };

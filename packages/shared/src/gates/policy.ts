@@ -41,6 +41,12 @@ export function normalizeDecision(input: ResolveGateInput): string {
       return `reject_and_redo:${feedback}`;
     }
   }
+  if (decision === "reject") {
+    const feedback = input.customText?.trim();
+    if (feedback) {
+      return `reject:${feedback}`;
+    }
+  }
   return decision;
 }
 
@@ -58,6 +64,9 @@ export function isAllowedDecision(
   }
   if (decision.startsWith("reject_and_redo:")) {
     return allowed.includes("reject_and_redo");
+  }
+  if (decision.startsWith("reject:")) {
+    return allowed.includes("reject");
   }
   return false;
 }
@@ -91,6 +100,10 @@ export function parseDecision(decision: string): ParsedDecision {
   if (decision.startsWith("reject_and_redo:")) {
     const customText = decision.slice("reject_and_redo:".length);
     return { raw: decision, kind: "reject_and_redo", customText, isCustom: false };
+  }
+  if (decision.startsWith("reject:")) {
+    const customText = decision.slice("reject:".length);
+    return { raw: decision, kind: "reject", customText, isCustom: false };
   }
   return { raw: decision, kind: decision, isCustom: false };
 }
