@@ -33,11 +33,7 @@ import {
   type ProjectStatus,
 } from "@oc/shared";
 import type { FinalSuiteId, NormalizedRunnerResult } from "@oc/shared";
-import {
-  createDevSession,
-  loadDevSession,
-  saveDevSession,
-} from "./development/state.js";
+import { createDevSession, loadDevSession, saveDevSession } from "./development/state.js";
 import { isSliceLoopActive } from "./development/slice-loop-registry.js";
 import type { DevelopmentSessionPayload, DevelopmentWorkflowDeps } from "./development/types.js";
 import type { RequirementWorkflowDeps } from "./requirement/types.js";
@@ -155,10 +151,7 @@ export function createWorkflowDeps(db: Db): RequirementWorkflowDeps {
         {
           db,
           runner: async (_runCtx, agentIdAtVersion, task) => ({
-            output: runScriptedRequirementAgent(
-              agentIdAtVersion,
-              task as RequirementAgentTask,
-            ),
+            output: runScriptedRequirementAgent(agentIdAtVersion, task as RequirementAgentTask),
           }),
         },
         input,
@@ -190,7 +183,10 @@ export function setupWorkflowTest(): {
   };
 }
 
-export function seedPrdReadyProject(db: Db, name = "M6 Dev Project"): { projectId: string; repoPath: string } {
+export function seedPrdReadyProject(
+  db: Db,
+  name = "M6 Dev Project",
+): { projectId: string; repoPath: string } {
   const projectId = randomUUID();
   const now = new Date().toISOString();
   db.insert(projects)
@@ -234,6 +230,9 @@ export type DevelopmentDepsOptions = {
   authoritativeAttemptsBeforePass?: number;
   alwaysFail?: boolean;
   failureDetails?: string;
+  typecheckFailuresBeforePass?: number;
+  typecheckFailureDetails?: string;
+  onSliceTypecheck?: (attempt: number) => void;
   onFinalRepairCompleted?: DevelopmentWorkflowDeps["onFinalRepairCompleted"];
 };
 
@@ -243,7 +242,9 @@ export function createDevelopmentDeps(
   options: DevelopmentDepsOptions = {},
 ): DevelopmentWorkflowDeps {
   let attempt = 0;
+  let typecheckAttempt = 0;
   const attemptsBeforePass = options.authoritativeAttemptsBeforePass ?? 1;
+  const typecheckFailuresBeforePass = options.typecheckFailuresBeforePass ?? 0;
 
   return {
     db,
@@ -259,6 +260,17 @@ export function createDevelopmentDeps(
         passed: attempt >= attemptsBeforePass,
         details: attempt >= attemptsBeforePass ? "ok" : "fail",
       };
+    },
+    runSliceTypecheck: async () => {
+      typecheckAttempt += 1;
+      options.onSliceTypecheck?.(typecheckAttempt);
+      if (typecheckAttempt <= typecheckFailuresBeforePass) {
+        return {
+          passed: false,
+          details: options.typecheckFailureDetails ?? "fixture typecheck fail",
+        };
+      }
+      return { passed: true, details: "fixture typecheck pass" };
     },
     runAgent: async (input) =>
       runAgent(
@@ -385,9 +397,7 @@ export function setupTestingTest(options: TestingDepsOptions = {}): {
   };
 }
 
-export function setupDevelopmentTest(
-  options: DevelopmentDepsOptions = {},
-): {
+export function setupDevelopmentTest(options: DevelopmentDepsOptions = {}): {
   db: Db;
   deps: DevelopmentWorkflowDeps;
   projectId: string;

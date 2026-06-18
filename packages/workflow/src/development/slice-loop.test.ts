@@ -8,8 +8,12 @@ import { setupDevelopmentTest, waitForSliceLoopIdle } from "../test-utils.js";
 
 describe("slice loop with stub harness", () => {
   it("retries on authoritative failure then commits on pass", async () => {
+    let typecheckCalls = 0;
     const { db, deps, projectId, cleanup } = setupDevelopmentTest({
       authoritativeAttemptsBeforePass: 2,
+      onSliceTypecheck: () => {
+        typecheckCalls += 1;
+      },
     });
     try {
       await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
@@ -22,10 +26,11 @@ describe("slice loop with stub harness", () => {
       await waitForSliceLoopIdle(db, projectId);
       const result = getDevelopmentStatus(deps, projectId);
 
-      expect(result.state.commits).toHaveLength(1);
+      expect(result.state.commits).toHaveLength(2);
       expect(result.state.currentSliceAttempts).toBe(0);
-      expect(db.select().from(commits).all()).toHaveLength(1);
-      expect(db.select().from(diffs).all()).toHaveLength(1);
+      expect(typecheckCalls).toBe(2);
+      expect(db.select().from(commits).all()).toHaveLength(2);
+      expect(db.select().from(diffs).all()).toHaveLength(2);
 
       const testEvents = db
         .select()
@@ -41,6 +46,71 @@ describe("slice loop with stub harness", () => {
       const sliceResults = loadTestResults(db, projectId, "slice");
       expect(sliceResults.length).toBeGreaterThan(0);
       expect(sliceResults.every((row) => row.suite.startsWith("slice:"))).toBe(true);
+      expect(result.state.taskQueue.map((task) => [task.id, task.status])).toEqual([
+        ["slice-1", "passed"],
+        ["reconciliation-1", "passed"],
+      ]);
+      expect(result.state.commits.at(-1)?.taskId).toBe("reconciliation-1");
+      expect(result.phase).toBe("completed");
+      expect(result.projectStatus).toBe("Testing");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("retries without committing when slice typecheck fails after authoritative pass", async () => {
+    let typecheckCalls = 0;
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest({
+      typecheckFailuresBeforePass: 1,
+      typecheckFailureDetails: "fixture: TS2322 integration mismatch",
+      onSliceTypecheck: () => {
+        typecheckCalls += 1;
+      },
+    });
+    try {
+      await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
+      await resumeDevelopmentAfterGate(deps, {
+        projectId,
+        decision: "approve",
+      });
+      await waitForSliceLoopIdle(db, projectId);
+      const result = getDevelopmentStatus(deps, projectId);
+
+      expect(typecheckCalls).toBe(3);
+      expect(result.state.commits).toHaveLength(2);
+      expect(result.state.commits[0]?.taskId).toBe("slice-1");
+      expect(
+        result.state.testResults.some(
+          (row) => row.status === "failed" && row.details?.includes("TS2322"),
+        ),
+      ).toBe(true);
+      expect(result.state.currentSliceAttempts).toBe(0);
+      expect(result.projectStatus).toBe("Testing");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("injects reconciliation before transitioning to Testing", async () => {
+    const { db, deps, projectId, cleanup } = setupDevelopmentTest();
+    try {
+      await startDevelopment(deps, { projectId, repoPath: deps.repoPath });
+      await resumeDevelopmentAfterGate(deps, {
+        projectId,
+        decision: "approve",
+      });
+      await waitForSliceLoopIdle(db, projectId);
+      const result = getDevelopmentStatus(deps, projectId);
+
+      const reconciliation = result.state.taskQueue.find((task) => task.id === "reconciliation-1");
+      expect(reconciliation).toMatchObject({
+        status: "passed",
+        testCommand: "pnpm typecheck && pnpm test",
+      });
+      expect(reconciliation?.acceptanceChecks).toContain("Full-repo typecheck passes");
+      expect(result.state.commits.at(-1)?.taskId).toBe("reconciliation-1");
+      expect(result.projectStatus).toBe("Testing");
+      expect(result.phase).toBe("completed");
     } finally {
       cleanup();
     }

@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { and, eq } from "drizzle-orm";
 import { commitSlice, ensureDevRepoScaffold, initRepo } from "@oc/workspace";
 import {
@@ -68,6 +70,11 @@ import type { SliceGlobalContext } from "./types.js";
 import { buildHarnessContext } from "./harness-context.js";
 import type { DevFixtureProfile } from "@oc/agent-core";
 
+const execFileAsync = promisify(execFile);
+
+const RECONCILIATION_SLICE_ID = "reconciliation-1";
+const RECONCILIATION_TEST_COMMAND = "pnpm typecheck && pnpm test";
+
 function toResult(
   deps: DevelopmentWorkflowDeps,
   payload: DevelopmentSessionPayload,
@@ -103,14 +110,39 @@ function emitPipelineNote(
   );
 }
 
+async function runSliceTypecheck(
+  deps: DevelopmentWorkflowDeps,
+): Promise<{ passed: boolean; details: string }> {
+  if (deps.runSliceTypecheck) {
+    return deps.runSliceTypecheck();
+  }
+
+  try {
+    const result = await execFileAsync("tsc", ["--noEmit"], {
+      cwd: deps.repoPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    const details = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+    return { passed: true, details: details || "tsc --noEmit passed" };
+  } catch (error) {
+    if (error && typeof error === "object" && "stdout" in error && "stderr" in error) {
+      const output = [String(error.stdout ?? ""), String(error.stderr ?? "")]
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      return { passed: false, details: output || "tsc --noEmit failed" };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return { passed: false, details: message };
+  }
+}
+
 /** Opencode may finish with zero edits when a prior attempt already landed the code — still verify via platform tests. */
 function harnessOutcomeAllowsAuthoritativeCheck(sliceResult: {
   passed: boolean;
   summary: string;
 }): boolean {
-  return (
-    sliceResult.passed || sliceResult.summary === OPENCODE_NO_FILE_CHANGES_SUMMARY
-  );
+  return sliceResult.passed || sliceResult.summary === OPENCODE_NO_FILE_CHANGES_SUMMARY;
 }
 
 function classifySliceFailure(details: string): string {
@@ -130,7 +162,11 @@ function classifySliceFailure(details: string): string {
   return "authoritative-test";
 }
 
-function buildRepeatedFailureDiagnostic(sliceId: string, category: string, details: string): string {
+function buildRepeatedFailureDiagnostic(
+  sliceId: string,
+  category: string,
+  details: string,
+): string {
   return [
     `Slice ${sliceId} hit repeated ${category} failures; stopping blind retry after 2 matching failures.`,
     `Latest evidence: ${details.slice(0, 220)}`,
@@ -147,7 +183,8 @@ function truncateFailureDetails(details: string): string {
 }
 
 const REPO_FILE_TREE_MAX = 120;
-const REPO_FILE_TREE_EXCLUDE = /^(node_modules\/|dist\/|\.git\/|\.onecompany\/|test-results\/|playwright-report\/|coverage\/)/;
+const REPO_FILE_TREE_EXCLUDE =
+  /^(node_modules\/|dist\/|\.git\/|\.onecompany\/|test-results\/|playwright-report\/|coverage\/)/;
 
 function extractTechContext(content: string): string {
   // Take the first ~1500 chars of the tech plan — enough to capture stack,
@@ -157,7 +194,10 @@ function extractTechContext(content: string): string {
   return `${trimmed.slice(0, 1500)}…`;
 }
 
-function buildPredecessors(state: import("@oc/shared").DevState, currentSliceId: string): Array<{ sliceId: string; title: string; files: string[] }> {
+function buildPredecessors(
+  state: import("@oc/shared").DevState,
+  currentSliceId: string,
+): Array<{ sliceId: string; title: string; files: string[] }> {
   return state.taskQueue
     .filter((task) => task.id !== currentSliceId && task.status === "passed")
     .map((task) => ({
@@ -202,7 +242,44 @@ function buildGlobalContext(
   return { techContext, predecessors, repoFileTree };
 }
 
-function buildSliceRetryContext(payload: DevelopmentSessionPayload, sliceId: string): string[] | undefined {
+function injectReconciliationSlice(payload: DevelopmentSessionPayload): DevelopmentSessionPayload {
+  return {
+    ...payload,
+    state: {
+      ...payload.state,
+      taskQueue: [
+        ...payload.state.taskQueue,
+        {
+          id: RECONCILIATION_SLICE_ID,
+          title: "Reconcile development changes",
+          description: [
+            "Review all changes made during development.",
+            "Fix any inconsistencies: duplicate code, mismatched interfaces, inconsistent error handling, missing type exports.",
+            "Ensure the codebase is coherent.",
+          ].join(" "),
+          acceptanceChecks: [
+            "Full-repo typecheck passes",
+            "No obvious code duplication",
+            "Module interfaces are consistent",
+          ],
+          testCommand: RECONCILIATION_TEST_COMMAND,
+          expectedFiles: [],
+          status: "pending" as const,
+        },
+      ],
+    },
+    meta: {
+      ...payload.meta,
+      reconciliationDone: true,
+      currentSliceId: RECONCILIATION_SLICE_ID,
+    },
+  };
+}
+
+function buildSliceRetryContext(
+  payload: DevelopmentSessionPayload,
+  sliceId: string,
+): string[] | undefined {
   const digest = payload.meta.sliceFailureDigest;
   if (!digest || digest.sliceId !== sliceId) {
     return undefined;
@@ -269,10 +346,7 @@ export async function runSliceIteration(
 
   let state = markSliceInProgress(payload.state, slice);
   let meta = payload.meta;
-  const maxAttempts = effectiveMaxSliceAttempts(
-    state,
-    payload.meta.sliceRetryBudgetExtension ?? 0,
-  );
+  const maxAttempts = effectiveMaxSliceAttempts(state, payload.meta.sliceRetryBudgetExtension ?? 0);
 
   while (state.currentSliceAttempts < maxAttempts) {
     const attempt = state.currentSliceAttempts + 1;
@@ -315,9 +389,9 @@ export async function runSliceIteration(
 
     // Slice-boundary typecheck: a slice whose tests pass but breaks the build
     // must fail HERE, not 30 minutes later in the final Testing phase.
-    if (check.passed && deps.runSliceTypecheck) {
+    if (check.passed) {
       emitPipelineNote(deps, state.projectId, "agent.act", "正在运行全仓类型检查（tsc --noEmit）…");
-      const typecheck = await deps.runSliceTypecheck();
+      const typecheck = await runSliceTypecheck(deps);
       if (!typecheck.passed) {
         check = {
           passed: false,
@@ -357,12 +431,7 @@ export async function runSliceIteration(
     if (check.passed) {
       initRepo(deps.repoPath);
       if (sliceResult.changedFiles.length === 0) {
-        const auditPath = path.join(
-          deps.repoPath,
-          ".onecompany",
-          "slices",
-          `${slice.id}.json`,
-        );
+        const auditPath = path.join(deps.repoPath, ".onecompany", "slices", `${slice.id}.json`);
         fs.mkdirSync(path.dirname(auditPath), { recursive: true });
         fs.writeFileSync(
           auditPath,
@@ -390,10 +459,7 @@ export async function runSliceIteration(
       state = markSlicePassed(state, slice.id);
       state = {
         ...state,
-        commits: [
-          ...state.commits,
-          { hash: commit.hash, taskId: slice.id, summary: slice.title },
-        ],
+        commits: [...state.commits, { hash: commit.hash, taskId: slice.id, summary: slice.title }],
       };
       state = captureDiff(deps.db, state, slice.id, deps.onEvent);
 
@@ -590,6 +656,7 @@ export function beginSliceLoopInBackground(
       sliceLoopBackgroundErrors.set(projectId, message);
       emitSliceLoopFailure(deps, projectId, message);
     } finally {
+      await deps.harness.closeProjectSession?.(projectId);
       markSliceLoopInactive(projectId);
     }
 
@@ -625,6 +692,7 @@ export async function runSliceLoopUntilHalt(
     emitSliceLoopFailure(deps, projectId, message);
     throw error;
   } finally {
+    await deps.harness.closeProjectSession?.(projectId);
     markSliceLoopInactive(projectId);
   }
   await triggerFinalRepairRetest(deps, projectId);
@@ -703,57 +771,71 @@ async function runSliceLoopUntilHaltInner(
   saveDevSession(deps.db, current.state.projectId, current);
   closeStaleTechPlanGates(deps, current.state.projectId);
 
-  while (hasRunnableSlices(current.state)) {
-    const slice = getCurrentSlice(current.state);
-    if (!slice) {
-      break;
-    }
+  while (true) {
+    while (hasRunnableSlices(current.state)) {
+      const slice = getCurrentSlice(current.state);
+      if (!slice) {
+        break;
+      }
 
-    current = {
-      ...current,
-      state: resetSliceAttemptsForNewSlice(current.state),
-      meta: { ...current.meta, currentSliceId: slice.id },
-    };
-
-    const iteration = await runSliceIteration(deps, current);
-    current = { ...current, state: iteration.state, meta: iteration.meta };
-
-    if (iteration.kind === "gate") {
-      return toResult(deps, {
+      current = {
         ...current,
-        meta: {
-          ...current.meta,
-          phase: "awaiting_gate",
-          gateId: iteration.gateId,
-          gateType: SLICE_FAILURE_GATE,
-        },
-      });
+        state: resetSliceAttemptsForNewSlice(current.state),
+        meta: { ...current.meta, currentSliceId: slice.id },
+      };
+
+      const iteration = await runSliceIteration(deps, current);
+      current = { ...current, state: iteration.state, meta: iteration.meta };
+
+      if (iteration.kind === "gate") {
+        return toResult(deps, {
+          ...current,
+          meta: {
+            ...current.meta,
+            phase: "awaiting_gate",
+            gateId: iteration.gateId,
+            gateType: SLICE_FAILURE_GATE,
+          },
+        });
+      }
+
+      saveDevSession(deps.db, current.state.projectId, current);
     }
 
-    saveDevSession(deps.db, current.state.projectId, current);
-  }
+    if (allSlicesPassed(current.state)) {
+      const projectId = current.state.projectId;
+      if (!current.meta.reconciliationDone) {
+        emitPipelineNote(
+          deps,
+          projectId,
+          "agent.act",
+          "开发切片已完成，正在加入最终测试前的一致性调和任务",
+        );
+        current = injectReconciliationSlice(current);
+        saveDevSession(deps.db, projectId, current);
+        continue;
+      }
 
-  if (allSlicesPassed(current.state)) {
-    const projectId = current.state.projectId;
-    const status = deps.getProjectStatus(projectId);
-    if (status === "Developing") {
-      deps.setStatus(projectId, "Testing", "development_slices_complete");
-    } else {
-      // Status moved while the loop ran (e.g. paused). Forcing "Testing" here
-      // is an illegal transition and used to crash the loop silently.
-      emitPipelineNote(
-        deps,
-        projectId,
-        "agent.observe",
-        `切片已全部完成，但项目状态为「${status}」，未自动进入 Testing — 恢复到开发状态后即可进入测试`,
-      );
+      const status = deps.getProjectStatus(projectId);
+      if (status === "Developing") {
+        deps.setStatus(projectId, "Testing", "development_slices_complete");
+      } else {
+        // Status moved while the loop ran (e.g. paused). Forcing "Testing" here
+        // is an illegal transition and used to crash the loop silently.
+        emitPipelineNote(
+          deps,
+          projectId,
+          "agent.observe",
+          `切片已全部完成，但项目状态为「${status}」，未自动进入 Testing — 恢复到开发状态后即可进入测试`,
+        );
+      }
+      const completed = updateDevSessionMeta(current, { phase: "completed" });
+      saveDevSession(deps.db, projectId, completed);
+      return toResult(deps, completed);
     }
-    const completed = updateDevSessionMeta(current, { phase: "completed" });
-    saveDevSession(deps.db, projectId, completed);
-    return toResult(deps, completed);
-  }
 
-  return toResult(deps, current);
+    return toResult(deps, current);
+  }
 }
 
 export async function startDevelopmentLegacy(
@@ -865,7 +947,9 @@ async function resumeSliceFailureGate(
   switch (decision) {
     case "retry": {
       const sliceId =
-        payload.meta.currentSliceId ?? payload.state.currentTask?.id ?? getCurrentSlice(payload.state)?.id;
+        payload.meta.currentSliceId ??
+        payload.state.currentTask?.id ??
+        getCurrentSlice(payload.state)?.id;
       if (!sliceId) {
         throw new Error("No slice to retry after slice failure gate");
       }
@@ -887,7 +971,9 @@ async function resumeSliceFailureGate(
     }
     case "replan": {
       const sliceId =
-        payload.meta.currentSliceId ?? payload.state.currentTask?.id ?? getCurrentSlice(payload.state)?.id;
+        payload.meta.currentSliceId ??
+        payload.state.currentTask?.id ??
+        getCurrentSlice(payload.state)?.id;
       const clearedPayload: DevelopmentSessionPayload = {
         ...payload,
         meta: sliceId ? clearSliceFailureMemory(payload.meta, sliceId) : payload.meta,

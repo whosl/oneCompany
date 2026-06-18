@@ -91,7 +91,7 @@ describe("change review", () => {
           ),
           currentTask: activeSlice ? { ...activeSlice, status: "in_progress" } : undefined,
         },
-        meta: { ...developing.meta, phase: "slicing" },
+        meta: { ...developing.meta, phase: "slicing", currentSliceId: activeSlice?.id },
       });
       db.update(projects)
         .set({ status: "Developing" })

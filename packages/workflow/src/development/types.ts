@@ -1,11 +1,10 @@
-import type { DevAgentTask, DevFixtureProfile, RunAgentInput, RunAgentResult } from "@oc/agent-core";
 import type {
-  AuthDecision,
-  CodingHarness,
-  DevContext,
-  SliceSpec,
-  ToolOp,
+  DevAgentTask,
+  DevFixtureProfile,
+  RunAgentInput,
+  RunAgentResult,
 } from "@oc/agent-core";
+import type { AuthDecision, CodingHarness, DevContext, SliceSpec, ToolOp } from "@oc/agent-core";
 import type {
   DevState,
   EventEnvelope,
@@ -67,6 +66,7 @@ export type DevelopmentSessionMeta = {
   sliceFailureCounts?: Record<string, Record<string, number>>;
   sliceFailureDigest?: SliceFailureDigest;
   finalRepair?: FinalRepairMeta;
+  reconciliationDone?: boolean;
 };
 
 export type DevelopmentSessionPayload = {
@@ -137,10 +137,7 @@ export const CHANGE_REVIEW_GATE = "change_review";
 
 export const SLICE_RETRY_BUDGET_EXTENSION = 4;
 
-export type HarnessContextFactory = (
-  deps: DevelopmentWorkflowDeps,
-  state: DevState,
-) => DevContext;
+export type HarnessContextFactory = (deps: DevelopmentWorkflowDeps, state: DevState) => DevContext;
 
 export type SliceGlobalContext = {
   /** Key architecture decisions / conventions extracted from the latest tech plan. */

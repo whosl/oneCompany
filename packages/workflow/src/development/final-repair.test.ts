@@ -54,7 +54,7 @@ describe("final testing repair loop", () => {
       expect(completed.testing?.phase).toBe("passed");
       expect(completed.testing?.qaNotes).toContain("final acceptance suite passed");
       expect(deps.getProjectStatus(projectId)).toBe("Deploying");
-      expect(reviewCount).toBe(1);
+      expect(reviewCount).toBe(2);
       expect(retestRequest).toEqual({ attempt: 1, requestDeploy: true });
     } finally {
       cleanup();
