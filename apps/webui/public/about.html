@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OneCompany · 项目展示</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d0e;
+      --panel: #0f1213;
+      --panel-raised: #151819;
+      --surface: #1a1d1e;
+      --text: #e6e3dc;
+      --muted: #858b8c;
+      --faint: #454b4c;
+      --line: #303536;
+      --line-strong: #4c5455;
+      --cyan: #57d5dd;
+      --cyan-soft: #153b3e;
+      --green: #65d28a;
+      --yellow: #e4c05c;
+      --red: #ee7a72;
+      --magenta: #d38bd6;
+      --mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f4f3ef;
+      --panel: #faf9f5;
+      --panel-raised: #ffffff;
+      --surface: #eeece6;
+      --surface-soft: #e5e2da;
+      --text: #343332;
+      --muted: #77736e;
+      --faint: #bbb7af;
+      --line: #d6d2c9;
+      --line-strong: #a7a198;
+      --cyan: #087c86;
+      --cyan-soft: #d7edef;
+      --green: #297a45;
+      --yellow: #9a6f00;
+      --red: #b33d36;
+      --magenta: #8d4d91;
+      --mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .shell { max-width: 1080px; margin: 0 auto; padding: 56px clamp(20px, 5vw, 72px) 96px; }
+
+    /* theme toggle */
+    .theme-toggle {
+      position: fixed;
+      top: clamp(18px, 3vw, 32px);
+      right: clamp(18px, 3vw, 32px);
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line-strong);
+      background: var(--panel-raised);
+      color: var(--muted);
+      border-radius: 50%;
+      cursor: pointer;
+      z-index: 50;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+      transition: color 120ms ease, border-color 120ms ease, background 120ms ease, transform 120ms ease;
+    }
+    .theme-toggle:hover { color: var(--cyan); border-color: var(--cyan); background: var(--cyan-soft); transform: translateY(-1px); }
+    .theme-toggle:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+    .theme-toggle svg { width: 18px; height: 18px; }
+    /* dark mode (default): show sun icon (click → switch to light) */
+    .theme-toggle .icon-moon { display: none; }
+    /* light mode: show moon icon (click → switch to dark) */
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: inline; }
+    /* lift hero title away from the fixed top-right toggle on narrow screens */
+    .hero h1 { padding-right: 56px; }
+
+    /* header */
+    .hero { padding-bottom: 28px; border-bottom: 1px solid var(--line-strong); margin-bottom: 36px; }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 4vw, 44px);
+      letter-spacing: -0.04em;
+      line-height: 1;
+      font-weight: 600;
+    }
+    .brand { color: var(--cyan); }
+    .hero .sub { color: var(--muted); font-size: .5em; font-weight: 400; letter-spacing: 0; }
+    .tagline { margin: 14px 0 6px; color: var(--cyan); font-size: 16px; }
+    .meta { margin: 0; color: var(--muted); }
+    .rule { height: 1px; background: linear-gradient(90deg, var(--line-strong) 0 72%, transparent 72%); margin: 18px 0; }
+
+    /* toc */
+    .toc {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      margin-bottom: 48px;
+      font-size: 13px;
+    }
+    .toc a { color: var(--muted); }
+    .toc a:hover { color: var(--cyan); }
+
+    /* section */
+    section { margin-bottom: 56px; scroll-margin-top: 24px; }
+    h2 {
+      margin: 0 0 18px;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2::before { content: "❯"; color: var(--cyan); font-size: 16px; }
+    h3 { margin: 24px 0 10px; font-size: 15px; color: var(--cyan); font-weight: 500; }
+    p { margin: 8px 0; }
+    p.lead { font-size: 15px; }
+    strong { color: var(--text); }
+    code {
+      background: var(--surface);
+      color: var(--cyan);
+      padding: 1px 6px;
+      font-size: 13px;
+      border: 1px solid var(--line);
+    }
+    ul, ol { padding-left: 22px; }
+    li { margin: 4px 0; }
+
+    /* tables */
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--panel); color: var(--cyan); font-weight: 500; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    tr:hover td { background: var(--surface); }
+    td .pill { display: inline-block; padding: 1px 7px; border: 1px solid currentColor; font-size: 11px; border-radius: 2px; }
+
+    /* tier / status colors */
+    .t-cheap { color: var(--green); }
+    .t-std   { color: var(--yellow); }
+    .t-strong{ color: var(--magenta); }
+    .t-harness { color: var(--cyan); }
+    .ok { color: var(--green); }
+    .partial { color: var(--yellow); }
+    .miss { color: var(--red); }
+
+    /* flow diagram (pure div) */
+    .flow { display: grid; gap: 10px; margin: 16px 0; }
+    .flow-row {
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch;
+    }
+    .flow-box {
+      border: 1px solid var(--line-strong);
+      background: var(--panel);
+      padding: 12px 14px;
+    }
+    .flow-box.lead-layer { border-left: 2px solid var(--cyan); }
+    .flow-box.dev-layer  { border-left: 2px solid var(--magenta); }
+    .flow-box .title { color: var(--cyan); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+    .flow-box.dev-layer .title { color: var(--magenta); }
+    .flow-box .agents { color: var(--text); font-size: 13px; }
+    .flow-box .agents .muted { color: var(--muted); }
+    .flow-arrow { display: flex; align-items: center; justify-content: center; color: var(--cyan); font-size: 18px; }
+    .flow-bridge {
+      text-align: center; color: var(--yellow); font-size: 12px;
+      border: 1px dashed var(--line-strong); padding: 6px;
+      margin: 4px 0;
+    }
+
+    /* full flow diagram (双层工作流总览) */
+    .flow-diagram { display: grid; gap: 12px; margin: 24px 0; }
+    .fd-connector { text-align: center; color: var(--cyan); font-size: 16px; line-height: 1; padding: 3px 0; font-weight: 700; }
+    .fd-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; border: 1px dashed var(--line-strong); padding: 10px 14px; color: var(--muted); font-size: 14px; background: var(--panel); }
+    .fd-entry-label { color: var(--text); border: 1px solid var(--line-strong); padding: 2px 10px; font-size: 13px; }
+    .fd-band { border-left: 4px solid; padding: 12px 16px; background: var(--panel); }
+    .fd-band.fd-taizi { border-left-color: var(--yellow); }
+    .fd-band.fd-storage { border-left-color: var(--green); }
+    .fd-band-title { font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+    .fd-taizi .fd-band-title { color: var(--yellow); }
+    .fd-storage .fd-band-title { color: var(--green); }
+    .fd-band-body { font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; line-height: 1.5; }
+    .fd-band-note { color: var(--muted); font-size: 13px; margin-top: 8px; line-height: 1.5; }
+    .fd-tag { border: 1px solid var(--line-strong); padding: 2px 9px; font-size: 12px; color: var(--text); }
+    .fd-mode { border: 1px solid; padding: 2px 10px; font-size: 13px; font-weight: 500; }
+    .fd-mode.fd-route { color: var(--yellow); border-color: var(--yellow); }
+    .fd-mode.fd-research { color: var(--cyan); border-color: var(--cyan); }
+    .fd-sep { color: var(--faint); }
+    .fd-layer { border: 1px solid var(--line); border-left-width: 4px; padding: 16px; background: var(--panel); }
+    .fd-layer.fd-req { border-left-color: var(--cyan); }
+    .fd-layer.fd-dev { border-left-color: var(--magenta); }
+    .fd-layer-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+    .fd-layer-tag { font-size: 12px; padding: 2px 9px; border: 1px solid currentColor; font-weight: 600; }
+    .fd-req .fd-layer-tag { color: var(--cyan); }
+    .fd-dev .fd-layer-tag { color: var(--magenta); }
+    .fd-layer-title { font-size: 16px; color: var(--text); font-weight: 600; }
+    .fd-layer-exec { color: var(--muted); font-size: 13px; }
+    .fd-chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 10px 0; }
+    .fd-arrow { display: inline-flex; align-items: center; justify-content: center; color: var(--cyan); font-size: 20px; font-weight: 700; padding: 0 3px; min-width: 18px; }
+    .fd-node { border: 1px solid var(--line-strong); background: var(--surface); padding: 10px 12px; font-size: 14px; min-width: 112px; display: flex; flex-direction: column; justify-content: center; line-height: 1.35; }
+    .fd-node small { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.3; }
+    .fd-node.fd-node-soft { border-style: dashed; background: transparent; color: var(--muted); }
+    .fd-node.fd-node-out { border-color: var(--green); color: var(--green); }
+    .fd-node.fd-node-test { border-color: var(--green); }
+    .fd-node.fd-node-review { border-color: var(--magenta); }
+    .fd-node.fd-node-final { border-color: var(--cyan); color: var(--cyan); }
+    .fd-node.fd-harness { border-color: var(--cyan); background: var(--cyan-soft); color: var(--cyan); }
+    .fd-gate { border: 1px solid var(--yellow); color: var(--yellow); background: color-mix(in srgb, var(--yellow), transparent 88%); padding: 10px 12px; font-size: 14px; min-width: 112px; display: flex; flex-direction: column; justify-content: center; line-height: 1.35; font-weight: 500; }
+    .fd-gate small { color: var(--muted); font-size: 12px; margin-top: 3px; font-weight: 400; }
+    .fd-loop { display: grid; grid-template-columns: max-content 1fr; gap: 12px; align-items: center; margin: 8px 0 8px 16px; }
+    .fd-loop-label { font-size: 13px; padding: 3px 10px; border: 1px solid currentColor; white-space: nowrap; font-weight: 600; }
+    .fd-loop-label.ok { color: var(--green); }
+    .fd-loop-label.no { color: var(--red); }
+    .fd-slice-loop { border: 1px dashed var(--magenta); padding: 14px; margin: 12px 0; }
+    .fd-slice-loop-head { color: var(--magenta); font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+    .fd-bridge { display: grid; grid-template-columns: max-content 1fr max-content; align-items: center; gap: 12px; border: 1px dashed var(--line-strong); padding: 10px 14px; background: var(--panel); }
+    .fd-bridge-label { color: var(--yellow); font-size: 13px; font-weight: 500; }
+    .fd-bridge-items { color: var(--muted); font-size: 13px; text-align: center; }
+    .fd-bridge-arrow { color: var(--cyan); font-size: 16px; font-weight: 700; }
+    .fd-products { margin-top: 12px; padding: 10px 0 0; border-top: 1px dashed var(--line); color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .fd-products-label { color: var(--text); margin-right: 8px; font-weight: 500; }
+    .fd-note-warn { margin-top: 12px; padding: 10px 14px; border-left: 3px solid var(--red); background: color-mix(in srgb, var(--red), transparent 90%); font-size: 13px; line-height: 1.5; }
+
+    /* layout: 主流 + Taizi 旁路(并行) */
+    .fd-layout { display: grid; grid-template-columns: minmax(0, 1fr) 286px; gap: 16px; align-items: start; }
+    .fd-main { display: grid; gap: 12px; min-width: 0; }
+    .fd-taizi-lane { border: 1px solid var(--yellow); border-left-width: 4px; background: var(--panel); padding: 14px; font-size: 13px; align-self: start; position: sticky; top: 16px; min-height: 640px; display: flex; flex-direction: column; }
+    .fd-aside-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+    .fd-aside-icon { font-size: 20px; line-height: 1; }
+    .fd-aside-title { color: var(--yellow); font-size: 15px; font-weight: 600; line-height: 1.2; }
+    .fd-aside-sub { color: var(--muted); font-size: 11px; margin-top: 3px; line-height: 1.3; }
+    .fd-aside-entry { font-size: 12px; color: var(--muted); padding: 8px 10px; border: 1px dashed var(--line); margin-bottom: 10px; line-height: 1.5; }
+    .fd-aside-mode { padding: 10px; margin-bottom: 8px; border: 1px solid var(--line); }
+    .fd-aside-mode .mode-name { font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+    .fd-aside-mode .mode-do { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .fd-aside-mode .mode-effect { font-size: 12px; margin-top: 5px; color: var(--text); }
+    .fd-aside-mode.mode-read { border-left: 3px solid var(--cyan); }
+    .fd-aside-mode.mode-read .mode-name { color: var(--cyan); }
+    .fd-aside-mode.mode-interact { border-left: 3px solid var(--yellow); }
+    .fd-aside-mode.mode-interact .mode-name { color: var(--yellow); }
+    .fd-aside-points { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line); }
+    .fd-aside-points .points-title { font-size: 12px; color: var(--text); font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .fd-aside-points ul { margin: 0; padding-left: 16px; }
+    .fd-aside-points li { font-size: 12px; color: var(--muted); line-height: 1.7; }
+    .fd-aside-points li b { color: var(--text); }
+    /* human-in-the-loop 标记(用户决策点) */
+    .fd-node.fd-human { border-color: var(--text); background: color-mix(in srgb, var(--text), transparent 90%); color: var(--text); }
+    .fd-gate.fd-gate-human { border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text), transparent 90%); }
+    @media (max-width: 960px) {
+      .fd-layout { grid-template-columns: 1fr; }
+      .fd-taizi-lane { position: static; }
+    }
+
+    /* highlight card */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 16px 0; }
+    .card { border: 1px solid var(--line); background: var(--panel); padding: 14px 16px; }
+    .card .k { color: var(--cyan); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+    .card .v { font-size: 14px; }
+    .card .v b { color: var(--text); }
+
+    /* key-value list */
+    .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 12px 0; font-size: 13px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; }
+
+    /* callout */
+    .callout {
+      border-left: 2px solid var(--cyan);
+      background: var(--cyan-soft);
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .callout.warn { border-left-color: var(--yellow); background: color-mix(in srgb, var(--yellow), transparent 88%); }
+    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red), transparent 88%); }
+
+    /* numbered path */
+    ol.path { counter-reset: step; list-style: none; padding-left: 0; }
+    ol.path > li {
+      counter-increment: step; position: relative; padding-left: 38px; margin: 10px 0;
+      border-left: 1px solid var(--line); padding: 10px 0 10px 38px;
+    }
+    ol.path > li::before {
+      content: counter(step); position: absolute; left: 0; top: 10px;
+      width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--cyan); color: var(--cyan); font-size: 12px;
+    }
+
+    /* duty list (harness) */
+    ol.duties { list-style: none; padding: 0; counter-reset: duty; }
+    ol.duties > li {
+      counter-increment: duty; position: relative; padding: 8px 0 8px 44px;
+      border-bottom: 1px solid var(--line);
+    }
+    ol.duties > li::before {
+      content: counter(duty, decimal-leading-zero);
+      position: absolute; left: 0; top: 8px;
+      color: var(--cyan); font-size: 12px; letter-spacing: 0.05em;
+    }
+    ol.duties > li:last-child { border-bottom: 0; }
+    ol.duties b { color: var(--text); }
+
+    footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--cyan); }
+
+    @media (max-width: 720px) {
+      .flow-row { grid-template-columns: 1fr; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+  <body>
+    <button class="theme-toggle" id="theme-toggle" aria-label="切换深色/浅色模式" title="切换深色/浅色模式">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+    <main class="shell">
+
+    <header class="hero">
+      <h1><span class="brand">⬢</span> OneCompany <span class="sub">· showcase</span></h1>
+      <p class="tagline">本地优先、多智能体协同的软件交付平台</p>
+      <p class="meta">把"一句话业务需求"开发为可运行、可测试、可部署、可审计的独立应用。</p>
+      <div class="rule"></div>
+      <p class="meta">提交入口 · TUI2 / WebUI &nbsp;·&nbsp; 样例 · AI 面试助手 (L2) / AI 销售线索管理助手 (L3) &nbsp;·&nbsp; 内网 · <code>http://192.168.20.33:5109</code></p>
+    </header>
+
+    <nav class="toc">
+      <a href="#positioning">① 定位</a>
+      <a href="#workflow">② 双层工作流</a>
+      <a href="#agents">③ Agent 清单</a>
+      <a href="#taizi">④ Taizi 调度</a>
+      <a href="#harness">⑤ Opencode Harness</a>
+      <a href="#levels">⑥ L2 / L3 对照</a>
+      <a href="#demo">⑦ 演示路径</a>
+      <a href="#status">⑧ 完成度与缺口</a>
+    </nav>
+
+    <!-- ① 定位 -->
+    <section id="positioning">
+      <h2>项目定位</h2>
+      <p class="lead">OneCompany <strong>不是一个预先写好的 AI 应用</strong>,而是一个通用的 AI 应用生成器。用户在 TUI2/WebUI 中创建项目并输入一句业务需求,系统先通过需求分析 Agent Group 完成 <strong>需求规范化、完整度评分、澄清追问、PRD 与验收标准</strong>;再通过开发 Agent Group 完成 <strong>技术方案、功能切片、TDD 编码、代码审查、全量测试、部署与交付</strong>。</p>
+      <div class="callout">
+        整个过程<strong>不是一次性 Prompt</strong>。LangGraph 管理宏观工作流、循环预算、状态转换、失败恢复和人工审批;结构化 Agent 承担专业任务;Opencode Harness 驱动真实代码读写与命令执行。所有关键过程形成事件、工具调用、Diff、测试结果与交付产物,用户可实时观察并介入。
+      </div>
+      <div class="cards">
+        <div class="card"><div class="k">宏观工作流</div><div class="v">LangGraph.js StateGraph · interrupt/Command resume · SQLite Checkpoint</div></div>
+        <div class="card"><div class="k">非编码 Agent</div><div class="v">LangChain <code>withStructuredOutput</code> · OpenAI 兼容协议</div></div>
+        <div class="card"><div class="k">编码 / 审查</div><div class="v">mimo / OpenCode CLI · 可替换 <code>CodingHarness</code> 接口</div></div>
+        <div class="card"><div class="k">数据 / 实时</div><div class="v">SQLite + better-sqlite3 + Drizzle · REST + SSE(事件序号可重放)</div></div>
+      </div>
+    </section>
+
+    <!-- ② 双层工作流 -->
+    <section id="workflow">
+      <h2>双层工作流(职责分离)</h2>
+      <p>把"一句话生成应用"拆成两个职责清晰、通过<strong>持久化产物</strong>衔接的 Agent Group —— 避免需求未定就编码,也避免单一 Agent 同时承担产品、架构、编码与验收职责。</p>
+
+      <div class="flow-diagram">
+        <div class="fd-layout">
+
+          <div class="fd-main">
+
+            <div class="fd-entry">
+              <span class="fd-entry-label">用户</span>
+              <span>一句话业务需求 &nbsp;+&nbsp; 任意时刻自由文本(自由文本走 Taizi)</span>
+            </div>
+            <div class="fd-connector">↓ 主流</div>
+
+            <div class="fd-layer fd-req">
+              <div class="fd-layer-head">
+                <span class="fd-layer-tag">第一层</span>
+                <span class="fd-layer-title">需求确定工作流</span>
+                <span class="fd-layer-exec">LangChain 结构化 · 循环追问 · 人在回路</span>
+              </div>
+              <div class="fd-chain">
+                <div class="fd-node">Intake<small>规范化原始需求</small></div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-node">Analyst<small>结构化业务模型</small></div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-node">Scorer<small>完整度评分 + 缺口</small></div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-gate">达标?<small>completeness ≥ 阈值</small></div>
+              </div>
+              <div class="fd-loop">
+                <span class="fd-loop-label no">否 · 循环追问</span>
+                <div class="fd-chain">
+                  <div class="fd-node fd-node-soft">Question Planner<small>主题化问题 + 建议答案</small></div>
+                  <span class="fd-arrow">→</span>
+                  <div class="fd-node fd-human">🧑 用户<small>回答 / 采用默认假设</small></div>
+                  <span class="fd-arrow">↻</span>
+                  <div class="fd-node fd-node-soft">回到 Analyst / Scorer</div>
+                </div>
+              </div>
+              <div class="fd-loop">
+                <span class="fd-loop-label ok">是 · 达标</span>
+                <div class="fd-chain">
+                  <div class="fd-node fd-node-out">PRD &amp; Acceptance<small>固化业务基线</small></div>
+                  <span class="fd-arrow">→</span>
+                  <div class="fd-gate fd-gate-human">需求确认 Gate<small>🧑 用户 approve / reject</small></div>
+                </div>
+              </div>
+              <div class="fd-products">
+                <span class="fd-products-label">本层产物:</span>
+                需求 JSON · 完整度评分 · 缺口清单 · 问题轮次 · 假设 · PRD · 验收标准
+              </div>
+            </div>
+
+            <div class="fd-bridge">
+              <span class="fd-bridge-label">持久化产物衔接(业务基线)</span>
+              <span class="fd-bridge-items">PRD · 验收标准</span>
+              <span class="fd-bridge-arrow">↓</span>
+            </div>
+
+            <div class="fd-layer fd-dev">
+              <div class="fd-layer-head">
+                <span class="fd-layer-tag">第二层</span>
+                <span class="fd-layer-title">开发交付工作流</span>
+                <span class="fd-layer-exec">LangGraph 状态机 · Plan + ReAct + TDD + Gate</span>
+              </div>
+              <div class="fd-chain">
+                <div class="fd-node">Architect<small>技术方案</small></div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-gate">技术方案 Gate<small>approve / redo / revise</small></div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-node">Planner<small>拆 Slice + 测试命令</small></div>
+              </div>
+
+              <div class="fd-slice-loop">
+                <div class="fd-slice-loop-head">切片循环(每个 Function Slice)</div>
+                <div class="fd-chain">
+                  <div class="fd-node fd-harness">Coding<small>Opencode Harness · TDD</small></div>
+                  <span class="fd-arrow">→</span>
+                  <div class="fd-node fd-node-test">权威测试<small>OneCompany 独立执行</small></div>
+                  <span class="fd-arrow">→</span>
+                  <div class="fd-node fd-node-review">Review<small>只读审查 · JSON 裁决</small></div>
+                  <span class="fd-arrow">→</span>
+                  <div class="fd-gate">通过?</div>
+                </div>
+                <div class="fd-loop">
+                  <span class="fd-loop-label ok">是</span>
+                  <div class="fd-chain">
+                    <div class="fd-node fd-node-out">Git 提交 → 下一切片</div>
+                  </div>
+                </div>
+                <div class="fd-loop">
+                  <span class="fd-loop-label no">否</span>
+                  <div class="fd-chain">
+                    <div class="fd-node fd-node-soft">重试</div>
+                    <span class="fd-arrow">/</span>
+                    <div class="fd-node fd-node-soft">重规划</div>
+                    <span class="fd-arrow">/</span>
+                    <div class="fd-node fd-node-soft">变更评审</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fd-chain">
+                <div class="fd-node fd-node-final">全部切片完成</div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-node fd-node-test">最终 typecheck / build / vitest / playwright</div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-gate">部署 Gate</div>
+                <span class="fd-arrow">→</span>
+                <div class="fd-node fd-node-out">人工最终验收 → 交付</div>
+              </div>
+              <div class="fd-note-warn">
+                最终失败 → <code>final-repair.ts</code> 最多 <strong>3 次</strong>自动修复(Prompt 硬约束"禁绕测试"),超限交 <code>SLICE_FAILURE_GATE</code> 由用户决策
+              </div>
+              <div class="fd-products">
+                <span class="fd-products-label">本层产物:</span>
+                技术方案 · Slice Queue · 源码 · 测试 · Diff · Git 提交 · 测试结果 · Docker · 交付报告
+              </div>
+            </div>
+
+            <div class="fd-band fd-storage">
+              <div class="fd-band-title">持久化产物 · SQLite + Artifacts(贯穿全程)</div>
+              <div class="fd-band-body">
+                项目状态机 · 事件流(SSE 可重放)· Gate 历史 · 工具调用日志 · PAOR 摘要 · 命令输出 · 截图 / Trace · 需求 / 计划 JSON
+              </div>
+              <div class="fd-band-note">Agent 之间<strong>不直接对话</strong> —— 协作通过 LangGraph 状态 + SQLite 持久化 + 统一事件流(<code>agent.*</code> / <code>tool_call.*</code>)完成</div>
+            </div>
+
+          </div>
+
+          <aside class="fd-taizi-lane">
+            <div class="fd-aside-head">
+              <div class="fd-aside-icon">🟡</div>
+              <div>
+                <div class="fd-aside-title">Taizi 太子调度</div>
+                <div class="fd-aside-sub">与主流并行 · 不在主流程内</div>
+              </div>
+            </div>
+
+            <div class="fd-aside-entry">
+              用户任意时刻自由文本<br/>→ 三级分类(规则 → LLM → 状态保底)
+            </div>
+
+            <div class="fd-aside-mode mode-read">
+              <div class="mode-name">🔍 只读调研</div>
+              <div class="mode-do">查:项目状态 · 事件流 · Gate · 切片 · 产物</div>
+              <div class="mode-effect">→ 自然语言回答 · <b>不改状态</b></div>
+            </div>
+
+            <div class="fd-aside-mode mode-interact">
+              <div class="mode-name">⚡ 调度路由(交互)</div>
+              <div class="mode-do">动:暂停 · 恢复 · 插话 · Gate · 变更 · 启动 · 导出</div>
+              <div class="mode-effect">→ <b>改变工作流状态</b></div>
+            </div>
+
+            <div class="fd-aside-points">
+              <div class="points-title">作用于主流各阶段</div>
+              <ul>
+                <li><b>需求层</b>:补充回答 · 跳过澄清 · 强制继续</li>
+                <li><b>Gate</b>:批准 · 拒绝 · 修改后通过</li>
+                <li><b>开发层</b>:插话活跃编码会话 · 创建变更单</li>
+                <li><b>全局</b>:暂停 · 恢复 · 停止 · 导出提交包</li>
+              </ul>
+            </div>
+          </aside>
+
+        </div>
+      </div>
+
+      <h3>开发切片内部循环(单切片)</h3>
+      <ol class="path">
+        <li>Planner 拆分功能切片并为每个切片设计测试命令</li>
+        <li>Opencode Harness 在项目 Git 工作区起本地 server,创建切片会话</li>
+        <li>注入 TDD Prompt(目标 + 验收检查 + 测试命令),<code>promptAsync</code> 异步发起</li>
+        <li>编码模型真实 ReAct:读文件 / 改文件 / 跑测试 / 看失败 / 修正</li>
+        <li>OneCompany <strong>独立执行权威测试</strong>,解析结构化结果</li>
+        <li>Review Agent 对照验收标准做只读审查,产出 JSON 裁决</li>
+        <li>通过 → Git 提交 → 下一切片;失败 → 重试 / 重规划 / 变更评审</li>
+      </ol>
+
+      <div class="callout danger">
+        <strong>关键防线:</strong>Opencode 可以建议代码完成,但只有 OneCompany 自己跑的<strong>权威测试通过</strong>,LangGraph 才允许切片提交 —— 防住"模型自报成功、伪造测试结果、绕过状态机"。
+      </div>
+    </section>
+
+    <!-- ③ Agent 清单 -->
+    <section id="agents">
+      <h2>Agent 清单(共 13 个,统一注册)</h2>
+      <p>每个 Agent 通过注册表声明 <code>id</code> / <code>version</code> / Group / 角色 / 输入输出 Schema / 工具 allowlist / 模型层级 / 风险等级 / 权限。工作流按 <code>agent-id@version</code> 解析 —— <strong>新增、替换、升级 Agent 不需要改架构</strong>。</p>
+
+      <h3>需求分析 Agent Group</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Agent</th><th>职责</th><th>主要输出</th><th>tier</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Intake</strong></td><td>接收并规范化原始需求</td><td>normalizedSummary / targetUsers / userGoals / appType</td><td><span class="t-cheap">cheap</span></td></tr>
+            <tr><td><strong>Requirement Analyst</strong></td><td>自然语言 → 业务结构</td><td>结构化需求模型(功能/流程/数据/角色/集成/非功能)</td><td><span class="t-strong">strong</span></td></tr>
+            <tr><td><strong>Completeness Scorer</strong></td><td>0–100 评分 + 缺口识别</td><td>completenessScore · gaps[]</td><td><span class="t-cheap">cheap</span></td></tr>
+            <tr><td><strong>Question Planner</strong></td><td>规划每轮澄清问题</td><td>主题化问题轮次 + 建议答案</td><td><span class="t-cheap">cheap</span></td></tr>
+            <tr><td><strong>PRD &amp; Acceptance</strong></td><td>固化需求阶段结果</td><td>Markdown PRD · 验收标准 · 假设 · 风险</td><td><span class="t-std">standard</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>开发 Agent Group</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Agent</th><th>职责</th><th>主要输出</th><th>tier</th><th>执行器</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Architect</strong></td><td>PRD → 可执行技术方案</td><td>技术栈 / 架构 / 模块 / 数据模型 / TDD 策略</td><td><span class="t-strong">strong</span></td><td>LangChain</td></tr>
+            <tr><td><strong>Planner</strong></td><td>拆 Slice + 设计测试命令</td><td>有序 Slice Queue · 验收检查 · 测试命令</td><td><span class="t-strong">strong</span></td><td>LangChain</td></tr>
+            <tr><td><strong>Coding</strong></td><td>实现单个功能切片</td><td>源码 · 测试 · Diff</td><td><span class="t-strong">strong</span></td><td><span class="t-harness">mimo Harness</span></td></tr>
+            <tr><td><strong>Review</strong></td><td>独立审查切片改动</td><td>approved/findings · 退回结论</td><td><span class="t-strong">strong</span></td><td><span class="t-harness">mimo Harness(只读)</span></td></tr>
+            <tr><td><strong>QA</strong></td><td>项目级验证(非单函数)</td><td>Typecheck / Build / Vitest / Playwright 证据</td><td><span class="t-std">standard</span></td><td>LangChain</td></tr>
+            <tr><td><strong>DevOps &amp; Delivery</strong></td><td>整理交付材料</td><td>Docker · RUN · 报告 · 导出包</td><td><span class="t-std">standard</span></td><td>LangChain</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>模型双通道</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>通道</th><th>适用 Agent</th><th>环境变量</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Workflow LLM</strong></td><td>除 Coding/Review 外的结构化 Agent</td><td><code>OC_LLM_API_KEY</code> · <code>OC_WORKFLOW_MODEL_*</code> (DeepSeek)</td></tr>
+            <tr><td><strong>Coding Harness</strong></td><td>Coding · Review</td><td><code>OC_OPENCODE_MODEL_*</code> (provider/model 格式 · mimo-v2.5-pro)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ④ Taizi -->
+    <section id="taizi">
+      <h2>Taizi(太子)调度 Agent · 差异化设计</h2>
+      <p>用户在任意阶段都可能输入任何话——「继续」「停」「加一个导出功能」「为什么 slice failed」——而正确含义取决于当前状态,或需要先查项目事实再回答。<strong>Taizi 是这些自由文本的统一入口</strong>。</p>
+
+      <h3>双模式</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>模式</th><th>触发</th><th>行为</th><th>是否改状态</th></tr></thead>
+          <tbody>
+            <tr><td><strong>调度路由</strong></td><td>继续 / 暂停 / 批准 / 加功能 / 导出 等动作类</td><td>产出 <code>TaiziDecision</code>,由 dispatcher 落成具体调用</td><td><span class="ok">是</span></td></tr>
+            <tr><td><strong>只读调研</strong></td><td><code>status_query</code> / <code>chat</code></td><td>调用 8 个只读工具查库/读文件/读事件,再生成中文回答</td><td><span class="miss">否</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>13 类意图(<code>TaiziIntentSchema</code>)</h3>
+      <p><code>continue</code> · <code>pause</code> · <code>stop</code> · <code>new_requirement</code> · <code>answer_question</code> · <code>skip_clarification</code> · <code>gate_decision</code> · <code>change_request</code> · <code>start_development</code> · <code>start_testing</code> · <code>export_submission</code> · <code>status_query</code> · <code>chat</code></p>
+
+      <h3>三级分类策略</h3>
+      <ol>
+        <li><strong>规则快速通道</strong>(零成本零延迟):高频词与 <code>!</code> 硬打断前缀直接命中</li>
+        <li><strong>LLM 分类</strong>:规则未命中时,cheap 档结构化模型按状态机判断;拿不准一律降级 <code>chat</code>(只读调研,不动作)</li>
+        <li><strong>状态保底</strong>:LLM 不可用时按状态选保守解释 —— <strong>调度永不阻塞用户</strong></li>
+      </ol>
+
+      <div class="callout">
+        <strong>A2A 协作方式:</strong>Taizi 与其他 Agent <strong>不直接对话</strong>。调度模式下产出 <code>TaiziDecision</code>,dispatcher 落成调用并发出 <code>taizi.routed</code> 事件;目标 Agent 产出通过统一事件流(<code>agent.*</code> / <code>tool_call.*</code>)回流。长耗时动作后台执行,Taizi 立即应答。
+      </div>
+    </section>
+
+    <!-- ⑤ Opencode Harness -->
+    <section id="harness">
+      <h2>Opencode Harness · 受治理的代码执行层</h2>
+      <p>开发阶段的代码执行适配层。<strong>不是第二套工作流引擎,也不决定项目状态</strong> —— 把已规划好的功能切片交给真实编码助手执行,并把过程重新纳入 OneCompany 的治理与审计。</p>
+
+      <h3>接口契约(解耦关键)</h3>
+      <pre style="background:var(--surface);border:1px solid var(--line);padding:14px;overflow-x:auto;font-size:13px;margin:12px 0;"><code>interface CodingHarness {
+  runSlice(slice: SliceSpec, ctx: DevContext): Promise&lt;SliceResult&gt;;
+  runReview?(review: ReviewSpec, ctx: DevContext): Promise&lt;ReviewResult&gt;;
+  closeProjectSession?(projectId: string): Promise&lt;void&gt;;
+}</code></pre>
+      <p>OneCompany 只依赖这个接口 → <strong>可无缝切换 mimo / OpenCode harness</strong>。</p>
+
+      <h3>九大职责</h3>
+      <ol class="duties">
+        <li><b>隔离编码引擎</b> · 通过 <code>CodingHarness</code> 接口与 LangGraph 工作流解耦</li>
+        <li><b>每项目独立会话</b> · 在项目自己的 Git 工作区启动本地 Opencode Server,选择模型层级</li>
+        <li><b>注入 TDD 任务</b> · Prompt 含切片目标 + 验收检查 + 测试命令</li>
+        <li><b>执行真实 ReAct</b> · 读 / 改 / 跑 / 看失败 / 修正,而非一次性吐代码</li>
+        <li><b>事件桥接(Event Bridge)</b> · 思考片段 / 工具调用 / Diff / 错误 → OneCompany 统一事件</li>
+        <li><b>权限桥接(Permission Bridge)</b> · read/edit/shell/MCP 走 allowlist + 目录边界 + 风险分级</li>
+        <li><b>日志桥接(Log Bridge)</b> · 密钥脱敏,大输出写 artifact,DB 存摘要 + 路径 + 哈希</li>
+        <li><b>收集真实改动</b> · 从 Opencode 状态 + Git 工作区收集,不信"模型说完成了"</li>
+        <li><b>独立代码审查</b> · 同一 Harness 启只读 Review 会话,产出结构化裁决</li>
+      </ol>
+
+      <h3>关键工程取舍</h3>
+      <div class="cards">
+        <div class="card"><div class="k">持久化 session</div><div class="v">session-registry 让多 slice 复用同一 lead session,跨切片保持上下文</div></div>
+        <div class="card"><div class="k">异步 + 心跳</div><div class="v"><code>promptAsync</code> + <code>waitForSessionCompletion</code>,长任务不阻塞,定时 emit 心跳</div></div>
+        <div class="card"><div class="k">空改动检测</div><div class="v"><code>changedFiles.length === 0</code> → 判失败(<code>OPENCODE_NO_FILE_CHANGES_SUMMARY</code>)</div></div>
+        <div class="card"><div class="k">最终修复循环</div><div class="v"><code>final-repair.ts</code> · 最多 3 次自动重试 · Prompt 硬约束"禁绕测试"</div></div>
+      </div>
+    </section>
+
+    <!-- ⑥ L2 / L3 对照 -->
+    <section id="levels">
+      <h2>Level 2 / Level 3 对照</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>维度</th><th>Level 2</th><th>Level 3</th></tr></thead>
+          <tbody>
+            <tr><td>题目</td><td>业务需求到可运行应用</td><td><strong>复杂需求到可验证工程项目</strong></td></tr>
+            <tr><td>统一样例</td><td>AI 面试助手</td><td>AI 销售线索管理助手</td></tr>
+            <tr><td>导出目录</td><td><code>generated_app</code></td><td><code>delivery_app</code>(已重命名,字段同步)</td></tr>
+            <tr><td>测试规模</td><td>typecheck + 47 Vitest + build</td><td>typecheck + <strong>118 Vitest</strong>(含 authz/storage/boundary) + build + Playwright</td></tr>
+            <tr><td>差异化能力</td><td>多 Agent + 真实工具 + MCP</td><td>+ <strong>RBAC 鉴权 + 数据持久化 + 边界测试 + Docker</strong></td></tr>
+            <tr><td>角色权限</td><td>—</td><td>sales / admin / manager 三角色 · 4 测试账号 · 越权测试 7 条</td></tr>
+            <tr><td>自评</td><td>(未给分)</td><td><strong>92 / 100</strong>(超 85 通过线)</td></tr>
+            <tr><td>已生成应用</td><td>面试助手</td><td>面试 / 日历 / 五子棋 / 台球 / 销售线索(共 4 个 Delivered)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>工具能力(进入流程并生成事件的真实工具)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>工具</th><th>用途</th><th>典型证据</th></tr></thead>
+          <tbody>
+            <tr><td><code>workspace-read</code></td><td>项目目录内读文件/目录</td><td>架构设计 / 代码理解 / 审查 / Taizi 读仓库</td></tr>
+            <tr><td><code>requirement-context</code></td><td>读需求摘要/缺口/分数</td><td>需求 Agent 基于最新状态分析</td></tr>
+            <tr><td><code>read-artifact</code></td><td>读 PRD / 验收标准</td><td>Architect / Planner / Review / Taizi 调研</td></tr>
+            <tr><td>Taizi 只读工具集(8 个)</td><td>查项目状态/事件/Gate/切片/产物</td><td>生成中文回答 + <code>tool_call.*</code> 事件</td></tr>
+            <tr><td>文件编辑 / 生成</td><td>创建和修改源码/测试/配置</td><td>真实工作区 Diff + Git 提交</td></tr>
+            <tr><td>受治理 Shell</td><td>执行测试/类型检查/构建/启动</td><td>退出码进入测试判断</td></tr>
+            <tr><td>Vitest / Typecheck / Build Runner</td><td>结构化测试结果</td><td>决定切片通过 / 重试 / Gate</td></tr>
+            <tr><td>Playwright / Browser</td><td>页面导航/截图/控制台错误/Trace</td><td>E2E 与人工验收证据(18 条调用)</td></tr>
+            <tr><td>MCP Gateway(<code>oc-gateway-mcp</code>)</td><td>项目级 MCP 工具</td><td>CodeGraph · Context7 · Playwright · GitHub · Figma · Supabase · Vercel</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ⑦ 演示路径 -->
+    <section id="demo">
+      <h2>建议现场演示路径</h2>
+      <div class="callout warn">
+        <strong>策略提示:</strong>OneCompany 编排复杂、Coding/Review 走 max 规格,生成一个应用时间漫长,且编排与 TUI2 不完全完善、试用偶有跑飞。<strong>建议用已 Delivered 项目的 Timeline 滚动展示,现场只演示 Taizi 只读调研模式(响应快、不改状态、不会跑飞)</strong>。
+      </div>
+
+      <h3>主路径(用已 Delivered 项目)</h3>
+      <ol class="path">
+        <li>Project Hub 新建/打开项目,输入统一业务需求</li>
+        <li>展示累计 6+ 澄清问题、建议答案、自由输入、默认假设</li>
+        <li>批准需求 Gate → 展示 Architect / Planner 的 PAOR 与技术方案</li>
+        <li>批准技术方案 → 展示 Opencode Harness 真实读/改/Shell/测试/Diff</li>
+        <li>展示至少 5 种工具调用,以及其中一次失败 / 重试</li>
+        <li>在输入框向 <strong>Taizi</strong> 提问(「slice 为什么 failed」「现在该说什么」),展示 <code>tool_call.*</code> 只读调研 + 中文作答</li>
+        <li>展示全量测试 + Playwright 页面验证</li>
+        <li>导出 <code>generated_app</code> / <code>delivery_app</code> + 结构化日志 + 交付报告</li>
+      </ol>
+
+      <h3>销售线索样例验收路径(L3)</h3>
+      <ol>
+        <li>sales 身份登录 → 导入/新增客户线索</li>
+        <li>系统按行业/规模/预算/需求生成意向等级 + 跟进建议</li>
+        <li>添加跟进记录 → 详情/列表/统计更新</li>
+        <li>切换 manager → 查看团队线索和统计</li>
+        <li>验证普通销售无法访问他人数据(RBAC)</li>
+        <li>刷新页面 → 数据保留(localStorage 持久化)</li>
+        <li>执行自动化测试(118 条)+ Docker 启动验证</li>
+      </ol>
+    </section>
+
+    <!-- ⑧ 完成度 -->
+    <section id="status">
+      <h2>完成度与诚实缺口</h2>
+
+      <h3>Level 3 评分自评(92 / 100)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>评分项</th><th>满分</th><th>得分</th><th>主要依据</th></tr></thead>
+          <tbody>
+            <tr><td>交付工程功能完成度</td><td>18</td><td><span class="ok">16</span></td><td>销售线索 5 切片全过(118 tests),持久化/RBAC/边界已实现</td></tr>
+            <tr><td>多 Agent 架构</td><td>18</td><td><span class="ok">18</span></td><td>13 个 Agent,职责/Schema/日志/状态清楚</td></tr>
+            <tr><td>Tools 与 MCP 集成</td><td>17</td><td><span class="partial">15</span></td><td>9 类工具有调用;Playwright 18 条 MCP 证据,待补 CodeGraph/Context7</td></tr>
+            <tr><td>代码生成与执行闭环</td><td>15</td><td><span class="ok">14</span></td><td>slice5 通过 change-review + agent TDD 全流程;parseVitestJson bug 已修复</td></tr>
+            <tr><td>测试与自我评审</td><td>14</td><td><span class="ok">13</span></td><td>118 条测试含越权/持久化/边界;final-repair 待运行证据</td></tr>
+            <tr><td>权限、数据与边界处理</td><td>8</td><td><span class="ok">7</span></td><td>RBAC 守卫 + localStorage 持久化 + 越权/边界测试全过</td></tr>
+            <tr><td>部署与交付材料</td><td>6</td><td><span class="ok">6</span></td><td>Docker/RUN/报告已有;delivery_app 命名已修复</td></tr>
+            <tr><td>运行完整性与扩展性</td><td>4</td><td><span class="partial">3</span></td><td>销售应用走到 Deploying;标准路径仍有 Deploying→Delivered 断点</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>当前剩余收尾项</h3>
+      <ul>
+        <li><span class="partial">●</span> 销售线索应用从 <code>Deploying</code> 推进到 <code>Delivered</code> 最终状态</li>
+        <li><span class="partial">●</span> 最终集成失败修复循环(<code>final-repair.ts</code> 代码已完成,缺实际运行证据)</li>
+        <li><span class="partial">●</span> CodeGraph / Context7 在标准样例中的有效调用证据(硬性条件:至少 2 个 MCP,目前仅 Playwright 1 个有证据)</li>
+        <li><span class="partial">●</span> 最终提交压缩包清理</li>
+      </ul>
+
+      <div class="callout warn">
+        <strong>诚实声明:</strong>实测在"一句话需求到可运行应用"场景中,单独使用任何 coding agent 都比 OneCompany 更快更强 —— 现在的基模可能不需要如此复杂的编排。OneCompany 更像是<strong>用于理解 agent harness 原理的作业</strong>。Agent 配置的 model 均采用个人 url 和 key,提交源码时已删除。
+      </div>
+    </section>
+
+    <footer>
+      OneCompany · 天梯赛展示材料 &nbsp;·&nbsp; 详见 <a href="https://github.com/">仓库</a> <code>docs/week3-level2-submission.md</code> 与 <code>docs/week3-level3-submission.md</code> &nbsp;·&nbsp; 本页由 WebUI 右下角 ⓘ 按钮打开
+    </footer>
+
+  </main>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var KEY = "about-theme";
+      try {
+        if (localStorage.getItem(KEY) === "light") {
+          root.setAttribute("data-theme", "light");
+        }
+      } catch (e) {}
+      var btn = document.getElementById("theme-toggle");
+      if (!btn) return;
+      btn.addEventListener("click", function () {
+        var isLight = root.getAttribute("data-theme") === "light";
+        if (isLight) {
+          root.removeAttribute("data-theme");
+          try { localStorage.setItem(KEY, "dark"); } catch (e) {}
+        } else {
+          root.setAttribute("data-theme", "light");
+          try { localStorage.setItem(KEY, "light"); } catch (e) {}
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

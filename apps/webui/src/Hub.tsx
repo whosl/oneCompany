@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Plus, RefreshCw, ServerOff } from "lucide-react";
+import { ArrowRight, Info, Plus, RefreshCw, ServerOff } from "lucide-react";
 import { API_BASE, api } from "./api";
 import type { ProjectRecord } from "./types";
 
@@ -113,6 +113,17 @@ export function ProjectHub({ onOpen }: { onOpen: (id: string) => void }) {
 
         <footer className="hub-footer">n new project · r refresh · click / Enter open</footer>
       </section>
+
+      <a
+        className="hub-info-fab"
+        href="/about.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="more information"
+        title="项目展示"
+      >
+        <Info size={18} />
+      </a>
     </main>
   );
 }
