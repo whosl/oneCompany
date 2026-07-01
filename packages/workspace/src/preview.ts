@@ -84,7 +84,7 @@ export function resolvePreviewCommand(repoPath: string): PreviewCommand | null {
         ? // Vite does NOT read PORT env var — must pass --port explicitly so
           // the server binds to findFreePort's allocation instead of the
           // port hardcoded in vite.config.ts (e.g. 3000/5173).
-          "pnpm exec vite --port ${PREVIEW_PORT:-3000} --base ${PREVIEW_BASE_PATH:-/}"
+          "pnpm exec vite --host 127.0.0.1 --port ${PREVIEW_PORT:-3000} --base ${PREVIEW_BASE_PATH:-/}"
         : "pnpm dev",
       shell: true,
     };

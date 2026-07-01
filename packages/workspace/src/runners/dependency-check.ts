@@ -80,10 +80,14 @@ const NODE_BUILTINS = new Set([
 ]);
 
 const IMPORT_PATTERNS = [
-  /(?:import|export)(?:[^'";]*?\sfrom\s*|[^'";]*?import\s*)['"`]([^'"`]+)['"`]/g,
-  /\bimport\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
-  /\brequire\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
-  /\bimport\s*['"`]([^'"`]+)['"`]/g,
+  // import/export ... from "pkg" — must be on a single line
+  /\b(?:import|export)\b[^'\n;]*?\bfrom\s*['"`]([^'`\n]+)['"`]/g,
+  // side-effect import: import "pkg"
+  /\bimport\s+['"`]([^'`\n]+)['"`]/g,
+  // dynamic import: import("pkg")
+  /\bimport\s*\(\s*['"`]([^'`\n]+)['"`]\s*\)/g,
+  // CommonJS require: require("pkg")
+  /\brequire\s*\(\s*['"`]([^'`\n]+)['"`]\s*\)/g,
 ];
 
 type UndeclaredImport = {

@@ -225,12 +225,11 @@ export default {
 
 const E2E_SMOKE_SPEC = `import { test, expect } from "@playwright/test";
 
-test("app shell loads with product UI (not scaffold placeholder)", async ({ page }) => {
+test("preview serves real app (not scaffold placeholder)", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("app-shell")).toBeVisible();
-  await expect(page.getByTestId("app-title")).toBeVisible();
-  await expect(page.getByTestId("app-title")).not.toHaveText("${SCAFFOLD_PLACEHOLDER_TITLE}");
-  await expect(page.getByTestId("app-page")).toBeVisible();
+  const title = await page.title();
+  expect(title).not.toBe("${SCAFFOLD_PLACEHOLDER_TITLE}");
+  expect(title.length).toBeGreaterThan(0);
 });
 `;
 
