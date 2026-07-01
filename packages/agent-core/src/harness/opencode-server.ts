@@ -14,6 +14,8 @@ type CachedServer = {
   url: string;
   /** When set, this process was spawned by us and may be killed on release. */
   proc?: ChildProcess;
+  /** Set to true when we intentionally kill the process (don't auto-restart). */
+  intentionalShutdown?: boolean;
 };
 
 const activeServers = new Map<string, CachedServer>();
@@ -87,7 +89,7 @@ async function spawnCodingServer(
   const executable = resolveOpencodeExecutable();
   if (!executable) {
     throw new Error(
-      "Coding CLI not found. Install mimo (or opencode) or set OC_OPENCODE_BIN.",
+      "Coding CLI not found. Install mimo (or opencode), set OC_OPENCODE_BIN.",
     );
   }
 
@@ -95,12 +97,39 @@ async function spawnCodingServer(
   const timeoutMs = options?.timeoutMs ?? 15_000;
   const config = governedConfig(options);
 
-  const proc = spawn(executable, [`serve`, `--hostname=${hostname}`, `--port=${port}`], {
-    env: {
-      ...process.env,
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
-    },
-  });
+  const spawnArgs = [`serve`, `--hostname=${hostname}`, `--port=${port}`];
+  const spawnEnv = {
+    ...process.env,
+    OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
+  };
+
+  const doSpawn = (): ChildProcess => {
+    return spawn(executable, spawnArgs, { env: spawnEnv });
+  };
+
+  const proc = doSpawn();
+
+  const cached: CachedServer = { url: "", proc };
+
+  // Auto-restart supervisor: when the opencode process dies unexpectedly
+  // (known stability issue — crashes after ~10 min of sustained use),
+  // immediately respawn on the same port so the URL stays valid.
+  const supervise = (current: ChildProcess): void => {
+    current.on("exit", () => {
+      if (cached.intentionalShutdown) return;
+      setTimeout(() => {
+        if (cached.intentionalShutdown) return;
+        try {
+          const restarted = doSpawn();
+          cached.proc = restarted;
+          supervise(restarted);
+        } catch {
+          // Best-effort; the next startProjectServer call will retry
+        }
+      }, 1_000);
+    });
+  };
+  supervise(proc);
 
   const url = await new Promise<string>((resolve, reject) => {
     const id = setTimeout(() => {
@@ -141,10 +170,8 @@ async function spawnCodingServer(
     });
   });
 
-  return {
-    url,
-    proc,
-  };
+  cached.url = url;
+  return cached;
 }
 
 function normalizeRepoPath(repoPath: string): string {
@@ -224,6 +251,7 @@ export async function releaseProjectServer(
   if (!server) {
     return;
   }
+  server.intentionalShutdown = true;
   activeServers.delete(cacheKey);
   if (server.proc) {
     server.proc.kill();

@@ -18,6 +18,7 @@ export const WEB_DEVELOPMENT_GUIDANCE = [
   "每个切片的 acceptanceChecks 至少一条须描述用户在浏览器中可见/可操作的行为。",
   "编码时须创建或更新 Web 页面，将业务功能暴露为 UI，而非仅写 src/services 下的纯逻辑。",
   "第一个切片完成后，Preview 即应展示真实产品壳（非 generated-app 占位页）。",
+  "SPA 路由须兼容 Preview base path：如果使用 BrowserRouter，必须设置 basename={import.meta.env.BASE_URL}，否则在 /preview/<id>/ 路径下页面会空白。",
 ].join("\n");
 
 export const WEB_DEPLOYMENT_GUIDANCE = [
