@@ -22,6 +22,14 @@
       --yellow: #e4c05c;
       --red: #ee7a72;
       --magenta: #d38bd6;
+      --wf-bg: #0b0d0e;
+      --wf-agent-bg: #153b3e;
+      --wf-user-bg: #333333;
+      --wf-output-bg: #1a3a25;
+      --wf-step-bg: #1a1d1e;
+      --wf-gate-bg: #3a3417;
+      --wf-taizi-bg: #2f2a12;
+      --wf-taizi-card-bg: #17160e;
       --mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
     }
     :root[data-theme="light"] {
@@ -42,6 +50,14 @@
       --yellow: #9a6f00;
       --red: #b33d36;
       --magenta: #8d4d91;
+      --wf-bg: #fbfaf6;
+      --wf-agent-bg: #d7edef;
+      --wf-user-bg: #ebe7de;
+      --wf-output-bg: #dcebdd;
+      --wf-step-bg: #eeece6;
+      --wf-gate-bg: #f3e8bf;
+      --wf-taizi-bg: #f6edc9;
+      --wf-taizi-card-bg: #fff8dc;
       --mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
@@ -104,17 +120,38 @@
     .meta { margin: 0; color: var(--muted); }
     .rule { height: 1px; background: linear-gradient(90deg, var(--line-strong) 0 72%, transparent 72%); margin: 18px 0; }
 
-    /* toc */
     .toc {
-      display: flex; flex-wrap: wrap; gap: 14px;
-      padding: 12px 14px;
+      position: fixed;
+      left: 24px;
+      top: 96px;
+      width: 180px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 14px;
       border: 1px solid var(--line);
       background: var(--panel);
-      margin-bottom: 48px;
+      margin-bottom: 0;
       font-size: 13px;
+      z-index: 20;
     }
     .toc a { color: var(--muted); }
     .toc a:hover { color: var(--cyan); }
+
+    @media (min-width: 1280px) {
+      .shell { margin-left: 240px; margin-right: auto; }
+    }
+
+    @media (max-width: 1120px) {
+      .toc {
+        position: static;
+        width: auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-bottom: 48px;
+      }
+    }
 
     /* section */
     section { margin-bottom: 56px; scroll-margin-top: 24px; }
@@ -210,21 +247,108 @@
     .fd-layer-exec { color: var(--muted); font-size: 13px; }
     .fd-chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 10px 0; }
     .fd-arrow { display: inline-flex; align-items: center; justify-content: center; color: var(--cyan); font-size: 20px; font-weight: 700; padding: 0 3px; min-width: 18px; }
+    .fd-layer > .fd-chain,
+    .fd-slice-loop > .fd-chain,
+    .fd-cycle > .fd-chain { flex-direction: column; flex-wrap: nowrap; max-width: 460px; margin-left: auto; margin-right: auto; gap: 6px; }
+    .fd-layer > .fd-chain > .fd-arrow,
+    .fd-slice-loop > .fd-chain > .fd-arrow,
+    .fd-cycle > .fd-chain > .fd-arrow { transform: rotate(90deg); align-self: center; }
     .fd-node { border: 1px solid var(--line-strong); background: var(--surface); padding: 10px 12px; font-size: 14px; min-width: 112px; display: flex; flex-direction: column; justify-content: center; line-height: 1.35; }
-    .fd-node small { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.3; }
-    .fd-node.fd-node-soft { border-style: dashed; background: transparent; color: var(--muted); }
-    .fd-node.fd-node-out { border-color: var(--green); color: var(--green); }
-    .fd-node.fd-node-test { border-color: var(--green); }
-    .fd-node.fd-node-review { border-color: var(--magenta); }
-    .fd-node.fd-node-final { border-color: var(--cyan); color: var(--cyan); }
-    .fd-node.fd-harness { border-color: var(--cyan); background: var(--cyan-soft); color: var(--cyan); }
-    .fd-gate { border: 1px solid var(--yellow); color: var(--yellow); background: color-mix(in srgb, var(--yellow), transparent 88%); padding: 10px 12px; font-size: 14px; min-width: 112px; display: flex; flex-direction: column; justify-content: center; line-height: 1.35; font-weight: 500; }
+    .fd-node b { color: var(--text); font-weight: 600; }
+    .fd-node small { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.35; }
+    .fd-agent { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan), transparent 92%); }
+    .fd-agent .fd-model { color: var(--cyan); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 4px; }
+    .fd-agent .fd-why { color: var(--yellow); }
+    .fd-user { border-color: var(--text); background: color-mix(in srgb, var(--text), transparent 91%); }
+    .fd-user .fd-model { color: var(--text); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 4px; }
+    .fd-step { border-style: dashed; background: transparent; color: var(--muted); }
+    .fd-output { border-color: var(--green); background: color-mix(in srgb, var(--green), transparent 92%); color: var(--green); }
+    .fd-gate { border: 1px dashed var(--yellow); color: var(--yellow); background: color-mix(in srgb, var(--yellow), transparent 88%); padding: 10px 12px; font-size: 14px; min-width: 112px; display: flex; flex-direction: column; justify-content: center; line-height: 1.35; font-weight: 500; }
+    /* flowchart decision fork: each branch ends at a real node box */
+    .fd-decide-forks { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 8px 0; }
+    .fd-decide-fork { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .fd-decide-label { font-size: 12px; font-weight: 600; padding: 2px 10px; border: 1px dashed currentColor; white-space: nowrap; }
+    .fd-decide-label.ok { color: var(--green); }
+    .fd-decide-label.warn { color: var(--yellow); }
+    .fd-decide-label.no { color: var(--red); }
+    .fd-decide-arrow { font-size: 20px; font-weight: 700; line-height: 1; }
+    .fd-decide-arrow.ok { color: var(--green); }
+    .fd-decide-arrow.warn { color: var(--yellow); }
+    .fd-decide-arrow.no { color: var(--red); }
+    .fd-node.fd-ref { display: none; }
+    /* loop-back side arrow: dashed U-route from gate back up to existing node */
+    .fd-has-loopback { position: relative; padding-left: 60px; }
+    .fd-loopback { position: absolute; left: 6px; top: 0; bottom: 0; width: 46px; pointer-events: none; }
+    .fd-loopback::before {
+      content: ""; position: absolute; left: 20px; top: 10px; bottom: 10px;
+      border-left: 1.5px dashed var(--red); border-top: 1.5px dashed var(--red);
+      border-bottom: 1.5px dashed var(--red); border-radius: 10px 0 0 10px;
+    }
+    .fd-loopback::after {
+      content: ""; position: absolute; top: 4px; right: 13px; width: 0; height: 0;
+      border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+      border-left: 7px solid var(--red);
+    }
+    .fd-loopback-label {
+      position: absolute; left: -2px; top: 50%; transform: translateY(-50%);
+      font-size: 11px; font-weight: 600; color: var(--red);
+      border: 1px dashed var(--red); padding: 3px 6px; background: var(--panel);
+      white-space: nowrap; line-height: 1.3; text-align: center;
+    }
+    .fd-loopback-inline { font-size: 12px; color: var(--red); font-weight: 500; white-space: nowrap; padding: 4px 0; }
     .fd-gate small { color: var(--muted); font-size: 12px; margin-top: 3px; font-weight: 400; }
-    .fd-loop { display: grid; grid-template-columns: max-content 1fr; gap: 12px; align-items: center; margin: 8px 0 8px 16px; }
-    .fd-loop-label { font-size: 13px; padding: 3px 10px; border: 1px solid currentColor; white-space: nowrap; font-weight: 600; }
+    .fd-cycle { border: 1px dashed var(--line-strong); padding: 14px; margin: 12px 0; background: color-mix(in srgb, var(--surface), transparent 62%); position: relative; }
+    .fd-cycle.fd-has-side-return,
+    .fd-slice-loop.fd-has-side-return { padding-left: 78px; }
+    .fd-cycle-head { color: var(--cyan); font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+    .fd-side-return { position: absolute; left: 18px; width: 52px; color: var(--cyan); pointer-events: none; }
+    .fd-side-return::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      right: 0;
+      bottom: 12px;
+      left: 6px;
+      border-left: 1.5px dashed currentColor;
+      border-top: 1.5px dashed currentColor;
+      border-bottom: 1.5px dashed currentColor;
+      border-radius: 12px 0 0 12px;
+    }
+    .fd-side-return::after {
+      content: "";
+      position: absolute;
+      top: 7px;
+      right: -1px;
+      width: 10px;
+      height: 10px;
+      border-right: 1.5px solid currentColor;
+      border-top: 1.5px solid currentColor;
+      transform: rotate(45deg);
+    }
+    .fd-side-return-label {
+      position: absolute;
+      left: -4px;
+      top: 50%;
+      width: 62px;
+      transform: translateY(-50%);
+      background: var(--panel);
+      border: 1px solid currentColor;
+      padding: 4px 5px;
+      font-size: 11px;
+      line-height: 1.35;
+      text-align: center;
+      white-space: normal;
+    }
+    .fd-return-demand { top: 44px; bottom: 18px; }
+    .fd-return-slice { top: 54px; bottom: 132px; color: var(--magenta); }
+    .fd-loop { display: grid; grid-template-columns: max-content 1fr; gap: 12px; align-items: start; margin: 8px 0 8px 16px; }
+    .fd-loop-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .fd-return { display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--cyan); margin-top: 2px; }
+    .fd-return-arrow { display: block; max-width: 100%; height: auto; }
+    .fd-return-label { font-size: 12px; color: var(--cyan); white-space: nowrap; font-weight: 500; }
     .fd-loop-label.ok { color: var(--green); }
     .fd-loop-label.no { color: var(--red); }
-    .fd-slice-loop { border: 1px dashed var(--magenta); padding: 14px; margin: 12px 0; }
+    .fd-slice-loop { border: 1px dashed var(--magenta); padding: 14px; margin: 12px 0; position: relative; }
     .fd-slice-loop-head { color: var(--magenta); font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
     .fd-bridge { display: grid; grid-template-columns: max-content 1fr max-content; align-items: center; gap: 12px; border: 1px dashed var(--line-strong); padding: 10px 14px; background: var(--panel); }
     .fd-bridge-label { color: var(--yellow); font-size: 13px; font-weight: 500; }
@@ -256,12 +380,19 @@
     .fd-aside-points ul { margin: 0; padding-left: 16px; }
     .fd-aside-points li { font-size: 12px; color: var(--muted); line-height: 1.7; }
     .fd-aside-points li b { color: var(--text); }
-    /* human-in-the-loop 标记(用户决策点) */
-    .fd-node.fd-human { border-color: var(--text); background: color-mix(in srgb, var(--text), transparent 90%); color: var(--text); }
-    .fd-gate.fd-gate-human { border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text), transparent 90%); }
+    .fd-gate.fd-gate-human { border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text), transparent 90%); border-style: dashed; }
+    .fd-loop-label { font-size: 13px; padding: 3px 10px; border: 1px dashed currentColor; white-space: nowrap; font-weight: 600; }
     @media (max-width: 960px) {
       .fd-layout { grid-template-columns: 1fr; }
       .fd-taizi-lane { position: static; }
+    }
+    @media (max-width: 720px) {
+      .fd-cycle.fd-has-side-return,
+      .fd-slice-loop.fd-has-side-return { padding-left: 14px; }
+      .fd-side-return { position: relative; left: auto; top: auto; bottom: auto; width: auto; min-height: 46px; margin: 8px auto 0; }
+      .fd-side-return::before { left: 50%; right: auto; top: 0; bottom: 0; }
+      .fd-side-return::after { left: calc(50% - 5px); top: 0; }
+      .fd-side-return-label { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 124px; }
     }
 
     /* highlight card */
@@ -333,9 +464,7 @@
     <header class="hero">
       <h1><span class="brand">⬢</span> OneCompany <span class="sub">· showcase</span></h1>
       <p class="tagline">本地优先、多智能体协同的软件交付平台</p>
-      <p class="meta">把"一句话业务需求"开发为可运行、可测试、可部署、可审计的独立应用。</p>
       <div class="rule"></div>
-      <p class="meta">提交入口 · TUI2 / WebUI &nbsp;·&nbsp; 样例 · AI 面试助手 (L2) / AI 销售线索管理助手 (L3) &nbsp;·&nbsp; 内网 · <code>http://192.168.20.33:5109</code></p>
     </header>
 
     <nav class="toc">
@@ -344,15 +473,14 @@
       <a href="#agents">③ Agent 清单</a>
       <a href="#taizi">④ Taizi 调度</a>
       <a href="#harness">⑤ Opencode Harness</a>
-      <a href="#levels">⑥ L2 / L3 对照</a>
-      <a href="#demo">⑦ 演示路径</a>
-      <a href="#status">⑧ 完成度与缺口</a>
+      <a href="#tools">⑥ 工具能力</a>
+      <a href="#honesty">⑦ 诚实声明</a>
     </nav>
 
     <!-- ① 定位 -->
     <section id="positioning">
       <h2>项目定位</h2>
-      <p class="lead">OneCompany <strong>不是一个预先写好的 AI 应用</strong>,而是一个通用的 AI 应用生成器。用户在 TUI2/WebUI 中创建项目并输入一句业务需求,系统先通过需求分析 Agent Group 完成 <strong>需求规范化、完整度评分、澄清追问、PRD 与验收标准</strong>;再通过开发 Agent Group 完成 <strong>技术方案、功能切片、TDD 编码、代码审查、全量测试、部署与交付</strong>。</p>
+      <p class="lead">OneCompany <strong>不是一个预先写好的 AI 应用</strong>,而是一个用于验证多 Agent 编排、受治理工具调用和人工 Gate 控制的本地优先交付系统。系统把需求分析 Agent Group、开发 Agent Group、Taizi 调度和 Opencode Harness 串成可观察、可审计、可中断的工作流。</p>
       <div class="callout">
         整个过程<strong>不是一次性 Prompt</strong>。LangGraph 管理宏观工作流、循环预算、状态转换、失败恢复和人工审批;结构化 Agent 承担专业任务;Opencode Harness 驱动真实代码读写与命令执行。所有关键过程形成事件、工具调用、Diff、测试结果与交付产物,用户可实时观察并介入。
       </div>
@@ -367,172 +495,199 @@
     <!-- ② 双层工作流 -->
     <section id="workflow">
       <h2>双层工作流(职责分离)</h2>
-      <p>把"一句话生成应用"拆成两个职责清晰、通过<strong>持久化产物</strong>衔接的 Agent Group —— 避免需求未定就编码,也避免单一 Agent 同时承担产品、架构、编码与验收职责。</p>
+      <p>把需求确定与开发交付拆成两个职责清晰、通过<strong>持久化产物</strong>衔接的 Agent Group —— 避免需求未定就编码,也避免单一 Agent 同时承担产品、架构、编码与验收职责。</p>
 
       <div class="flow-diagram">
-        <div class="fd-layout">
+        <svg class="workflow-svg" viewBox="0 0 1260 2860" role="img" aria-label="OneCompany 双层工作流流程图" style="width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:var(--wf-bg);">
+          <defs>
+            <marker id="wf-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+            </marker>
+            <style>
+              .wf-title{font:700 24px var(--mono);fill:var(--text)}.wf-cluster{fill:none;stroke-dasharray:8 5;stroke-width:1.5}.wf-label{font:600 17px var(--mono)}
+              .wf-node{stroke-width:1.5;rx:5;ry:5}.wf-agent{fill:var(--wf-agent-bg);stroke:var(--cyan)}.wf-user{fill:var(--wf-user-bg);stroke:var(--text)}.wf-output{fill:var(--wf-output-bg);stroke:var(--green)}.wf-step{fill:var(--wf-step-bg);stroke:var(--muted);stroke-dasharray:6 4}.wf-gate{fill:var(--wf-gate-bg);stroke:var(--yellow);stroke-width:1.5}.wf-taizi{fill:var(--wf-taizi-bg);stroke:var(--yellow);stroke-width:1.5}.wf-taizi-card{fill:var(--wf-taizi-card-bg);stroke:var(--yellow);stroke-width:1.2}.wf-text{font:600 15px var(--mono);fill:var(--text)}.wf-sub{font:13px var(--mono);fill:var(--muted)}.wf-small{font:12px var(--mono);fill:var(--muted)}.wf-green{fill:var(--green)}.wf-yellow{fill:var(--yellow)}.wf-cyan{fill:var(--cyan)}.wf-muted{fill:var(--muted)}.wf-edge{fill:none;stroke:var(--muted);stroke-width:1.4;marker-end:url(#wf-arrow);color:var(--muted)}.wf-edge-ok{stroke:var(--green);color:var(--green)}.wf-edge-no{stroke:var(--red);color:var(--red);stroke-dasharray:7 5}.wf-edge-blue{stroke:var(--cyan);color:var(--cyan)}.wf-edge-bridge{stroke:var(--green);color:var(--green)}.wf-edge-taizi{stroke:var(--yellow);color:var(--yellow);stroke-dasharray:8 6}.wf-edge-label{font:600 13px var(--mono);fill:var(--text)}.wf-edge-label-ok{fill:var(--green)}.wf-edge-label-no{fill:var(--red)}
+            </style>
+          </defs>
 
-          <div class="fd-main">
+          <text x="36" y="42" class="wf-title">OneCompany 双层工作流</text>
 
-            <div class="fd-entry">
-              <span class="fd-entry-label">用户</span>
-              <span>一句话业务需求 &nbsp;+&nbsp; 任意时刻自由文本(自由文本走 Taizi)</span>
-            </div>
-            <div class="fd-connector">↓ 主流</div>
+          <g id="entry">
+            <rect x="380" y="64" width="220" height="62" class="wf-node wf-user"></rect>
+            <text x="490" y="90" text-anchor="middle" class="wf-text">用户</text>
+            <text x="490" y="110" text-anchor="middle" class="wf-sub">原始业务需求</text>
+          </g>
 
-            <div class="fd-layer fd-req">
-              <div class="fd-layer-head">
-                <span class="fd-layer-tag">第一层</span>
-                <span class="fd-layer-title">需求确定工作流</span>
-                <span class="fd-layer-exec">LangChain 结构化 · 循环追问 · 人在回路</span>
-              </div>
-              <div class="fd-chain">
-                <div class="fd-node">Intake<small>规范化原始需求</small></div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-node">Analyst<small>结构化业务模型</small></div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-node">Scorer<small>完整度评分 + 缺口</small></div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-gate">达标?<small>completeness ≥ 阈值</small></div>
-              </div>
-              <div class="fd-loop">
-                <span class="fd-loop-label no">否 · 循环追问</span>
-                <div class="fd-chain">
-                  <div class="fd-node fd-node-soft">Question Planner<small>主题化问题 + 建议答案</small></div>
-                  <span class="fd-arrow">→</span>
-                  <div class="fd-node fd-human">🧑 用户<small>回答 / 采用默认假设</small></div>
-                  <span class="fd-arrow">↻</span>
-                  <div class="fd-node fd-node-soft">回到 Analyst / Scorer</div>
-                </div>
-              </div>
-              <div class="fd-loop">
-                <span class="fd-loop-label ok">是 · 达标</span>
-                <div class="fd-chain">
-                  <div class="fd-node fd-node-out">PRD &amp; Acceptance<small>固化业务基线</small></div>
-                  <span class="fd-arrow">→</span>
-                  <div class="fd-gate fd-gate-human">需求确认 Gate<small>🧑 用户 approve / reject</small></div>
-                </div>
-              </div>
-              <div class="fd-products">
-                <span class="fd-products-label">本层产物:</span>
-                需求 JSON · 完整度评分 · 缺口清单 · 问题轮次 · 假设 · PRD · 验收标准
-              </div>
-            </div>
+          <rect x="70" y="155" width="840" height="900" class="wf-cluster" stroke="#57d5dd"></rect>
+          <text x="94" y="184" class="wf-label wf-cyan">第一层 · 需求确定工作流</text>
 
-            <div class="fd-bridge">
-              <span class="fd-bridge-label">持久化产物衔接(业务基线)</span>
-              <span class="fd-bridge-items">PRD · 验收标准</span>
-              <span class="fd-bridge-arrow">↓</span>
-            </div>
+          <rect x="380" y="210" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="236" text-anchor="middle" class="wf-text">Intake</text>
+          <text x="490" y="256" text-anchor="middle" class="wf-sub">cheap · 规范化需求</text>
 
-            <div class="fd-layer fd-dev">
-              <div class="fd-layer-head">
-                <span class="fd-layer-tag">第二层</span>
-                <span class="fd-layer-title">开发交付工作流</span>
-                <span class="fd-layer-exec">LangGraph 状态机 · Plan + ReAct + TDD + Gate</span>
-              </div>
-              <div class="fd-chain">
-                <div class="fd-node">Architect<small>技术方案</small></div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-gate">技术方案 Gate<small>approve / redo / revise</small></div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-node">Planner<small>拆 Slice + 测试命令</small></div>
-              </div>
+          <rect x="178" y="318" width="624" height="445" rx="6" ry="6" fill="none" stroke="#4c5455" stroke-width="1.2"></rect>
+          <text x="202" y="344" class="wf-label wf-cyan">需求循环 · 人在回路</text>
 
-              <div class="fd-slice-loop">
-                <div class="fd-slice-loop-head">切片循环(每个 Function Slice)</div>
-                <div class="fd-chain">
-                  <div class="fd-node fd-harness">Coding<small>Opencode Harness · TDD</small></div>
-                  <span class="fd-arrow">→</span>
-                  <div class="fd-node fd-node-test">权威测试<small>OneCompany 独立执行</small></div>
-                  <span class="fd-arrow">→</span>
-                  <div class="fd-node fd-node-review">Review<small>只读审查 · JSON 裁决</small></div>
-                  <span class="fd-arrow">→</span>
-                  <div class="fd-gate">通过?</div>
-                </div>
-                <div class="fd-loop">
-                  <span class="fd-loop-label ok">是</span>
-                  <div class="fd-chain">
-                    <div class="fd-node fd-node-out">Git 提交 → 下一切片</div>
-                  </div>
-                </div>
-                <div class="fd-loop">
-                  <span class="fd-loop-label no">否</span>
-                  <div class="fd-chain">
-                    <div class="fd-node fd-node-soft">重试</div>
-                    <span class="fd-arrow">/</span>
-                    <div class="fd-node fd-node-soft">重规划</div>
-                    <span class="fd-arrow">/</span>
-                    <div class="fd-node fd-node-soft">变更评审</div>
-                  </div>
-                </div>
-              </div>
+          <rect x="380" y="370" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="396" text-anchor="middle" class="wf-text">Analyst</text>
+          <text x="490" y="416" text-anchor="middle" class="wf-sub">strong · 结构化业务模型</text>
+          <rect x="380" y="455" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="481" text-anchor="middle" class="wf-text">Scorer</text>
+          <text x="490" y="501" text-anchor="middle" class="wf-sub">cheap · 评分 + 缺口</text>
+          <polygon points="490,550 572,595 490,640 408,595" class="wf-gate"></polygon>
+          <text x="490" y="600" text-anchor="middle" class="wf-text wf-yellow">达标?</text>
+          <rect x="220" y="675" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="330" y="701" text-anchor="middle" class="wf-text">Question Planner</text>
+          <text x="330" y="721" text-anchor="middle" class="wf-sub">cheap · 规划澄清问题</text>
+          <rect x="540" y="675" width="220" height="66" class="wf-node wf-user"></rect>
+          <text x="650" y="701" text-anchor="middle" class="wf-text">用户回答</text>
+          <text x="650" y="721" text-anchor="middle" class="wf-sub">回答 / 默认假设</text>
 
-              <div class="fd-chain">
-                <div class="fd-node fd-node-final">全部切片完成</div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-node fd-node-test">最终 typecheck / build / vitest / playwright</div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-gate">部署 Gate</div>
-                <span class="fd-arrow">→</span>
-                <div class="fd-node fd-node-out">人工最终验收 → 交付</div>
-              </div>
-              <div class="fd-note-warn">
-                最终失败 → <code>final-repair.ts</code> 最多 <strong>3 次</strong>自动修复(Prompt 硬约束"禁绕测试"),超限交 <code>SLICE_FAILURE_GATE</code> 由用户决策
-              </div>
-              <div class="fd-products">
-                <span class="fd-products-label">本层产物:</span>
-                技术方案 · Slice Queue · 源码 · 测试 · Diff · Git 提交 · 测试结果 · Docker · 交付报告
-              </div>
-            </div>
+          <rect x="380" y="780" width="220" height="66" class="wf-node wf-output"></rect>
+          <text x="490" y="806" text-anchor="middle" class="wf-text wf-green">PRD &amp; Acceptance</text>
+          <text x="490" y="826" text-anchor="middle" class="wf-sub">standard · PRD + 验收</text>
+          <polygon points="490,935 572,980 490,1025 408,980" class="wf-gate"></polygon>
+          <text x="490" y="974" text-anchor="middle" class="wf-text">需求确认</text>
+          <text x="490" y="993" text-anchor="middle" class="wf-sub">Gate</text>
 
-            <div class="fd-band fd-storage">
-              <div class="fd-band-title">持久化产物 · SQLite + Artifacts(贯穿全程)</div>
-              <div class="fd-band-body">
-                项目状态机 · 事件流(SSE 可重放)· Gate 历史 · 工具调用日志 · PAOR 摘要 · 命令输出 · 截图 / Trace · 需求 / 计划 JSON
-              </div>
-              <div class="fd-band-note">Agent 之间<strong>不直接对话</strong> —— 协作通过 LangGraph 状态 + SQLite 持久化 + 统一事件流(<code>agent.*</code> / <code>tool_call.*</code>)完成</div>
-            </div>
+          <rect x="380" y="1080" width="220" height="66" class="wf-node wf-output"></rect>
+          <text x="490" y="1106" text-anchor="middle" class="wf-text wf-green">PRD Ready</text>
+          <text x="490" y="1126" text-anchor="middle" class="wf-sub">可通过 startDevelopment 启动开发</text>
 
-          </div>
+          <rect x="70" y="1195" width="840" height="1645" class="wf-cluster" stroke="#d38bd6"></rect>
+          <text x="94" y="1224" class="wf-label" fill="#d38bd6">第二层 · 开发交付工作流</text>
+          <rect x="380" y="1265" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="1291" text-anchor="middle" class="wf-text">Architect</text>
+          <text x="490" y="1311" text-anchor="middle" class="wf-sub">strong · 技术方案</text>
+          <polygon points="490,1365 572,1410 490,1455 408,1410" class="wf-gate"></polygon>
+          <text x="490" y="1404" text-anchor="middle" class="wf-text wf-yellow">技术方案</text>
+          <text x="490" y="1423" text-anchor="middle" class="wf-sub">Gate</text>
+          <rect x="380" y="1490" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="1516" text-anchor="middle" class="wf-text">Planner</text>
+          <text x="490" y="1536" text-anchor="middle" class="wf-sub">strong · 拆 Slice + 测试</text>
 
-          <aside class="fd-taizi-lane">
-            <div class="fd-aside-head">
-              <div class="fd-aside-icon">🟡</div>
-              <div>
-                <div class="fd-aside-title">Taizi 太子调度</div>
-                <div class="fd-aside-sub">与主流并行 · 不在主流程内</div>
-              </div>
-            </div>
+          <rect x="150" y="1615" width="700" height="470" rx="6" ry="6" fill="none" stroke="#4c5455" stroke-width="1.2"></rect>
+          <text x="174" y="1642" class="wf-label" fill="#d38bd6">切片循环</text>
+          <rect x="380" y="1675" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="1701" text-anchor="middle" class="wf-text">Coding</text>
+          <text x="490" y="1721" text-anchor="middle" class="wf-sub">mimo Harness · TDD</text>
+          <rect x="380" y="1760" width="220" height="66" class="wf-node wf-step"></rect>
+          <text x="490" y="1786" text-anchor="middle" class="wf-text wf-muted">权威测试</text>
+          <text x="490" y="1806" text-anchor="middle" class="wf-sub">OneCompany 独立执行</text>
+          <rect x="380" y="1845" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="1871" text-anchor="middle" class="wf-text">Review</text>
+          <text x="490" y="1891" text-anchor="middle" class="wf-sub">read-only · 审查裁决</text>
+          <polygon points="490,1945 555,1985 490,2025 425,1985" class="wf-gate"></polygon>
+          <text x="490" y="1990" text-anchor="middle" class="wf-text wf-yellow">通过?</text>
+          <rect x="220" y="2100" width="200" height="62" class="wf-node wf-output"></rect>
+          <text x="320" y="2126" text-anchor="middle" class="wf-text wf-green">Git 提交</text>
+          <text x="320" y="2146" text-anchor="middle" class="wf-sub">→ 下一切片</text>
+          <polygon points="670,2088 742,2134 670,2180 598,2134" class="wf-gate"></polygon>
+          <text x="670" y="2128" text-anchor="middle" class="wf-text wf-yellow">超过</text>
+          <text x="670" y="2147" text-anchor="middle" class="wf-sub">重试?</text>
+          <rect x="552" y="2210" width="236" height="116" class="wf-node wf-user"></rect>
+          <text x="670" y="2233" text-anchor="middle" class="wf-text">用户决策</text>
+          <text x="670" y="2252" text-anchor="middle" class="wf-sub">SLICE_FAILURE_GATE</text>
+          <text x="670" y="2272" text-anchor="middle" class="wf-small">retry / replan</text>
+          <text x="670" y="2290" text-anchor="middle" class="wf-small">replan_slices</text>
+          <text x="670" y="2308" text-anchor="middle" class="wf-small">request_skip_slice / fail</text>
 
-            <div class="fd-aside-entry">
-              用户任意时刻自由文本<br/>→ 三级分类(规则 → LLM → 状态保底)
-            </div>
+          <rect x="380" y="2335" width="220" height="62" class="wf-node wf-output"></rect>
+          <text x="490" y="2372" text-anchor="middle" class="wf-text wf-green">全部切片完成</text>
+          <rect x="380" y="2425" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="2451" text-anchor="middle" class="wf-text">QA</text>
+          <text x="490" y="2471" text-anchor="middle" class="wf-sub">typecheck / build / e2e</text>
+          <polygon points="490,2525 562,2570 490,2615 418,2570" class="wf-gate"></polygon>
+          <text x="490" y="2564" text-anchor="middle" class="wf-text wf-yellow">部署</text>
+          <text x="490" y="2583" text-anchor="middle" class="wf-sub">Gate</text>
+          <rect x="380" y="2650" width="220" height="62" class="wf-node wf-user"></rect>
+          <text x="490" y="2687" text-anchor="middle" class="wf-text">用户验收</text>
+          <rect x="380" y="2750" width="220" height="66" class="wf-node wf-agent"></rect>
+          <text x="490" y="2776" text-anchor="middle" class="wf-text">DevOps &amp; Delivery</text>
+          <text x="490" y="2796" text-anchor="middle" class="wf-sub">Docker / 报告 / 导出</text>
 
-            <div class="fd-aside-mode mode-read">
-              <div class="mode-name">🔍 只读调研</div>
-              <div class="mode-do">查:项目状态 · 事件流 · Gate · 切片 · 产物</div>
-              <div class="mode-effect">→ 自然语言回答 · <b>不改状态</b></div>
-            </div>
+          <path class="wf-edge wf-edge-blue" d="M490 126 L490 210"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 276 L490 370"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 436 L490 455"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 521 L490 550"></path>
+          <path class="wf-edge wf-edge-ok" d="M490 640 L490 780"></path><text x="512" y="715" class="wf-edge-label-ok">是</text>
+          <path class="wf-edge wf-edge-no" d="M408 595 C330 595 330 635 330 675"></path><text x="342" y="634" class="wf-edge-label-no">否</text>
+          <path class="wf-edge wf-edge-blue" d="M440 708 L540 708"></path>
+          <path class="wf-edge wf-edge-blue" d="M650 675 C810 610 810 488 600 488"></path><text x="744" y="560" class="wf-edge-label">回答后</text>
+          <path class="wf-edge wf-edge-blue" d="M490 846 L490 935"></path>
+          <path class="wf-edge wf-edge-ok" d="M490 1025 L490 1080"></path><text x="515" y="1054" class="wf-edge-label-ok">approve</text>
+          <path class="wf-edge wf-edge-no" d="M408 980 C145 980 145 595 408 595"></path><text x="154" y="740" class="wf-edge-label-no">reject</text>
+          <path class="wf-edge wf-edge-bridge" d="M490 1146 L490 1265"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 1331 L490 1365"></path>
+          <path class="wf-edge wf-edge-ok" d="M490 1455 L490 1490"></path><text x="515" y="1478" class="wf-edge-label-ok">approve</text>
+          <path class="wf-edge wf-edge-no" d="M408 1410 C260 1410 260 1298 380 1298"></path><text x="258" y="1366" class="wf-edge-label-no">revise/redo</text>
+          <path class="wf-edge wf-edge-blue" d="M490 1556 L490 1675"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 1741 L490 1760"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 1826 L490 1845"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 1911 L490 1945"></path>
+          <path class="wf-edge wf-edge-ok" d="M455 2010 C380 2050 350 2070 320 2100"></path><text x="366" y="2055" class="wf-edge-label-ok">是</text>
+          <path class="wf-edge wf-edge-no" d="M525 2010 C595 2050 630 2070 670 2088"></path><text x="610" y="2056" class="wf-edge-label-no">否</text>
+          <path class="wf-edge wf-edge-no" d="M598 2134 C150 2134 150 1708 380 1708"></path><text x="160" y="1928" class="wf-edge-label-ok">否</text>
+          <path class="wf-edge wf-edge-no" d="M670 2180 L670 2210"></path><text x="692" y="2202" class="wf-edge-label-no">是</text>
+          <path class="wf-edge wf-edge-bridge" d="M320 2162 C320 2290 490 2265 490 2335"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 2397 L490 2425"></path>
+          <path class="wf-edge wf-edge-blue" d="M490 2491 L490 2525"></path>
+          <path class="wf-edge wf-edge-ok" d="M490 2615 L490 2650"></path><text x="515" y="2638" class="wf-edge-label-ok">approve</text>
+          <path class="wf-edge wf-edge-no" d="M418 2570 C265 2570 265 2458 380 2458"></path><text x="286" y="2522" class="wf-edge-label-no">reject</text>
+          <path class="wf-edge wf-edge-blue" d="M490 2712 L490 2750"></path>
 
-            <div class="fd-aside-mode mode-interact">
-              <div class="mode-name">⚡ 调度路由(交互)</div>
-              <div class="mode-do">动:暂停 · 恢复 · 插话 · Gate · 变更 · 启动 · 导出</div>
-              <div class="mode-effect">→ <b>改变工作流状态</b></div>
-            </div>
+          <g id="taizi-lane">
+            <rect x="950" y="155" width="250" height="2685" rx="8" ry="8" class="wf-taizi"></rect>
+            <text x="1075" y="190" text-anchor="middle" class="wf-label wf-yellow">Taizi 太子调度</text>
+            <text x="1075" y="214" text-anchor="middle" class="wf-sub">并行旁路 · 贯穿始终</text>
+            <line x1="1075" y1="245" x2="1075" y2="2755" stroke="#e4c05c" stroke-width="1.5" stroke-dasharray="8 6"></line>
+            <circle cx="1075" cy="330" r="6" fill="#e4c05c"></circle>
+            <circle cx="1075" cy="1113" r="6" fill="#e4c05c"></circle>
+            <circle cx="1075" cy="1690" r="6" fill="#e4c05c"></circle>
+            <circle cx="1075" cy="2458" r="6" fill="#e4c05c"></circle>
 
-            <div class="fd-aside-points">
-              <div class="points-title">作用于主流各阶段</div>
-              <ul>
-                <li><b>需求层</b>:补充回答 · 跳过澄清 · 强制继续</li>
-                <li><b>Gate</b>:批准 · 拒绝 · 修改后通过</li>
-                <li><b>开发层</b>:插话活跃编码会话 · 创建变更单</li>
-                <li><b>全局</b>:暂停 · 恢复 · 停止 · 导出提交包</li>
-              </ul>
-            </div>
-          </aside>
+            <rect x="978" y="275" width="194" height="82" rx="5" ry="5" class="wf-taizi-card"></rect>
+            <text x="1075" y="303" text-anchor="middle" class="wf-text wf-yellow">用户任意时刻</text>
+            <text x="1075" y="324" text-anchor="middle" class="wf-sub">自由文本入口</text>
+            <text x="1075" y="344" text-anchor="middle" class="wf-small">规则 → LLM → 状态保底</text>
 
-        </div>
+            <rect x="978" y="805" width="194" height="110" rx="5" ry="5" class="wf-taizi-card"></rect>
+            <text x="1075" y="835" text-anchor="middle" class="wf-text wf-cyan">只读调研</text>
+            <text x="1075" y="858" text-anchor="middle" class="wf-small">查状态 / 事件 / Gate</text>
+            <text x="1075" y="878" text-anchor="middle" class="wf-small">查切片 / 产物 / 日志</text>
+            <text x="1075" y="898" text-anchor="middle" class="wf-small">回答问题 · 不改状态</text>
+
+            <rect x="978" y="1425" width="194" height="122" rx="5" ry="5" class="wf-taizi-card"></rect>
+            <text x="1075" y="1455" text-anchor="middle" class="wf-text wf-yellow">调度路由</text>
+            <text x="1075" y="1478" text-anchor="middle" class="wf-small">暂停 / 恢复 / Gate</text>
+            <text x="1075" y="1498" text-anchor="middle" class="wf-small">插话 / 变更 / 导出</text>
+            <text x="1075" y="1518" text-anchor="middle" class="wf-small">落成工作流动作</text>
+
+            <rect x="978" y="2308" width="194" height="104" rx="5" ry="5" class="wf-taizi-card"></rect>
+            <text x="1075" y="2338" text-anchor="middle" class="wf-text wf-yellow">A2A 协作</text>
+            <text x="1075" y="2361" text-anchor="middle" class="wf-small">不直接对话</text>
+            <text x="1075" y="2381" text-anchor="middle" class="wf-small">通过事件流回流</text>
+            <text x="1075" y="2401" text-anchor="middle" class="wf-small">taizi.routed</text>
+
+            <path class="wf-edge wf-edge-taizi" d="M950 330 C915 330 915 243 600 243"></path>
+            <text x="875" y="315" class="wf-edge-label wf-yellow">输入</text>
+            <path class="wf-edge wf-edge-taizi" d="M950 865 C925 865 925 775 572 775"></path>
+            <text x="872" y="850" class="wf-edge-label wf-yellow">需求层</text>
+            <path class="wf-edge wf-edge-taizi" d="M950 1490 C925 1490 925 1410 572 1410"></path>
+            <text x="868" y="1475" class="wf-edge-label wf-yellow">Gate/变更</text>
+            <path class="wf-edge wf-edge-taizi" d="M950 2360 C925 2360 925 2458 600 2458"></path>
+            <text x="872" y="2344" class="wf-edge-label wf-yellow">交付层</text>
+          </g>
+        </svg>
+      </div>
+
+      <h3>Taizi(太子)调度 · 与主流并行,不在主流程内</h3>
+      <p>用户任意时刻自由文本 → 三级分类(规则 → LLM → 状态保底)→ 统一入口。</p>
+      <div class="cards">
+        <div class="card"><div class="k">🔍 只读调研</div><div class="v">查项目状态/事件/Gate/切片/产物 → 中文回答 · <b>不改状态</b></div></div>
+        <div class="card"><div class="k">⚡ 调度路由(交互)</div><div class="v">暂停 · 恢复 · 插话 · Gate · 变更 · 启动 · 导出 → <b>改变工作流状态</b></div></div>
+      </div>
+      <div class="callout">
+        <strong>A2A 协作方式:</strong>Taizi 与其他 Agent <strong>不直接对话</strong>。调度产出 <code>TaiziDecision</code>,dispatcher 落成调用并发出 <code>taizi.routed</code> 事件;目标 Agent 产出通过统一事件流回流。长耗时动作后台执行,Taizi 立即应答。
       </div>
 
       <h3>开发切片内部循环(单切片)</h3>
@@ -663,26 +818,9 @@
       </div>
     </section>
 
-    <!-- ⑥ L2 / L3 对照 -->
-    <section id="levels">
-      <h2>Level 2 / Level 3 对照</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>维度</th><th>Level 2</th><th>Level 3</th></tr></thead>
-          <tbody>
-            <tr><td>题目</td><td>业务需求到可运行应用</td><td><strong>复杂需求到可验证工程项目</strong></td></tr>
-            <tr><td>统一样例</td><td>AI 面试助手</td><td>AI 销售线索管理助手</td></tr>
-            <tr><td>导出目录</td><td><code>generated_app</code></td><td><code>delivery_app</code>(已重命名,字段同步)</td></tr>
-            <tr><td>测试规模</td><td>typecheck + 47 Vitest + build</td><td>typecheck + <strong>118 Vitest</strong>(含 authz/storage/boundary) + build + Playwright</td></tr>
-            <tr><td>差异化能力</td><td>多 Agent + 真实工具 + MCP</td><td>+ <strong>RBAC 鉴权 + 数据持久化 + 边界测试 + Docker</strong></td></tr>
-            <tr><td>角色权限</td><td>—</td><td>sales / admin / manager 三角色 · 4 测试账号 · 越权测试 7 条</td></tr>
-            <tr><td>自评</td><td>(未给分)</td><td><strong>92 / 100</strong>(超 85 通过线)</td></tr>
-            <tr><td>已生成应用</td><td>面试助手</td><td>面试 / 日历 / 五子棋 / 台球 / 销售线索(共 4 个 Delivered)</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h3>工具能力(进入流程并生成事件的真实工具)</h3>
+    <section id="tools">
+      <h2>工具能力</h2>
+      <h3>进入流程并生成事件的真实工具</h3>
       <div class="table-wrap">
         <table>
           <thead><tr><th>工具</th><th>用途</th><th>典型证据</th></tr></thead>
@@ -701,66 +839,8 @@
       </div>
     </section>
 
-    <!-- ⑦ 演示路径 -->
-    <section id="demo">
-      <h2>建议现场演示路径</h2>
-      <div class="callout warn">
-        <strong>策略提示:</strong>OneCompany 编排复杂、Coding/Review 走 max 规格,生成一个应用时间漫长,且编排与 TUI2 不完全完善、试用偶有跑飞。<strong>建议用已 Delivered 项目的 Timeline 滚动展示,现场只演示 Taizi 只读调研模式(响应快、不改状态、不会跑飞)</strong>。
-      </div>
-
-      <h3>主路径(用已 Delivered 项目)</h3>
-      <ol class="path">
-        <li>Project Hub 新建/打开项目,输入统一业务需求</li>
-        <li>展示累计 6+ 澄清问题、建议答案、自由输入、默认假设</li>
-        <li>批准需求 Gate → 展示 Architect / Planner 的 PAOR 与技术方案</li>
-        <li>批准技术方案 → 展示 Opencode Harness 真实读/改/Shell/测试/Diff</li>
-        <li>展示至少 5 种工具调用,以及其中一次失败 / 重试</li>
-        <li>在输入框向 <strong>Taizi</strong> 提问(「slice 为什么 failed」「现在该说什么」),展示 <code>tool_call.*</code> 只读调研 + 中文作答</li>
-        <li>展示全量测试 + Playwright 页面验证</li>
-        <li>导出 <code>generated_app</code> / <code>delivery_app</code> + 结构化日志 + 交付报告</li>
-      </ol>
-
-      <h3>销售线索样例验收路径(L3)</h3>
-      <ol>
-        <li>sales 身份登录 → 导入/新增客户线索</li>
-        <li>系统按行业/规模/预算/需求生成意向等级 + 跟进建议</li>
-        <li>添加跟进记录 → 详情/列表/统计更新</li>
-        <li>切换 manager → 查看团队线索和统计</li>
-        <li>验证普通销售无法访问他人数据(RBAC)</li>
-        <li>刷新页面 → 数据保留(localStorage 持久化)</li>
-        <li>执行自动化测试(118 条)+ Docker 启动验证</li>
-      </ol>
-    </section>
-
-    <!-- ⑧ 完成度 -->
-    <section id="status">
-      <h2>完成度与诚实缺口</h2>
-
-      <h3>Level 3 评分自评(92 / 100)</h3>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>评分项</th><th>满分</th><th>得分</th><th>主要依据</th></tr></thead>
-          <tbody>
-            <tr><td>交付工程功能完成度</td><td>18</td><td><span class="ok">16</span></td><td>销售线索 5 切片全过(118 tests),持久化/RBAC/边界已实现</td></tr>
-            <tr><td>多 Agent 架构</td><td>18</td><td><span class="ok">18</span></td><td>13 个 Agent,职责/Schema/日志/状态清楚</td></tr>
-            <tr><td>Tools 与 MCP 集成</td><td>17</td><td><span class="partial">15</span></td><td>9 类工具有调用;Playwright 18 条 MCP 证据,待补 CodeGraph/Context7</td></tr>
-            <tr><td>代码生成与执行闭环</td><td>15</td><td><span class="ok">14</span></td><td>slice5 通过 change-review + agent TDD 全流程;parseVitestJson bug 已修复</td></tr>
-            <tr><td>测试与自我评审</td><td>14</td><td><span class="ok">13</span></td><td>118 条测试含越权/持久化/边界;final-repair 待运行证据</td></tr>
-            <tr><td>权限、数据与边界处理</td><td>8</td><td><span class="ok">7</span></td><td>RBAC 守卫 + localStorage 持久化 + 越权/边界测试全过</td></tr>
-            <tr><td>部署与交付材料</td><td>6</td><td><span class="ok">6</span></td><td>Docker/RUN/报告已有;delivery_app 命名已修复</td></tr>
-            <tr><td>运行完整性与扩展性</td><td>4</td><td><span class="partial">3</span></td><td>销售应用走到 Deploying;标准路径仍有 Deploying→Delivered 断点</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h3>当前剩余收尾项</h3>
-      <ul>
-        <li><span class="partial">●</span> 销售线索应用从 <code>Deploying</code> 推进到 <code>Delivered</code> 最终状态</li>
-        <li><span class="partial">●</span> 最终集成失败修复循环(<code>final-repair.ts</code> 代码已完成,缺实际运行证据)</li>
-        <li><span class="partial">●</span> CodeGraph / Context7 在标准样例中的有效调用证据(硬性条件:至少 2 个 MCP,目前仅 Playwright 1 个有证据)</li>
-        <li><span class="partial">●</span> 最终提交压缩包清理</li>
-      </ul>
-
+    <section id="honesty">
+      <h2>诚实声明</h2>
       <div class="callout warn">
         <strong>诚实声明:</strong>实测在"一句话需求到可运行应用"场景中,单独使用任何 coding agent 都比 OneCompany 更快更强 —— 现在的基模可能不需要如此复杂的编排。OneCompany 更像是<strong>用于理解 agent harness 原理的作业</strong>。Agent 配置的 model 均采用个人 url 和 key,提交源码时已删除。
       </div>

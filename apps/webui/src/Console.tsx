@@ -77,6 +77,7 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   const [busy, setBusy] = useState<string[]>([]);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string>();
+  const [agentView, setAgentView] = useState<string>();
   const [inspectorTab, setInspectorTab] = useState<"artifacts" | "files">("artifacts");
   const [viewer, setViewer] = useState<FileResult | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
@@ -211,6 +212,9 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   const questions = snapshot?.requirement?.pendingQuestions ?? [];
   const previewUrl = snapshot?.testing?.previewUrl ?? snapshot?.dev?.previewUrl;
   const latestTodo = [...timeline].reverse().find((entry) => entry.kind === "todo" && entry.todos?.length);
+  const viewedAgent = agentView ? agents.find((agent) => agent.id === agentView) : undefined;
+  const viewTimeline = viewedAgent ? timeline.filter((entry) => entry.agent === viewedAgent.name) : timeline;
+  const inAgentView = Boolean(agentView);
   const selected = agents.find((agent) => agent.id === selectedAgent) ?? agents.find((agent) => ["running", "tool", "blocked"].includes(agent.status)) ?? agents[0];
   const developmentStarted = localLaunches.some((entry) => entry.action === "development" && entry.status !== "failed");
   const testingStarted = localLaunches.some((entry) => entry.action === "testing" && entry.status !== "failed");
@@ -398,15 +402,16 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
       </header>
 
       <div className="console-grid" data-mobile-panel={mobilePanel}>
-        <AgentColumn agents={agents} selected={selected} onSelect={(id) => setSelectedAgent(id)} />
+        <AgentColumn agents={agents} selected={selected} viewedId={agentView} onSelect={(id) => { setSelectedAgent(id); setAgentView(id); }} />
         <section className="stream-column">
           {latestTodo?.todos && <FloatingTodoCard entry={latestTodo} open={todoOpen} onToggle={() => setTodoOpen((value) => !value)} />}
+          {inAgentView && viewedAgent && <AgentViewBar agent={viewedAgent} onBack={() => setAgentView(undefined)} />}
           <div className="stream-scroll" ref={streamRef}>
-            <Stream entries={timeline} />
-            {activeGate && <GateCard gate={activeGate} projectId={projectId} previewUrl={previewUrl} yolo={yolo} previewBusy={busy.includes("preview")} pendingDecision={pendingGateDecision} feedback={gateFeedback} onFeedback={setGateFeedback} onChoose={(decision) => chooseGate(activeGate, decision)} onStartPreview={startPreview} onSubmitFeedback={() => pendingGateDecision && gateFeedback.trim() && void resolveGate(activeGate, pendingGateDecision, gateFeedback.trim())} onCancelFeedback={() => setPendingGateDecision(undefined)} onOpenFile={openFile} />}
-            {questions.length > 0 && <QuestionRound questions={questions} answers={draftAnswers} onChange={(index, value) => setDraftAnswers((items) => items.map((item, itemIndex) => itemIndex === index ? value : item))} onSubmit={() => void submitQuestions()} onSkip={() => { answeredQuestionsKey.current = questions.map((item) => item.question).join("|"); void run("skip", () => api.skipClarification(projectId), "已采用默认假设，开始生成 PRD"); }} busy={busy.includes("answers") || busy.includes("skip")} />}
-            {snapshot.project.status === "PRD Ready" && !activeGate && !developmentStarted && <LaunchPanel icon={<Rocket size={22} />} title="启动开发" description="PRD 已就绪。启动后 Architect 会先产出技术方案，再进入切片开发。" busy={busy.includes("development")} onClick={startDevelopment} />}
-            {snapshot.project.status === "Testing" && (snapshot.testing?.suiteTotal ?? 0) === 0 && !activeGate && !testingStarted && <LaunchPanel icon={<FlaskConical size={22} />} title="运行测试 + 部署" description="开发已完成，启动独立验证、预览和部署确认。" busy={busy.includes("testing")} onClick={startTesting} />}
+            <Stream entries={viewTimeline} />
+            {!inAgentView && activeGate && <GateCard gate={activeGate} projectId={projectId} previewUrl={previewUrl} yolo={yolo} previewBusy={busy.includes("preview")} pendingDecision={pendingGateDecision} feedback={gateFeedback} onFeedback={setGateFeedback} onChoose={(decision) => chooseGate(activeGate, decision)} onStartPreview={startPreview} onSubmitFeedback={() => pendingGateDecision && gateFeedback.trim() && void resolveGate(activeGate, pendingGateDecision, gateFeedback.trim())} onCancelFeedback={() => setPendingGateDecision(undefined)} onOpenFile={openFile} />}
+            {!inAgentView && questions.length > 0 && <QuestionRound questions={questions} answers={draftAnswers} onChange={(index, value) => setDraftAnswers((items) => items.map((item, itemIndex) => itemIndex === index ? value : item))} onSubmit={() => void submitQuestions()} onSkip={() => { const roundId = `answered-questions-skip-${Date.now()}`; const roundAnswers = questions.map((question) => ({ question: question.question, answer: question.suggestedAnswers[0] ?? "采用默认假设" })); setAnsweredQuestionRounds((items) => [...items, { id: roundId, at: timeNow(), afterSeq: snapshot?.lastSeq ?? 0, answers: roundAnswers, status: "sending" }]); answeredQuestionsKey.current = questions.map((item) => item.question).join("|"); void run("skip", () => api.skipClarification(projectId), "已采用默认假设，开始生成 PRD").then((sent) => setAnsweredQuestionRounds((items) => items.map((item) => item.id === roundId ? { ...item, status: sent ? "sent" : "failed" } : item))); }} busy={busy.includes("answers") || busy.includes("skip")} />}
+            {!inAgentView && snapshot.project.status === "PRD Ready" && !activeGate && !developmentStarted && <LaunchPanel icon={<Rocket size={22} />} title="启动开发" description="PRD 已就绪。启动后 Architect 会先产出技术方案，再进入切片开发。" busy={busy.includes("development")} onClick={startDevelopment} />}
+            {!inAgentView && snapshot.project.status === "Testing" && (snapshot.testing?.suiteTotal ?? 0) === 0 && !activeGate && !testingStarted && <LaunchPanel icon={<FlaskConical size={22} />} title="运行测试 + 部署" description="开发已完成，启动独立验证、预览和部署确认。" busy={busy.includes("testing")} onClick={startTesting} />}
           </div>
           <Composer snapshot={snapshot} value={message} busy={busy} onChange={setMessage} onSubmit={sendMessage} />
         </section>
@@ -423,12 +428,12 @@ export function ConsoleScreen({ projectId, onBack }: { projectId: string; onBack
   );
 }
 
-function AgentColumn({ agents, selected, onSelect }: { agents: AgentView[]; selected?: AgentView; onSelect: (id: string) => void }) {
+function AgentColumn({ agents, selected, viewedId, onSelect }: { agents: AgentView[]; selected?: AgentView; viewedId?: string; onSelect: (id: string) => void }) {
   return <aside className="agents-column panel-column">
     <h2>AGENTS</h2>
     {(["requirement", "development"] as const).map((group) => <div key={group} className="agent-group">
       <div className="section-rule">{group === "requirement" ? "Requirement" : "Development"}</div>
-      {agents.filter((agent) => agent.group === group).map((agent) => <button key={agent.id} className={`agent-row ${selected?.id === agent.id ? "selected" : ""}`} onClick={() => onSelect(agent.id)}>
+      {agents.filter((agent) => agent.group === group).map((agent) => <button key={agent.id} className={`agent-row ${selected?.id === agent.id ? "selected" : ""} ${viewedId === agent.id ? "viewing" : ""}`} onClick={() => onSelect(agent.id)}>
         <span className={`agent-glyph ${agent.status}`}>{agent.status === "running" || agent.status === "tool" ? "◌" : agent.status === "blocked" ? "!" : agent.status === "failed" ? "×" : agent.status === "done" ? "●" : "○"}</span>
         <span className="agent-name">{agent.name}</span>
         <span className={`agent-status ${agent.status}`}>{agent.status === "running" ? `run ${duration(agent.activeSince)}` : agent.status}</span>
@@ -460,8 +465,9 @@ function Stream({ entries }: { entries: TimelineEntry[] }) {
   }
   const units: Array<{ kind: "agent"; id: string; agent: string; groups: typeof groups } | { kind: "plain"; group: (typeof groups)[number] }> = [];
   for (const group of groups) {
+    const entry = group.kind === "entry" ? group.entry : null;
     const agent = group.kind === "tools" ? group.agent : group.entry.agent;
-    if (!agent) {
+    if (!agent || (entry && isPhaseBanner(entry))) {
       units.push({ kind: "plain", group });
       continue;
     }
@@ -474,6 +480,14 @@ function Stream({ entries }: { entries: TimelineEntry[] }) {
   }
   const renderGroup = (group: (typeof groups)[number]) => group.kind === "tools" ? <ToolGroup key={group.id} entries={group.entries} grouped /> : <TimelineRow key={group.entry.id} entry={group.entry} grouped />;
   return <div className="timeline">{units.map((unit) => unit.kind === "plain" ? renderGroup(unit.group) : <section key={unit.id} className="agent-stream-group"><header><AgentBadge name={unit.agent} /></header>{unit.groups.map(renderGroup)}</section>)}</div>;
+}
+
+function AgentViewBar({ agent, onBack }: { agent: AgentView; onBack: () => void }) {
+  return <div className="agent-view-bar">
+    <button className="agent-view-back" onClick={onBack}><ArrowLeft size={15} /> 返回主流程</button>
+    <AgentBadge name={agent.name} />
+    <span className={`agent-view-status ${agent.status}`}>{agent.status === "running" || agent.status === "tool" ? `运行中 ${duration(agent.activeSince)}` : agent.status}</span>
+  </div>;
 }
 
 function FloatingTodoCard({ entry, open, onToggle }: { entry: TimelineEntry; open: boolean; onToggle: () => void }) {
@@ -496,9 +510,26 @@ function FloatingTodoCard({ entry, open, onToggle }: { entry: TimelineEntry; ope
 }
 
 function TimelineRow({ entry, grouped = false }: { entry: TimelineEntry; grouped?: boolean }) {
+  if (entry.kind === "reason" && entry.tag === "REFLT") return <PhaseBanner entry={entry} />;
+  if (["status", "launch", "gate_ok"].includes(entry.kind)) return <PhaseBanner entry={entry} />;
   if (["user", "taizi", "reason"].includes(entry.kind)) return <MessageBlock entry={entry} grouped={grouped} />;
   if (["question_answered", "todo", "diff", "test", "environment", "error"].includes(entry.kind)) return <StructuredCard entry={entry} />;
   return <ProcessLine entry={entry} grouped={grouped} />;
+}
+
+const isPhaseBanner = (entry: TimelineEntry) =>
+  entry.kind === "status" || entry.kind === "launch" || entry.kind === "gate_ok" || (entry.kind === "reason" && entry.tag === "REFLT");
+
+function PhaseBanner({ entry }: { entry: TimelineEntry }) {
+  const parts = entry.text.split("→");
+  const phaseName = parts.length > 1 ? parts.at(-1)!.trim() : entry.text;
+  const tone = entry.kind === "gate_ok" ? "success" : entry.kind === "launch" ? (entry.localState === "failed" ? "danger" : "success") : entry.kind === "reason" ? "info" : statusTone(phaseName);
+  const icon = entry.kind === "gate_ok" ? "✓" : entry.kind === "launch" ? "→" : entry.kind === "reason" ? "◎" : "◉";
+  return <div className={`phase-banner ${tone}`}>
+    <span className="phase-icon">{icon}</span>
+    <div className="phase-body">{entry.kind === "reason" ? <Markdown>{entry.text}</Markdown> : <strong>{phaseName}</strong>}{entry.agent && <em>{entry.agent}</em>}</div>
+    <time>{entry.kind === "launch" && entry.localState === "sending" ? "启动中…" : entry.kind === "launch" && entry.localState === "failed" ? "启动失败" : entry.at}</time>
+  </div>;
 }
 
 function MessageBlock({ entry, grouped = false }: { entry: TimelineEntry; grouped?: boolean }) {
@@ -508,7 +539,7 @@ function MessageBlock({ entry, grouped = false }: { entry: TimelineEntry; groupe
 }
 
 function StructuredCard({ entry }: { entry: TimelineEntry }) {
-  if (entry.kind === "question_answered") return <article className={`answered-question-history structured-card ${entry.localState ?? ""}`}><header><span className="tag">{entry.tag}</span><strong>需求澄清</strong><time>{entry.localState === "sending" ? "提交中…" : entry.localState === "failed" ? "提交失败" : entry.at}</time></header><div className="answered-question-list">{(entry.answers ?? []).map((item, index) => <section key={`${item.question}-${index}`}><h4><span>{index + 1}</span>{item.question}</h4><Markdown>{item.answer}</Markdown></section>)}</div></article>;
+  if (entry.kind === "question_answered") return <article className={`answered-question-history ${entry.localState ?? ""}`}><header><span className="tag">{entry.tag}</span><strong>需求澄清</strong><time>{entry.localState === "sending" ? "提交中…" : entry.localState === "failed" ? "提交失败" : entry.at}</time></header><div className="answered-question-list">{(entry.answers ?? []).map((item, index) => <section key={`${item.question}-${index}`}><h4><span>{index + 1}</span>{item.question}</h4><Markdown>{item.answer}</Markdown></section>)}</div></article>;
   if (entry.kind === "todo") return <article className="todo-entry structured-card"><header><span className="tag">{entry.tag}</span><strong>{entry.tool ?? "todowrite"}</strong><time>{entry.at}</time></header>{entry.todos?.length ? <div className="todo-list">{entry.todos.map((todo, index) => <div key={`${todo.content}-${index}`} className={`todo-row ${todo.status} ${todo.priority}`}><span className="todo-index">{index + 1}</span><span className="todo-status">{todo.status.replace(/_/g, " ")}</span><span className="todo-content">{todo.content}</span><span className="todo-priority">{todo.priority}</span></div>)}</div> : entry.text ? <Markdown>{entry.text}</Markdown> : entry.summary ? <Markdown>{entry.summary}</Markdown> : <p className="dim">更新任务清单…</p>}</article>;
   if (entry.kind === "test") return <article className={`structured-card test-card ${entry.summary === "failed" ? "failed" : "passed"}`}><header><span className="tag">{entry.tag}</span><strong>测试结果</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
   if (entry.kind === "diff") return <article className="structured-card diff-card"><header><span className="tag">{entry.tag}</span><strong>代码变更</strong><time>{entry.at}</time></header><Markdown>{entry.text}</Markdown></article>;
