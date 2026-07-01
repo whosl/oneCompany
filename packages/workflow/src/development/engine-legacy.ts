@@ -73,7 +73,7 @@ import type { DevFixtureProfile } from "@oc/agent-core";
 const execFileAsync = promisify(execFile);
 
 const RECONCILIATION_SLICE_ID = "reconciliation-1";
-const RECONCILIATION_TEST_COMMAND = "pnpm typecheck && pnpm test";
+const RECONCILIATION_TEST_COMMAND = "pnpm vitest run --reporter=json";
 
 function toResult(
   deps: DevelopmentWorkflowDeps,
@@ -987,18 +987,34 @@ async function resumeSliceFailureGate(
       next = raiseTechPlanGate(deps, next);
       return toResult(deps, next);
     }
-    case "replan_slices": {
-      const sliceId =
-        payload.meta.currentSliceId ??
-        payload.state.currentTask?.id ??
-        getCurrentSlice(payload.state)?.id;
-      let next = await runPlanner(deps, {
-        ...payload,
-        meta: sliceId ? clearSliceFailureMemory(payload.meta, sliceId) : payload.meta,
-      });
-      if (sliceId && next.state.taskQueue.some((task) => task.id === sliceId)) {
-        next = { ...next, state: resetSliceForRetry(next.state, sliceId) };
-      } else {
+	    case "replan_slices": {
+	      const sliceId =
+	        payload.meta.currentSliceId ??
+	        payload.state.currentTask?.id ??
+	        getCurrentSlice(payload.state)?.id;
+	      let next = await runPlanner(deps, {
+	        ...payload,
+	        meta: sliceId ? clearSliceFailureMemory(payload.meta, sliceId) : payload.meta,
+	      });
+	      const reconciled = reconcilePassedSlicesFromCommits(
+	        deps.db,
+	        next.state,
+	        deps.onEvent,
+	      );
+	      if (reconciled !== next.state) {
+	        next = { ...next, state: reconciled };
+	      }
+	      const replannedFailedSlice = sliceId
+	        ? next.state.taskQueue.find((task) => task.id === sliceId)
+	        : undefined;
+	      if (
+	        sliceId &&
+	        replannedFailedSlice &&
+	        replannedFailedSlice.status !== "passed" &&
+	        replannedFailedSlice.status !== "skipped"
+	      ) {
+	        next = { ...next, state: resetSliceForRetry(next.state, sliceId) };
+	      } else {
         next = {
           ...next,
           state: {
