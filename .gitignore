@@ -17,3 +17,5 @@ apps/web/test-results/
 demo-runs/
 .mcp.json
 .omo/
+csgo-test/
+csgo-test-gpt/
